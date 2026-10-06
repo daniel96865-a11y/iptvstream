@@ -57,6 +57,7 @@ import androidx.compose.ui.window.DialogProperties
 import de.dgstudios.iptvstream.core.data.EpgState
 import de.dgstudios.iptvstream.core.data.SyncState
 import de.dgstudios.iptvstream.core.ui.LocalAppStyle
+import kotlinx.coroutines.launch
 
 /**
  * Fokusfähiges Element für die Fernbedienung: deutlich sichtbarer weißer Rahmen,
@@ -268,6 +269,33 @@ fun Modifier.registered(registry: FocusRegistry, index: Int): Modifier {
     }
     return this.focusRequester(r)
 }
+
+/** Verhindert, dass eine gehaltene Taste mehrere Fokus-Sprünge gleichzeitig startet. */
+class MoveGate {
+    private var job: kotlinx.coroutines.Job? = null
+
+    fun launch(scope: kotlinx.coroutines.CoroutineScope, block: suspend () -> Unit) {
+        if (job?.isActive == true) return
+        job = scope.launch { block() }
+    }
+}
+
+/** Hoch/Links selbst auswerten, damit eine lange Liste den Fokus nicht festhält. */
+fun Modifier.tvMove(onUp: (() -> Unit)? = null, onLeft: (() -> Unit)? = null): Modifier =
+    onPreviewKeyEvent { ev ->
+        if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+        when (ev.key) {
+            Key.DirectionUp -> {
+                onUp?.invoke()
+                onUp != null
+            }
+            Key.DirectionLeft -> {
+                onLeft?.invoke()
+                onLeft != null
+            }
+            else -> false
+        }
+    }
 
 /** Einstiegspunkt für Fokus von der Tab-Leiste in den Inhalt (vom aktuellen Bildschirm gesetzt). */
 class EntryHandle {

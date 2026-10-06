@@ -1,6 +1,7 @@
 package de.dgstudios.iptvstream.tv
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,7 +33,11 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -68,20 +73,32 @@ import de.dgstudios.iptvstream.core.vm.MoviesViewModel
 import de.dgstudios.iptvstream.core.vm.SeriesDetailViewModel
 import de.dgstudios.iptvstream.core.vm.SeriesViewModel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 
 class PosterItem(val id: String, val name: String, val poster: String?, val rating: Double)
 
 @Composable
-fun TvMoviesScreen(vm: MoviesViewModel, settings: AppSettings, entry: EntryHandle, first: FirstFocus, onOpen: (String) -> Unit) {
-    PosterBrowse(vm, settings.categoryDrawer, entry, first, onOpen, toItem = { PosterItem(it.streamId, it.name, it.poster, it.rating) }, emptyFav = "Favoriten setzt du in der Detailansicht.")
+fun TvMoviesScreen(
+    vm: MoviesViewModel,
+    settings: AppSettings,
+    entry: EntryHandle,
+    first: FirstFocus,
+    onOpen: (String) -> Unit,
+    onEscapeUp: () -> Unit,
+) {
+    PosterBrowse(vm, settings.categoryDrawer, entry, first, onOpen, onEscapeUp, toItem = { PosterItem(it.streamId, it.name, it.poster, it.rating) }, emptyFav = "Favoriten setzt du in der Detailansicht.")
 }
 
 @Composable
-fun TvSeriesScreen(vm: SeriesViewModel, settings: AppSettings, entry: EntryHandle, first: FirstFocus, onOpen: (String) -> Unit) {
-    PosterBrowse(vm, settings.categoryDrawer, entry, first, onOpen, toItem = { PosterItem(it.seriesId, it.name, it.poster, it.rating) }, emptyFav = "Favoriten setzt du in der Detailansicht.")
+fun TvSeriesScreen(
+    vm: SeriesViewModel,
+    settings: AppSettings,
+    entry: EntryHandle,
+    first: FirstFocus,
+    onOpen: (String) -> Unit,
+    onEscapeUp: () -> Unit,
+) {
+    PosterBrowse(vm, settings.categoryDrawer, entry, first, onOpen, onEscapeUp, toItem = { PosterItem(it.seriesId, it.name, it.poster, it.rating) }, emptyFav = "Favoriten setzt du in der Detailansicht.")
 }
 
 @Composable
@@ -91,6 +108,7 @@ private fun <T> PosterBrowse(
     entry: EntryHandle,
     first: FirstFocus,
     onOpen: (String) -> Unit,
+    onEscapeUp: () -> Unit,
     toItem: (T) -> PosterItem,
     emptyFav: String,
 ) {
@@ -112,26 +130,108 @@ private fun <T> PosterBrowse(
     var drawerOpen by remember { mutableStateOf(false) }
     val drawerListState = rememberLazyListState(vm.drawerIndex, vm.drawerOffset)
     val drawerBottom = drawerSystemBottom()
+    var railOpen by remember { mutableStateOf(true) }
+    val move = remember { MoveGate() }
+    val escapeRef = rememberUpdatedState(onEscapeUp)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        var skipFirst = !lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+        val observer = LifecycleEventObserver { _, event ->
+            if (event != Lifecycle.Event.ON_START) return@LifecycleEventObserver
+            if (skipFirst) {
+                skipFirst = false
+                return@LifecycleEventObserver
+            }
+            railOpen = true
+            vm.focusIndex = 0
+            vm.onScroll(0, 0)
+            scope.launch {
+                gridState.scrollToItem(0)
+                escapeRef.value()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     LaunchedEffect(drawerListState) {
         snapshotFlow { drawerListState.firstVisibleItemIndex to drawerListState.firstVisibleItemScrollOffset }
             .collect { (i, o) -> vm.onDrawerScroll(i, o) }
     }
 
     fun enter() {
-        scope.launch {
+        first.pending = false
+        move.launch(scope) {
             val list = itemsRef.value
             if (list.isNotEmpty()) {
-                val idx = vm.focusIndex.coerceIn(0, list.lastIndex)
-                gridState.ensureVisible(idx)
-                gridReg.focus(idx)
+                if (!drawer) railOpen = false
+                val idx = gridState.firstVisibleItemIndex.coerceIn(0, list.lastIndex)
+                gridState.scrollToItem(idx)
+                if (!gridReg.focus(idx)) {
+                    gridState.scrollToItem(0)
+                    if (!gridReg.focus(0)) onEscapeUp()
+                }
             } else if (drawer) {
                 try {
                     openButton.requestFocus()
                 } catch (_: IllegalStateException) {
                 }
             } else {
+                railOpen = true
                 val ci = catItemsRef.value.indexOfFirst { it.id == selectedRef.value }.coerceAtLeast(0)
-                catReg.focus(ci)
+                if (!catReg.focus(ci)) onEscapeUp()
+            }
+        }
+    }
+
+    fun openRail() {
+        railOpen = true
+        move.launch(scope) {
+            delay(240)
+            val ci = catItemsRef.value.indexOfFirst { it.id == selectedRef.value }.coerceAtLeast(0)
+            if (!catReg.focus(ci)) onEscapeUp()
+        }
+    }
+
+    fun stepUp(index: Int) {
+        move.launch(scope) {
+            val cols = gridColumns(gridState)
+            val above = index - cols
+            if (above < 0) {
+                if (drawer) {
+                    try {
+                        openButton.requestFocus()
+                    } catch (_: IllegalStateException) {
+                        onEscapeUp()
+                    }
+                } else {
+                    onEscapeUp()
+                }
+            } else {
+                if (gridState.layoutInfo.visibleItemsInfo.none { it.index == above }) {
+                    gridState.scrollToItem(above)
+                }
+                if (!gridReg.focus(above)) {
+                    gridState.scrollToItem(above)
+                    if (!gridReg.focus(above)) onEscapeUp()
+                }
+            }
+        }
+    }
+
+    fun stepLeft(index: Int) {
+        move.launch(scope) {
+            val col = gridState.layoutInfo.visibleItemsInfo.find { it.index == index }?.column ?: 0
+            if (col > 0) {
+                val left = index - 1
+                if (gridState.layoutInfo.visibleItemsInfo.none { it.index == left }) {
+                    gridState.scrollToItem(left)
+                }
+                if (!gridReg.focus(left)) onEscapeUp()
+            } else {
+                railOpen = true
+                delay(240)
+                val ci = catItemsRef.value.indexOfFirst { it.id == selectedRef.value }.coerceAtLeast(0)
+                if (!catReg.focus(ci)) onEscapeUp()
             }
         }
     }
@@ -148,15 +248,10 @@ private fun <T> PosterBrowse(
 
     LaunchedEffect(restored) {
         if (!restored) return@LaunchedEffect
-        delay(120)
-        withTimeoutOrNull(4_000) { snapshotFlow { itemsRef.value.size }.first { it > 0 } } ?: return@LaunchedEffect
-        val list = itemsRef.value
-        val idx = vm.focusIndex.coerceIn(0, list.lastIndex)
-        gridState.scrollToItem((idx - 4).coerceAtLeast(0))
-        if (first.pending) {
-            first.pending = false
-            gridReg.focus(idx)
-        }
+        first.pending = false
+        vm.focusIndex = 0
+        vm.onScroll(0, 0)
+        gridState.scrollToItem(0)
     }
 
     LaunchedEffect(items, pendingFrom) {
@@ -197,14 +292,10 @@ private fun <T> PosterBrowse(
                         p = p,
                         index = index,
                         registry = gridReg,
-                        onFocus = {
-                            vm.focusIndex = index
-                            vm.onScroll(index, 0)
-                        },
-                        onClick = {
-                            vm.focusIndex = index
-                            onOpen(p.id)
-                        },
+                        onFocus = { if (!drawer) railOpen = false },
+                        onUp = { stepUp(index) },
+                        onLeft = if (drawer) null else ({ stepLeft(index) }),
+                        onClick = { onOpen(p.id) },
                     )
                 }
             }
@@ -236,21 +327,30 @@ private fun <T> PosterBrowse(
             )
         }
     } else {
-        Row(Modifier.fillMaxSize()) {
-            TvCategoryList(catItems, selected, catReg, ::chooseCategory)
-            Spacer(Modifier.width(16.dp))
-            Box(Modifier.weight(1f).fillMaxHeight()) { Posters() }
-        }
+        TvSplitRail(
+            open = railOpen,
+            rail = { TvCategoryList(catItems, selected, catReg, ::chooseCategory, onEscapeUp) },
+            content = { Posters() },
+        )
     }
 }
 
 @Composable
-private fun PosterCell(p: PosterItem, index: Int, registry: FocusRegistry, onFocus: () -> Unit, onClick: () -> Unit) {
+private fun PosterCell(
+    p: PosterItem,
+    index: Int,
+    registry: FocusRegistry,
+    onFocus: () -> Unit,
+    onUp: () -> Unit,
+    onLeft: (() -> Unit)?,
+    onClick: () -> Unit,
+) {
     val s = LocalAppStyle.current
     Column(
         Modifier
             .fillMaxWidth()
             .registered(registry, index)
+            .tvMove(onUp = onUp, onLeft = onLeft)
             .tvFocus(onClick = onClick, shape = RoundedCornerShape(12.dp), onFocus = { if (it) onFocus() })
             .padding(6.dp),
     ) {
@@ -277,6 +377,11 @@ private fun Backdrop(url: String?) {
 }
 
 private fun metaLine(parts: List<String?>): String = parts.filterNotNull().filter { it.isNotBlank() }.joinToString("  ·  ")
+
+private fun gridColumns(state: LazyGridState): Int {
+    val cols = state.layoutInfo.visibleItemsInfo.maxOfOrNull { it.column } ?: 0
+    return (cols + 1).coerceAtLeast(1)
+}
 
 internal suspend fun FocusRequester.tryFocus() {
     repeat(12) {

@@ -27,6 +27,8 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -35,7 +37,11 @@ import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,6 +52,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -79,7 +86,6 @@ import de.dgstudios.iptvstream.core.vm.LiveViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 
 class CatItem(val id: String, val label: String)
 
@@ -91,17 +97,21 @@ fun buildCatItems(cats: List<CategoryEntity>, withRecent: Boolean = true): List<
         cats.forEach { add(CatItem(it.id, it.name)) }
     }
 
-/** Kategorieliste links (Auswahl per OK). */
+/** Kategorieliste links (Auswahl per OK). Hoch vom ersten Eintrag verlässt die Leiste. */
 @Composable
 fun TvCategoryList(
     items: List<CatItem>,
     selected: String,
     registry: FocusRegistry,
     onSelect: (String) -> Unit,
+    onEscapeUp: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val s = LocalAppStyle.current
+    val state = rememberLazyListState()
+    val scope = rememberCoroutineScope()
     LazyColumn(
+        state = state,
         modifier = modifier.width(240.dp).fillMaxHeight(),
         contentPadding = PaddingValues(vertical = 8.dp, horizontal = 6.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -112,6 +122,16 @@ fun TvCategoryList(
                     .fillMaxWidth()
                     .height(46.dp)
                     .registered(registry, index)
+                    .tvMove(onUp = {
+                        scope.launch {
+                            if (index <= 0) {
+                                onEscapeUp()
+                            } else {
+                                state.scrollToItem(index - 1)
+                                if (!registry.focus(index - 1)) onEscapeUp()
+                            }
+                        }
+                    })
                     .tvFocus(onClick = { onSelect(c.id) }, selected = c.id == selected)
                     .padding(horizontal = 14.dp),
                 contentAlignment = Alignment.CenterStart,
@@ -126,6 +146,36 @@ fun TvCategoryList(
                 )
             }
         }
+    }
+}
+
+/** Seitenleiste fährt zu, sobald der Fokus in der Inhaltsliste ist. */
+@Composable
+fun TvSplitRail(
+    open: Boolean,
+    rail: @Composable () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    val s = LocalAppStyle.current
+    val width by animateDpAsState(
+        targetValue = if (open) 256.dp else 0.dp,
+        animationSpec = if (s.animations) tween(220) else tween(0),
+        label = "railWidth",
+    )
+    Row(Modifier.fillMaxSize()) {
+        Box(
+            Modifier
+                .width(width)
+                .fillMaxHeight()
+                .clipToBounds()
+                .focusProperties { canFocus = open },
+        ) {
+            Row(Modifier.width(256.dp).fillMaxHeight()) {
+                rail()
+                Spacer(Modifier.width(16.dp))
+            }
+        }
+        Box(Modifier.weight(1f).fillMaxHeight()) { content() }
     }
 }
 
@@ -297,6 +347,7 @@ fun TvLiveScreen(
     entry: EntryHandle,
     first: FirstFocus,
     onPlay: () -> Unit,
+    onEscapeUp: () -> Unit,
 ) {
     val cats by vm.categories.collectAsStateWithLifecycle()
     val selected by vm.selectedCategory.collectAsStateWithLifecycle()
@@ -320,26 +371,90 @@ fun TvLiveScreen(
     var drawerOpen by remember { mutableStateOf(false) }
     val drawerListState = rememberLazyListState(vm.drawerIndex, vm.drawerOffset)
     val drawerBottom = drawerSystemBottom()
+    var railOpen by remember { mutableStateOf(true) }
+    val move = remember { MoveGate() }
+    val escapeRef = rememberUpdatedState(onEscapeUp)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        // Der erste Start zählt nicht: erst die Rückkehr aus dem Hintergrund setzt die Liste zurück.
+        var skipFirst = !lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+        val observer = LifecycleEventObserver { _, event ->
+            if (event != Lifecycle.Event.ON_START) return@LifecycleEventObserver
+            if (skipFirst) {
+                skipFirst = false
+                return@LifecycleEventObserver
+            }
+            railOpen = true
+            vm.focusIndex = 0
+            vm.onScroll(0, 0)
+            scope.launch {
+                listState.scrollToItem(0)
+                escapeRef.value()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     LaunchedEffect(drawerListState) {
         snapshotFlow { drawerListState.firstVisibleItemIndex to drawerListState.firstVisibleItemScrollOffset }
             .collect { (i, o) -> vm.onDrawerScroll(i, o) }
     }
 
     fun enter() {
-        scope.launch {
+        first.pending = false
+        move.launch(scope) {
             val list = itemsRef.value
             if (list.isNotEmpty()) {
-                val idx = vm.focusIndex.coerceIn(0, list.lastIndex)
-                listState.ensureVisible(idx)
-                listReg.focus(idx)
+                if (!drawer) railOpen = false
+                val idx = listState.firstVisibleItemIndex.coerceIn(0, list.lastIndex)
+                listState.scrollToItem(idx)
+                if (!listReg.focus(idx)) {
+                    listState.scrollToItem(0)
+                    if (!listReg.focus(0)) onEscapeUp()
+                }
             } else if (drawer) {
                 try {
                     openButton.requestFocus()
                 } catch (_: IllegalStateException) {
                 }
             } else {
+                railOpen = true
                 val ci = catItemsRef.value.indexOfFirst { it.id == selectedRef.value }.coerceAtLeast(0)
-                catReg.focus(ci)
+                if (!catReg.focus(ci)) onEscapeUp()
+            }
+        }
+    }
+
+    fun openRail() {
+        railOpen = true
+        move.launch(scope) {
+            delay(240)
+            val ci = catItemsRef.value.indexOfFirst { it.id == selectedRef.value }.coerceAtLeast(0)
+            if (!catReg.focus(ci)) onEscapeUp()
+        }
+    }
+
+    fun stepUp(index: Int) {
+        move.launch(scope) {
+            if (index <= 0) {
+                if (drawer) {
+                    try {
+                        openButton.requestFocus()
+                    } catch (_: IllegalStateException) {
+                        onEscapeUp()
+                    }
+                } else {
+                    onEscapeUp()
+                }
+            } else {
+                val above = index - 1
+                if (listState.layoutInfo.visibleItemsInfo.none { it.index == above }) {
+                    listState.scrollToItem(above)
+                }
+                if (!listReg.focus(above)) {
+                    listState.scrollToItem(above)
+                    if (!listReg.focus(above)) onEscapeUp()
+                }
             }
         }
     }
@@ -354,18 +469,13 @@ fun TvLiveScreen(
     }
     RegisterEntry(entry) { enter() }
 
-    // Gemerkte Kategorie/Position wiederherstellen; beim Start/Zurück aus dem Player dorthin fokussieren.
+    // Nicht tief in die Liste springen: das hat den Fokus ohne Weg nach oben gefangen.
     LaunchedEffect(restored) {
         if (!restored) return@LaunchedEffect
-        delay(120)
-        withTimeoutOrNull(4_000) { snapshotFlow { itemsRef.value.size }.first { it > 0 } } ?: return@LaunchedEffect
-        val list = itemsRef.value
-        val idx = vm.focusIndex.coerceIn(0, list.lastIndex)
-        listState.scrollToItem((idx - 2).coerceAtLeast(0))
-        if (first.pending) {
-            first.pending = false
-            listReg.focus(idx)
-        }
+        first.pending = false
+        vm.focusIndex = 0
+        vm.onScroll(0, 0)
+        listState.scrollToItem(0)
     }
 
     // Nach Kategoriewechsel (OK) in die neue Liste springen, sobald sie da ist.
@@ -407,12 +517,10 @@ fun TvLiveScreen(
                         isFav = ch.streamId in favs,
                         tick = tick,
                         registry = listReg,
-                        onFocus = {
-                            vm.focusIndex = index
-                            vm.onScroll(index, 0)
-                        },
+                        onFocus = { if (!drawer) railOpen = false },
+                        onUp = { stepUp(index) },
+                        onLeft = if (drawer) null else ::openRail,
                         onClick = {
-                            vm.focusIndex = index
                             vm.play(ch)
                             onPlay()
                         },
@@ -448,11 +556,11 @@ fun TvLiveScreen(
             )
         }
     } else {
-        Row(Modifier.fillMaxSize()) {
-            TvCategoryList(catItems, selected, catReg, ::chooseCategory)
-            Spacer(Modifier.width(16.dp))
-            Box(Modifier.weight(1f).fillMaxHeight()) { LiveChannels() }
-        }
+        TvSplitRail(
+            open = railOpen,
+            rail = { TvCategoryList(catItems, selected, catReg, ::chooseCategory, onEscapeUp) },
+            content = { LiveChannels() },
+        )
     }
 
     val m = menuFor
@@ -479,6 +587,8 @@ private fun ChannelRow(
     tick: Long,
     registry: FocusRegistry,
     onFocus: () -> Unit,
+    onUp: () -> Unit,
+    onLeft: (() -> Unit)?,
     onClick: () -> Unit,
     onMenu: () -> Unit,
 ) {
@@ -489,6 +599,7 @@ private fun ChannelRow(
             .fillMaxWidth()
             .height(78.dp)
             .registered(registry, index)
+            .tvMove(onUp = onUp, onLeft = onLeft)
             .onPreviewKeyEvent { ev ->
                 if (ev.type == KeyEventType.KeyUp && ev.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_MENU) {
                     onMenu()

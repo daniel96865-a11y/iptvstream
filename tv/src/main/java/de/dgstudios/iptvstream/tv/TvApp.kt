@@ -296,10 +296,16 @@ private fun TvHome(
             Spacer(Modifier.height(10.dp))
             TvStatusLine(sync, epg)
             Box(Modifier.weight(1f)) {
+                val escapeToTab = {
+                    try {
+                        tabRequesters[tab.ordinal].requestFocus()
+                    } catch (_: IllegalStateException) {
+                    }
+                }
                 when (tab) {
-                    TvTab.LIVE -> TvLiveScreen(liveVm, s, entry, first, onPlay)
-                    TvTab.MOVIES -> TvMoviesScreen(moviesVm, s, entry, first, onMovie)
-                    TvTab.SERIES -> TvSeriesScreen(seriesVm, s, entry, first, onSeries)
+                    TvTab.LIVE -> TvLiveScreen(liveVm, s, entry, first, onPlay, escapeToTab)
+                    TvTab.MOVIES -> TvMoviesScreen(moviesVm, s, entry, first, onMovie, escapeToTab)
+                    TvTab.SERIES -> TvSeriesScreen(seriesVm, s, entry, first, onSeries, escapeToTab)
                     TvTab.SEARCH -> TvSearchScreen(searchVm, s, entry, onPlay, onMovie, onSeries)
                     TvTab.SETTINGS -> TvSettingsScreen(mainVm, s, entry, onProfiles)
                 }
