@@ -46,6 +46,7 @@ import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -67,9 +68,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import de.dgstudios.iptvstream.core.container
@@ -110,6 +115,25 @@ fun MobileApp(mainVm: MainViewModel = viewModel()) {
         AppBackground {
             val nav = rememberNavController()
             val ctx = LocalContext.current
+            val updates = ctx.container.updates
+            val backStack by nav.currentBackStackEntryAsState()
+            val route = backStack?.destination?.route
+            LaunchedEffect(route) {
+                if (route == null || route == "home") updates.onStartScreenVisible()
+                else updates.onStartScreenHidden()
+            }
+            val lifecycleOwner = LocalLifecycleOwner.current
+            DisposableEffect(lifecycleOwner, route) {
+                val observer = LifecycleEventObserver { _, event ->
+                    when (event) {
+                        Lifecycle.Event.ON_RESUME -> if (route == null || route == "home") updates.onStartScreenResume()
+                        Lifecycle.Event.ON_STOP -> updates.onAppBackground()
+                        else -> Unit
+                    }
+                }
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+            }
             val auto by mainVm.autoStart.collectAsStateWithLifecycle()
             LaunchedEffect(auto) {
                 val req = auto ?: return@LaunchedEffect
@@ -161,7 +185,7 @@ fun MobileApp(mainVm: MainViewModel = viewModel()) {
                 }
             }
             ClockOverlay(s)
-            UpdateHost(ctx.container.updates)
+            UpdateHost(updates)
         }
     }
 }
@@ -226,8 +250,8 @@ private fun HomeScreen(
                 ) { t ->
                     when (t) {
                         Tab.LIVE -> LiveScreen(liveVm, mainVm, s, bottomPad, onPlay)
-                        Tab.MOVIES -> MoviesScreen(moviesVm, bottomPad, onMovie)
-                        Tab.SERIES -> SeriesScreen(seriesVm, bottomPad, onSeries)
+                        Tab.MOVIES -> MoviesScreen(moviesVm, s, bottomPad, onMovie)
+                        Tab.SERIES -> SeriesScreen(seriesVm, s, bottomPad, onSeries)
                         Tab.SEARCH -> SearchScreen(searchVm, s, bottomPad, onPlay, onMovie, onSeries)
                         Tab.SETTINGS -> SettingsScreen(mainVm, s, bottomPad, onProfiles)
                     }

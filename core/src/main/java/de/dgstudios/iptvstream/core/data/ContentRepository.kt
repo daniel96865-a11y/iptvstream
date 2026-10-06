@@ -36,6 +36,13 @@ object Cat {
     const val ALL = "__all"
     const val FAV = "__fav"
     const val RECENT = "__recent"
+
+    fun label(id: String, groupName: String? = null): String = when (id) {
+        ALL -> "Alle"
+        FAV -> "★ Favoriten"
+        RECENT -> "Zuletzt"
+        else -> groupName?.takeIf { it.isNotBlank() } ?: "Kategorie"
+    }
 }
 
 data class SearchResults(

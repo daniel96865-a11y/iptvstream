@@ -29,6 +29,7 @@ import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -53,9 +54,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import de.dgstudios.iptvstream.core.container
@@ -99,6 +104,25 @@ fun TvApp(mainVm: MainViewModel = viewModel()) {
         AppBackground {
             val nav = rememberNavController()
             val ctx = LocalContext.current
+            val updates = ctx.container.updates
+            val backStack by nav.currentBackStackEntryAsState()
+            val route = backStack?.destination?.route
+            LaunchedEffect(route) {
+                if (route == null || route == "home") updates.onStartScreenVisible()
+                else updates.onStartScreenHidden()
+            }
+            val lifecycleOwner = LocalLifecycleOwner.current
+            DisposableEffect(lifecycleOwner, route) {
+                val observer = LifecycleEventObserver { _, event ->
+                    when (event) {
+                        Lifecycle.Event.ON_RESUME -> if (route == null || route == "home") updates.onStartScreenResume()
+                        Lifecycle.Event.ON_STOP -> updates.onAppBackground()
+                        else -> Unit
+                    }
+                }
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+            }
             val auto by mainVm.autoStart.collectAsStateWithLifecycle()
             LaunchedEffect(auto) {
                 val req = auto ?: return@LaunchedEffect
@@ -149,7 +173,7 @@ fun TvApp(mainVm: MainViewModel = viewModel()) {
             }
             // Zusätzlicher Rand wegen Overscan, damit die Uhr nie abgeschnitten wird.
             ClockOverlay(s, Modifier.padding(horizontal = 36.dp, vertical = 15.dp))
-            UpdateHost(ctx.container.updates, television = true)
+            UpdateHost(updates, television = true)
         }
     }
 }
@@ -274,8 +298,8 @@ private fun TvHome(
             Box(Modifier.weight(1f)) {
                 when (tab) {
                     TvTab.LIVE -> TvLiveScreen(liveVm, s, entry, first, onPlay)
-                    TvTab.MOVIES -> TvMoviesScreen(moviesVm, entry, first, onMovie)
-                    TvTab.SERIES -> TvSeriesScreen(seriesVm, entry, first, onSeries)
+                    TvTab.MOVIES -> TvMoviesScreen(moviesVm, s, entry, first, onMovie)
+                    TvTab.SERIES -> TvSeriesScreen(seriesVm, s, entry, first, onSeries)
                     TvTab.SEARCH -> TvSearchScreen(searchVm, s, entry, onPlay, onMovie, onSeries)
                     TvTab.SETTINGS -> TvSettingsScreen(mainVm, s, entry, onProfiles)
                 }

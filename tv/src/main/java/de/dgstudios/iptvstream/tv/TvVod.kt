@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
@@ -55,6 +56,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import de.dgstudios.iptvstream.core.data.Cat
 import de.dgstudios.iptvstream.core.data.EpisodeInfo
 import de.dgstudios.iptvstream.core.data.WatchPos
+import de.dgstudios.iptvstream.core.settings.AppSettings
 import de.dgstudios.iptvstream.core.ui.LocalAppStyle
 import de.dgstudios.iptvstream.core.ui.Poster
 import de.dgstudios.iptvstream.core.ui.formatDuration
@@ -72,18 +74,19 @@ import kotlinx.coroutines.withTimeoutOrNull
 class PosterItem(val id: String, val name: String, val poster: String?, val rating: Double)
 
 @Composable
-fun TvMoviesScreen(vm: MoviesViewModel, entry: EntryHandle, first: FirstFocus, onOpen: (String) -> Unit) {
-    PosterBrowse(vm, entry, first, onOpen, toItem = { PosterItem(it.streamId, it.name, it.poster, it.rating) }, emptyFav = "Favoriten setzt du in der Detailansicht.")
+fun TvMoviesScreen(vm: MoviesViewModel, settings: AppSettings, entry: EntryHandle, first: FirstFocus, onOpen: (String) -> Unit) {
+    PosterBrowse(vm, settings.categoryDrawer, entry, first, onOpen, toItem = { PosterItem(it.streamId, it.name, it.poster, it.rating) }, emptyFav = "Favoriten setzt du in der Detailansicht.")
 }
 
 @Composable
-fun TvSeriesScreen(vm: SeriesViewModel, entry: EntryHandle, first: FirstFocus, onOpen: (String) -> Unit) {
-    PosterBrowse(vm, entry, first, onOpen, toItem = { PosterItem(it.seriesId, it.name, it.poster, it.rating) }, emptyFav = "Favoriten setzt du in der Detailansicht.")
+fun TvSeriesScreen(vm: SeriesViewModel, settings: AppSettings, entry: EntryHandle, first: FirstFocus, onOpen: (String) -> Unit) {
+    PosterBrowse(vm, settings.categoryDrawer, entry, first, onOpen, toItem = { PosterItem(it.seriesId, it.name, it.poster, it.rating) }, emptyFav = "Favoriten setzt du in der Detailansicht.")
 }
 
 @Composable
 private fun <T> PosterBrowse(
     vm: BrowseViewModel<T>,
+    drawer: Boolean,
     entry: EntryHandle,
     first: FirstFocus,
     onOpen: (String) -> Unit,
@@ -104,6 +107,8 @@ private fun <T> PosterBrowse(
     var pendingFrom by remember { mutableStateOf<List<T>?>(null) }
     val catItems = remember(cats) { buildCatItems(cats) }
     val catItemsRef = rememberUpdatedState(catItems)
+    val openButton = remember { FocusRequester() }
+    var drawerOpen by remember { mutableStateOf(false) }
 
     fun enter() {
         scope.launch {
@@ -112,10 +117,24 @@ private fun <T> PosterBrowse(
                 val idx = vm.focusIndex.coerceIn(0, list.lastIndex)
                 gridState.ensureVisible(idx)
                 gridReg.focus(idx)
+            } else if (drawer) {
+                try {
+                    openButton.requestFocus()
+                } catch (_: IllegalStateException) {
+                }
             } else {
                 val ci = catItemsRef.value.indexOfFirst { it.id == selectedRef.value }.coerceAtLeast(0)
                 catReg.focus(ci)
             }
+        }
+    }
+
+    fun chooseCategory(id: String) {
+        if (id == selected) {
+            enter()
+        } else {
+            pendingFrom = items
+            vm.selectCategory(id)
         }
     }
     RegisterEntry(entry) { enter() }
@@ -148,55 +167,70 @@ private fun <T> PosterBrowse(
         }
     }
 
-    Row(Modifier.fillMaxSize()) {
-        TvCategoryList(
-            items = catItems,
-            selected = selected,
-            registry = catReg,
-            onSelect = { id ->
-                if (id == selected) {
-                    enter()
-                } else {
-                    pendingFrom = items
-                    vm.selectCategory(id)
-                }
-            },
-        )
-        Spacer(Modifier.width(16.dp))
-        Box(Modifier.weight(1f).fillMaxHeight()) {
-            if (items.isEmpty()) {
-                when (selected) {
-                    Cat.FAV -> TvEmpty("Noch keine Favoriten", emptyFav)
-                    Cat.RECENT -> TvEmpty("Noch nichts angesehen")
-                    else -> TvEmpty("Keine Einträge", "Inhalte werden geladen oder die Kategorie ist leer.")
-                }
-            } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(138.dp),
-                    state = gridState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    itemsIndexed(items, key = { _, it -> toItem(it).id }) { index, raw ->
-                        val p = toItem(raw)
-                        PosterCell(
-                            p = p,
-                            index = index,
-                            registry = gridReg,
-                            onFocus = {
-                                vm.focusIndex = index
-                                vm.onScroll(index, 0)
-                            },
-                            onClick = {
-                                vm.focusIndex = index
-                                onOpen(p.id)
-                            },
-                        )
-                    }
+    @Composable
+    fun Posters() {
+        if (items.isEmpty()) {
+            when (selected) {
+                Cat.FAV -> TvEmpty("Noch keine Favoriten", emptyFav)
+                Cat.RECENT -> TvEmpty("Noch nichts angesehen")
+                else -> TvEmpty("Keine Einträge", "Inhalte werden geladen oder die Kategorie ist leer.")
+            }
+        } else {
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(138.dp),
+                state = gridState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                itemsIndexed(items, key = { _, it -> toItem(it).id }) { index, raw ->
+                    val p = toItem(raw)
+                    PosterCell(
+                        p = p,
+                        index = index,
+                        registry = gridReg,
+                        onFocus = {
+                            vm.focusIndex = index
+                            vm.onScroll(index, 0)
+                        },
+                        onClick = {
+                            vm.focusIndex = index
+                            onOpen(p.id)
+                        },
+                    )
                 }
             }
+        }
+    }
+
+    if (drawer) {
+        Column(Modifier.fillMaxSize()) {
+            TvButton(
+                text = "Kategorien: ${Cat.label(selected, cats.firstOrNull { it.id == selected }?.name)}",
+                onClick = { drawerOpen = true },
+                modifier = Modifier.padding(start = 6.dp, bottom = 8.dp),
+                icon = Icons.Rounded.Menu,
+                requester = openButton,
+            )
+            Box(Modifier.weight(1f).fillMaxSize()) { Posters() }
+        }
+        if (drawerOpen) {
+            TvCategoryDrawer(
+                items = catItems,
+                selected = selected,
+                onSelect = {
+                    drawerOpen = false
+                    chooseCategory(it)
+                },
+                onDismiss = { drawerOpen = false },
+            )
+        }
+    } else {
+        Row(Modifier.fillMaxSize()) {
+            TvCategoryList(catItems, selected, catReg, ::chooseCategory)
+            Spacer(Modifier.width(16.dp))
+            Box(Modifier.weight(1f).fillMaxHeight()) { Posters() }
         }
     }
 }

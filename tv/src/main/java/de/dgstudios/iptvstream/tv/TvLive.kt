@@ -1,5 +1,8 @@
 package de.dgstudios.iptvstream.tv
 
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +22,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,15 +39,25 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.dgstudios.iptvstream.core.data.Cat
 import de.dgstudios.iptvstream.core.data.db.CategoryEntity
@@ -105,6 +121,126 @@ fun TvCategoryList(
     }
 }
 
+/**
+ * Durchsuchbare Kategorien von der Seite. Zurück schließt, OK wählt aus,
+ * Hoch/Runter bewegt den Fokus, das Suchfeld filtert die Liste.
+ */
+@Composable
+fun TvCategoryDrawer(
+    items: List<CatItem>,
+    selected: String,
+    onSelect: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val s = LocalAppStyle.current
+    var query by remember { mutableStateOf("") }
+    val shown = remember(items, query) {
+        val q = query.trim()
+        if (q.isEmpty()) items else items.filter { it.label.contains(q, ignoreCase = true) }
+    }
+    val reg = remember { FocusRegistry() }
+    val search = remember { FocusRequester() }
+    val scope = rememberCoroutineScope()
+    var searchFocused by remember { mutableStateOf(false) }
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Row(Modifier.fillMaxSize()) {
+            Column(
+                Modifier
+                    .width(480.dp)
+                    .fillMaxHeight()
+                    .background(s.backgroundColors[1])
+                    .padding(horizontal = 18.dp, vertical = 16.dp),
+            ) {
+                Text("Kategorien", color = s.onSurface, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(12.dp))
+                BasicTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    singleLine = true,
+                    textStyle = TextStyle(color = s.onSurface, fontSize = 20.sp),
+                    cursorBrush = SolidColor(s.accent),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(search)
+                        .onFocusChanged { searchFocused = it.isFocused }
+                        .onPreviewKeyEvent { ev ->
+                            if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionDown && shown.isNotEmpty()) {
+                                scope.launch { reg.focus(0) }
+                                true
+                            } else {
+                                false
+                            }
+                        }
+                        .background(Color.White.copy(alpha = 0.10f), RoundedCornerShape(14.dp))
+                        .border(
+                            if (searchFocused) 3.dp else 1.dp,
+                            if (searchFocused) Color.White else Color.White.copy(alpha = 0.25f),
+                            RoundedCornerShape(14.dp),
+                        )
+                        .padding(16.dp),
+                    decorationBox = { inner ->
+                        Box {
+                            if (query.isEmpty()) Text("Kategorie suchen", color = s.onSurfaceDim, fontSize = 20.sp)
+                            inner()
+                        }
+                    },
+                )
+                Spacer(Modifier.height(12.dp))
+                if (shown.isEmpty()) {
+                    Text("Keine Kategorie", color = s.onSurfaceDim, fontSize = 18.sp)
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        itemsIndexed(shown, key = { _, c -> c.id }) { index, c ->
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(52.dp)
+                                    .registered(reg, index)
+                                    .then(if (index == 0) Modifier.focusProperties { up = search } else Modifier)
+                                    .tvFocus(onClick = { onSelect(c.id) }, selected = c.id == selected)
+                                    .padding(horizontal = 14.dp),
+                                contentAlignment = Alignment.CenterStart,
+                            ) {
+                                Text(
+                                    c.label,
+                                    color = s.onSurface,
+                                    fontSize = 20.sp,
+                                    fontWeight = if (c.id == selected) FontWeight.Bold else FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .focusProperties { canFocus = false }
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onDismiss,
+                    ),
+            )
+        }
+    }
+    LaunchedEffect(Unit) {
+        val idx = items.indexOfFirst { it.id == selected }.coerceAtLeast(0)
+        if (!reg.focus(idx)) {
+            try {
+                search.requestFocus()
+            } catch (_: IllegalStateException) {
+            }
+        }
+    }
+}
+
 @Composable
 fun TvLiveScreen(
     vm: LiveViewModel,
@@ -130,6 +266,9 @@ fun TvLiveScreen(
     var pendingFrom by remember { mutableStateOf<List<ChannelEntity>?>(null) }
     val catItems = remember(cats) { buildCatItems(cats) }
     val catItemsRef = rememberUpdatedState(catItems)
+    val drawer = settings.categoryDrawer
+    val openButton = remember { FocusRequester() }
+    var drawerOpen by remember { mutableStateOf(false) }
 
     fun enter() {
         scope.launch {
@@ -138,10 +277,24 @@ fun TvLiveScreen(
                 val idx = vm.focusIndex.coerceIn(0, list.lastIndex)
                 listState.ensureVisible(idx)
                 listReg.focus(idx)
+            } else if (drawer) {
+                try {
+                    openButton.requestFocus()
+                } catch (_: IllegalStateException) {
+                }
             } else {
                 val ci = catItemsRef.value.indexOfFirst { it.id == selectedRef.value }.coerceAtLeast(0)
                 catReg.focus(ci)
             }
+        }
+    }
+
+    fun chooseCategory(id: String) {
+        if (id == selected) {
+            enter()
+        } else {
+            pendingFrom = items
+            vm.selectCategory(id)
         }
     }
     RegisterEntry(entry) { enter() }
@@ -176,57 +329,72 @@ fun TvLiveScreen(
         }
     }
 
-    Row(Modifier.fillMaxSize()) {
-        TvCategoryList(
-            items = catItems,
-            selected = selected,
-            registry = catReg,
-            onSelect = { id ->
-                if (id == selected) {
-                    enter()
-                } else {
-                    pendingFrom = items
-                    vm.selectCategory(id)
-                }
-            },
-        )
-        Spacer(Modifier.width(16.dp))
-        Box(Modifier.weight(1f).fillMaxHeight()) {
-            if (items.isEmpty()) {
-                when (selected) {
-                    Cat.FAV -> TvEmpty("Noch keine Favoriten", "Sender lange drücken (oder Menü-Taste) und zu Favoriten hinzufügen.")
-                    Cat.RECENT -> TvEmpty("Noch nichts gesehen", "Zuletzt gesehene Sender erscheinen hier.")
-                    else -> TvEmpty("Keine Sender", "Inhalte werden geladen oder die Kategorie ist leer.")
-                }
-            } else {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(vertical = 8.dp, horizontal = 6.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    itemsIndexed(items, key = { _, c -> c.streamId }) { index, ch ->
-                        ChannelRow(
-                            ch = ch,
-                            index = index,
-                            showNumber = settings.showNumbers,
-                            isFav = ch.streamId in favs,
-                            tick = tick,
-                            registry = listReg,
-                            onFocus = {
-                                vm.focusIndex = index
-                                vm.onScroll(index, 0)
-                            },
-                            onClick = {
-                                vm.focusIndex = index
-                                vm.play(ch)
-                                onPlay()
-                            },
-                            onMenu = { menuFor = ch },
-                        )
-                    }
+    @Composable
+    fun LiveChannels() {
+        if (items.isEmpty()) {
+            when (selected) {
+                Cat.FAV -> TvEmpty("Noch keine Favoriten", "Sender lange drücken (oder Menü-Taste) und zu Favoriten hinzufügen.")
+                Cat.RECENT -> TvEmpty("Noch nichts gesehen", "Zuletzt gesehene Sender erscheinen hier.")
+                else -> TvEmpty("Keine Sender", "Inhalte werden geladen oder die Kategorie ist leer.")
+            }
+        } else {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(vertical = 8.dp, horizontal = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                itemsIndexed(items, key = { _, c -> c.streamId }) { index, ch ->
+                    ChannelRow(
+                        ch = ch,
+                        index = index,
+                        showNumber = settings.showNumbers,
+                        isFav = ch.streamId in favs,
+                        tick = tick,
+                        registry = listReg,
+                        onFocus = {
+                            vm.focusIndex = index
+                            vm.onScroll(index, 0)
+                        },
+                        onClick = {
+                            vm.focusIndex = index
+                            vm.play(ch)
+                            onPlay()
+                        },
+                        onMenu = { menuFor = ch },
+                    )
                 }
             }
+        }
+    }
+
+    if (drawer) {
+        Column(Modifier.fillMaxSize()) {
+            TvButton(
+                text = "Kategorien: ${Cat.label(selected, cats.firstOrNull { it.id == selected }?.name)}",
+                onClick = { drawerOpen = true },
+                modifier = Modifier.padding(start = 6.dp, bottom = 8.dp),
+                icon = Icons.Rounded.Menu,
+                requester = openButton,
+            )
+            Box(Modifier.weight(1f).fillMaxSize()) { LiveChannels() }
+        }
+        if (drawerOpen) {
+            TvCategoryDrawer(
+                items = catItems,
+                selected = selected,
+                onSelect = {
+                    drawerOpen = false
+                    chooseCategory(it)
+                },
+                onDismiss = { drawerOpen = false },
+            )
+        }
+    } else {
+        Row(Modifier.fillMaxSize()) {
+            TvCategoryList(catItems, selected, catReg, ::chooseCategory)
+            Spacer(Modifier.width(16.dp))
+            Box(Modifier.weight(1f).fillMaxHeight()) { LiveChannels() }
         }
     }
 

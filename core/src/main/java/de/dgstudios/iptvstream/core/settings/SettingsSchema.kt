@@ -134,11 +134,18 @@ object SettingsSchema {
         SettingsSection(
             "general", "Allgemein",
             listOf(
+                ChoiceDef(
+                    "categories",
+                    "Kategorien",
+                    listOf(Option("bar", "Leiste"), Option("drawer", "Schublade")),
+                    "bar",
+                    "Leiste oder durchsuchbare Schublade, für Live-TV, Filme und Serien",
+                ),
                 ActionDef("profiles", "Profile verwalten", "Hinzufügen, bearbeiten, löschen"),
                 ActionDef("reload", "Inhalte neu laden", "Sender, Filme und Serien aktualisieren"),
                 ActionDef("check_update", "Nach Updates suchen"),
                 InfoDef("language", "App-Sprache", "Deutsch"),
-                InfoDef("version", "Version", "1.0.3"),
+                InfoDef("version", "Version", "1.0.4"),
             ),
         ),
     )

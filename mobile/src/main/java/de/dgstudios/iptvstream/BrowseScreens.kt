@@ -1,19 +1,26 @@
 package de.dgstudios.iptvstream
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -24,6 +31,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material3.DropdownMenu
@@ -47,9 +55,12 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.dgstudios.iptvstream.core.data.Cat
 import de.dgstudios.iptvstream.core.data.db.CategoryEntity
@@ -82,6 +93,142 @@ fun CategoryRow(categories: List<CategoryEntity>, selected: String, onSelect: (S
     }
 }
 
+/** Leiste wie bisher, oder ein Knopf, der die durchsuchbare Schublade öffnet. */
+@Composable
+fun CategoryPicker(
+    categories: List<CategoryEntity>,
+    selected: String,
+    drawer: Boolean,
+    onSelect: (String) -> Unit,
+) {
+    if (!drawer) {
+        CategoryRow(categories, selected, onSelect)
+        return
+    }
+    var open by remember { mutableStateOf(false) }
+    val label = Cat.label(selected, categories.firstOrNull { it.id == selected }?.name)
+    val s = LocalAppStyle.current
+    Row(
+        Modifier
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .fillMaxWidth()
+            .height(36.dp)
+            .glass(RoundedCornerShape(50))
+            .pressable({ open = true })
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Rounded.Menu, contentDescription = "Kategorien öffnen", tint = s.onSurface, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(
+            label,
+            color = s.onSurface,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+    if (open) {
+        CategoryDrawer(
+            categories = categories,
+            selected = selected,
+            onSelect = {
+                onSelect(it)
+                open = false
+            },
+            onDismiss = { open = false },
+        )
+    }
+}
+
+@Composable
+private fun CategoryDrawer(
+    categories: List<CategoryEntity>,
+    selected: String,
+    onSelect: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val s = LocalAppStyle.current
+    var query by remember { mutableStateOf("") }
+    val entries = remember(categories) {
+        buildList {
+            add(Cat.ALL to Cat.label(Cat.ALL))
+            add(Cat.FAV to Cat.label(Cat.FAV))
+            add(Cat.RECENT to Cat.label(Cat.RECENT))
+            categories.forEach { add(it.id to it.name) }
+        }
+    }
+    val shown = remember(entries, query) {
+        val q = query.trim()
+        if (q.isEmpty()) entries else entries.filter { it.second.contains(q, ignoreCase = true) }
+    }
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = true),
+    ) {
+        Box(Modifier.fillMaxSize()) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.45f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onDismiss,
+                    ),
+            )
+            Column(
+                Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(0.88f)
+                    .widthIn(max = 420.dp)
+                    .background(s.backgroundColors[1])
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+            ) {
+                Text("Kategorien", color = s.onSurface, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(10.dp))
+                GlassTextField(
+                    value = query,
+                    onChange = { query = it },
+                    placeholder = "Kategorie suchen",
+                    imeAction = ImeAction.Search,
+                )
+                Spacer(Modifier.height(10.dp))
+                if (shown.isEmpty()) {
+                    Text("Keine Kategorie", color = s.onSurfaceDim, fontSize = 14.sp, modifier = Modifier.padding(8.dp))
+                } else {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(shown, key = { it.first }) { (id, name) ->
+                            val on = id == selected
+                            val shape = RoundedCornerShape(14.dp)
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(46.dp)
+                                    .then(if (on) Modifier.clip(shape).background(s.accent, shape) else Modifier.glass(shape))
+                                    .pressable({ onSelect(id) })
+                                    .padding(horizontal = 14.dp),
+                                contentAlignment = Alignment.CenterStart,
+                            ) {
+                                Text(
+                                    name,
+                                    color = if (on) Color.White else s.onSurface,
+                                    fontSize = 15.sp,
+                                    fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun LiveScreen(
     vm: LiveViewModel,
@@ -100,7 +247,7 @@ fun LiveScreen(
 
     Column(Modifier.fillMaxSize()) {
         ScreenHeader("Live TV", if (items.isNotEmpty()) "${items.size} Sender" else null)
-        CategoryRow(categories, selected, vm::selectCategory)
+        CategoryPicker(categories, selected, settings.categoryDrawer, vm::selectCategory)
         if (!restored) return@Column
 
         val listState = rememberLazyListState(vm.scrollIndex, vm.scrollOffset)
@@ -249,10 +396,11 @@ private fun ChannelRow(
 // ---------------------------------------------------------------------- Filme & Serien
 
 @Composable
-fun MoviesScreen(vm: MoviesViewModel, bottomPad: Dp, onOpen: (String) -> Unit) {
+fun MoviesScreen(vm: MoviesViewModel, settings: AppSettings, bottomPad: Dp, onOpen: (String) -> Unit) {
     PosterBrowse(
         title = "Filme",
         vm = vm,
+        drawer = settings.categoryDrawer,
         bottomPad = bottomPad,
         key = { it.streamId },
         name = { it.name },
@@ -263,10 +411,11 @@ fun MoviesScreen(vm: MoviesViewModel, bottomPad: Dp, onOpen: (String) -> Unit) {
 }
 
 @Composable
-fun SeriesScreen(vm: SeriesViewModel, bottomPad: Dp, onOpen: (String) -> Unit) {
+fun SeriesScreen(vm: SeriesViewModel, settings: AppSettings, bottomPad: Dp, onOpen: (String) -> Unit) {
     PosterBrowse(
         title = "Serien",
         vm = vm,
+        drawer = settings.categoryDrawer,
         bottomPad = bottomPad,
         key = { it.seriesId },
         name = { it.name },
@@ -280,6 +429,7 @@ fun SeriesScreen(vm: SeriesViewModel, bottomPad: Dp, onOpen: (String) -> Unit) {
 private fun <T> PosterBrowse(
     title: String,
     vm: BrowseViewModel<T>,
+    drawer: Boolean,
     bottomPad: Dp,
     key: (T) -> String,
     name: (T) -> String,
@@ -295,7 +445,7 @@ private fun <T> PosterBrowse(
 
     Column(Modifier.fillMaxSize()) {
         ScreenHeader(title, if (items.isNotEmpty()) "${items.size} Titel" else null)
-        CategoryRow(categories, selected, vm::selectCategory)
+        CategoryPicker(categories, selected, drawer, vm::selectCategory)
         if (!restored) return@Column
 
         val gridState = rememberLazyGridState(vm.scrollIndex, vm.scrollOffset)

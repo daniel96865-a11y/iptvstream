@@ -67,17 +67,48 @@ class UpdateChecker(
     private var checkJob: Job? = null
     private var downloadJob: Job? = null
 
+    /** Startbildschirm ist sichtbar (Home mit den Haupt-Tabs). */
+    private var startVisible = false
+
+    /** „Später“ auf diesem Besuch; der nächste Start zeigt das Update wieder. */
+    private var suppressOnThisVisit = false
+
     fun maybeCheck() {
         val last = prefs.getLong(KEY_LAST, 0L)
         if (System.currentTimeMillis() - last < INTERVAL_MS) return
-        check(manual = false)
+        check(manual = false, ignoreInterval = false)
+    }
+
+    /** Home wird angezeigt: sofort prüfen, ohne auf das Intervall zu warten. */
+    fun onStartScreenVisible() {
+        val entered = !startVisible
+        startVisible = true
+        if (!entered) return
+        suppressOnThisVisit = false
+        check(manual = false, ignoreInterval = true)
+    }
+
+    fun onStartScreenHidden() {
+        startVisible = false
+    }
+
+    /** Zurück in die App, solange der Startbildschirm offen ist. */
+    fun onStartScreenResume() {
+        if (!startVisible || suppressOnThisVisit) return
+        if (_prompt.value !is UpdatePrompt.Hidden) return
+        check(manual = false, ignoreInterval = true)
+    }
+
+    fun onAppBackground() {
+        suppressOnThisVisit = false
     }
 
     fun checkNow() {
-        check(manual = true)
+        check(manual = true, ignoreInterval = true)
     }
 
     fun later() {
+        if (_prompt.value !is UpdatePrompt.Hidden) suppressOnThisVisit = true
         downloadJob?.cancel()
         _prompt.value = UpdatePrompt.Hidden
     }
@@ -140,15 +171,23 @@ class UpdateChecker(
         Uri.parse("package:${appContext.packageName}"),
     )
 
-    private fun check(manual: Boolean) {
+    private fun check(manual: Boolean, ignoreInterval: Boolean) {
         val current = _prompt.value
         if (current is UpdatePrompt.Offer && current.downloading) return
+        if (!manual && !ignoreInterval) {
+            val last = prefs.getLong(KEY_LAST, 0L)
+            if (System.currentTimeMillis() - last < INTERVAL_MS) return
+        }
+        if (!manual && checkJob?.isActive == true) return
         checkJob?.cancel()
         checkJob = scope.launch {
             try {
                 val info = fetchFeed()
+                if (!isActive) return@launch
                 prefs.edit().putLong(KEY_LAST, System.currentTimeMillis()).apply()
-                if (info.versionCode > installedVersionCode(appContext)) {
+                val newer = info.versionCode > installedVersionCode(appContext)
+                if (newer) {
+                    if (!manual && (!startVisible || suppressOnThisVisit)) return@launch
                     _prompt.value = UpdatePrompt.Offer(info, downloading = false, progress = null, needPermission = false)
                 } else if (manual) {
                     val name = installedVersionName(appContext)
@@ -157,7 +196,7 @@ class UpdateChecker(
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                if (manual) _prompt.value = UpdatePrompt.Message("Update konnte nicht geprüft werden.")
+                if (manual && isActive) _prompt.value = UpdatePrompt.Message("Update konnte nicht geprüft werden.")
             }
         }
     }

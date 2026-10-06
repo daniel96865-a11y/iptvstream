@@ -39,6 +39,8 @@ data class AppSettings(val raw: Map<String, String> = emptyMap()) {
     val startMode: String get() = get("start_mode")
     val showNumbers: Boolean get() = on("show_numbers")
     val epgAuto: Boolean get() = on("epg_auto")
+    /** true: durchsuchbare Schublade. false: bisherige Kategorieleiste. */
+    val categoryDrawer: Boolean get() = get("categories") == "drawer"
 }
 
 class SettingsStore(private val context: Context) {

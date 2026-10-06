@@ -54,7 +54,6 @@ fun UpdateHost(checker: UpdateChecker, television: Boolean = false) {
     }
 
     LaunchedEffect(checker) {
-        checker.maybeCheck()
         checker.installs.collect { file ->
             val activity = context.findActivity()
             val intent = checker.installIntent(file)
