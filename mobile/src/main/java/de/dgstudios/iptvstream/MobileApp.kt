@@ -78,6 +78,7 @@ import de.dgstudios.iptvstream.core.settings.AppSettings
 import de.dgstudios.iptvstream.core.ui.AppBackground
 import de.dgstudios.iptvstream.core.ui.AppTheme
 import de.dgstudios.iptvstream.core.ui.ClockOverlay
+import de.dgstudios.iptvstream.core.update.UpdateHost
 import de.dgstudios.iptvstream.core.ui.LocalAppStyle
 import de.dgstudios.iptvstream.core.vm.LiveViewModel
 import de.dgstudios.iptvstream.core.vm.MainViewModel
@@ -160,6 +161,7 @@ fun MobileApp(mainVm: MainViewModel = viewModel()) {
                 }
             }
             ClockOverlay(s)
+            UpdateHost(ctx.container.updates)
         }
     }
 }

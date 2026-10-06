@@ -53,6 +53,8 @@ dependencies {
     api("androidx.media3:media3-exoplayer-hls:1.5.1")
     api("androidx.media3:media3-ui:1.5.1")
     api("androidx.media3:media3-datasource-okhttp:1.5.1")
+    // Vorgebautes Media3-FFmpeg-Audio (arm64-v8a, armeabi-v7a; AC3/E-AC3/MP2/DTS). JNI passt zu 1.5.x.
+    api("org.jellyfin.media3:media3-ffmpeg-decoder:1.5.0+1")
 
     api("androidx.room:room-runtime:2.6.1")
     api("androidx.room:room-ktx:2.6.1")

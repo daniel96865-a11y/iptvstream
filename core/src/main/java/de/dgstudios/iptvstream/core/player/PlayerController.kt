@@ -13,6 +13,7 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.decoder.ffmpeg.FfmpegAudioRenderer
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlaybackException
@@ -66,22 +67,35 @@ data class PlayerState(
     val ended: Boolean = false,
 )
 
-/** Renderer-Factory mit Decoder-Fallback und optional abgeschaltetem Passthrough. */
+/**
+ * Hardware-Decoder zuerst, FFmpeg nur als Fallback (AC3, E-AC3, MP2, DTS).
+ * Passthrough ist standardmäßig aus: [DefaultAudioSink.Builder] mit Context ignoriert
+ * [DefaultAudioSink.Builder.setAudioCapabilities] und würde AC3 sonst durchreichen.
+ */
 class AppRenderersFactory(context: Context, private val passthrough: Boolean) : DefaultRenderersFactory(context) {
     init {
         setEnableDecoderFallback(true)
+        setExtensionRendererMode(EXTENSION_RENDERER_MODE_ON)
+        // Harte Referenz: DefaultRenderersFactory lädt den Renderer nur per Reflection.
+        check(FfmpegAudioRenderer::class.java.constructors.isNotEmpty())
     }
 
+    @Suppress("DEPRECATION")
     override fun buildAudioSink(
         context: Context,
         enableFloatOutput: Boolean,
         enableAudioTrackPlaybackParams: Boolean,
-    ): AudioSink? {
-        val b = DefaultAudioSink.Builder(context)
+    ): AudioSink {
+        val b = if (passthrough) {
+            DefaultAudioSink.Builder(context)
+        } else {
+            DefaultAudioSink.Builder()
+                .setAudioCapabilities(AudioCapabilities.DEFAULT_AUDIO_CAPABILITIES)
+        }
+        return b
             .setEnableFloatOutput(enableFloatOutput)
             .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
-        if (!passthrough) b.setAudioCapabilities(AudioCapabilities.DEFAULT_AUDIO_CAPABILITIES)
-        return b.build()
+            .build()
     }
 }
 

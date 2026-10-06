@@ -29,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.dgstudios.iptvstream.core.data.db.ProfileEntity
 import de.dgstudios.iptvstream.core.data.db.ProfileType
+import de.dgstudios.iptvstream.core.container
 import de.dgstudios.iptvstream.core.settings.ActionDef
 import de.dgstudios.iptvstream.core.settings.AppSettings
 import de.dgstudios.iptvstream.core.settings.ChoiceDef
@@ -46,11 +48,13 @@ import de.dgstudios.iptvstream.core.settings.SettingDef
 import de.dgstudios.iptvstream.core.settings.SettingsSchema
 import de.dgstudios.iptvstream.core.ui.LocalAppStyle
 import de.dgstudios.iptvstream.core.ui.ProfileFormState
+import de.dgstudios.iptvstream.core.update.installedVersionName
 import de.dgstudios.iptvstream.core.vm.MainViewModel
 
 @Composable
 fun TvSettingsScreen(mainVm: MainViewModel, settings: AppSettings, entry: EntryHandle, onProfiles: () -> Unit) {
     val s = LocalAppStyle.current
+    val context = LocalContext.current
     val active by mainVm.active.collectAsStateWithLifecycle()
     val epg by mainVm.epg.collectAsStateWithLifecycle()
     var sectionIndex by rememberSaveable { mutableStateOf(0) }
@@ -121,6 +125,7 @@ fun TvSettingsScreen(mainVm: MainViewModel, settings: AppSettings, entry: EntryH
                             "profiles" -> onProfiles()
                             "reload" -> mainVm.reloadContent()
                             "epg_refresh" -> mainVm.refreshEpg()
+                            "check_update" -> context.container.updates.checkNow()
                         }
                     },
                 )
@@ -200,9 +205,14 @@ private fun SettingRow(
             }
         }
         is InfoDef -> {
+            val value = if (def.id == "version") {
+                installedVersionName(LocalContext.current).ifBlank { def.value }
+            } else {
+                def.value
+            }
             Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(def.title, color = s.onSurface, fontSize = 20.sp, modifier = Modifier.weight(1f))
-                Text(def.value, color = s.onSurfaceDim, fontSize = 18.sp)
+                Text(value, color = s.onSurfaceDim, fontSize = 18.sp)
             }
         }
     }

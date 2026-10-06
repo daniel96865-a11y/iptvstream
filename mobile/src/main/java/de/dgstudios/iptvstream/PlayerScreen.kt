@@ -4,6 +4,11 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
+import android.view.OrientationEventListener
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -35,6 +40,7 @@ import androidx.compose.material.icons.rounded.Forward10
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Replay10
+import androidx.compose.material.icons.rounded.ScreenRotation
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Star
@@ -65,6 +71,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -104,18 +111,58 @@ fun PlayerScreen(onBack: () -> Unit) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     val controller by vm.controller.collectAsStateWithLifecycle()
     val view = LocalView.current
+    val context = LocalContext.current
+    var autoRotate by remember {
+        mutableStateOf(
+            Settings.System.getInt(context.contentResolver, Settings.System.ACCELEROMETER_ROTATION, 0) == 1,
+        )
+    }
+    var userLandscape by remember { mutableStateOf(false) }
 
-    // Vollbild im Querformat; beim Verlassen alles zurücksetzen.
-    DisposableEffect(Unit) {
+    // Player öffnet in der aktuellen Ausrichtung. Querformat nur nach physischer Drehung,
+    // und nur wenn die System-Autorotation an ist.
+    DisposableEffect(userLandscape) {
         val act = view.context.findActivity()
         val window = act?.window
         val insets = window?.let { WindowCompat.getInsetsController(it, view) }
         insets?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         insets?.hide(WindowInsetsCompat.Type.systemBars())
-        act?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        val resolver = act?.contentResolver
+        val main = Handler(Looper.getMainLooper())
+        var lastDegrees = OrientationEventListener.ORIENTATION_UNKNOWN
+        fun apply(degrees: Int) {
+            val run = {
+                if (act != null && resolver != null) {
+                    val auto = Settings.System.getInt(resolver, Settings.System.ACCELEROMETER_ROTATION, 0) == 1
+                    autoRotate = auto
+                    if (auto && userLandscape) userLandscape = false
+                    act.requestedOrientation = playerRequestedOrientation(degrees, auto, userLandscape && !auto)
+                }
+            }
+            if (Looper.myLooper() == Looper.getMainLooper()) run() else main.post(run)
+        }
+        val listener = object : OrientationEventListener(view.context) {
+            override fun onOrientationChanged(orientation: Int) {
+                lastDegrees = orientation
+                apply(orientation)
+            }
+        }
+        if (listener.canDetectOrientation()) listener.enable() else apply(lastDegrees)
+        val observer = object : ContentObserver(main) {
+            override fun onChange(selfChange: Boolean) {
+                apply(lastDegrees)
+            }
+        }
+        resolver?.registerContentObserver(
+            Settings.System.getUriFor(Settings.System.ACCELEROMETER_ROTATION),
+            false,
+            observer,
+        )
         onDispose {
+            listener.disable()
+            resolver?.unregisterContentObserver(observer)
             insets?.show(WindowInsetsCompat.Type.systemBars())
-            act?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            act?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         }
     }
 
@@ -140,14 +187,27 @@ fun PlayerScreen(onBack: () -> Unit) {
         if (ctrl == null) {
             CircularProgressIndicator(Modifier.align(Alignment.Center), color = Color.White)
         } else {
-            PlayerContent(vm, ctrl, ui, onBack)
+            PlayerContent(
+                vm, ctrl, ui, onBack,
+                showRotate = !autoRotate,
+                landscapeLocked = userLandscape,
+                onToggleOrientation = { userLandscape = !userLandscape },
+            )
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PlayerContent(vm: PlayerViewModel, ctrl: PlayerController, ui: PlayerUi, onBack: () -> Unit) {
+private fun PlayerContent(
+    vm: PlayerViewModel,
+    ctrl: PlayerController,
+    ui: PlayerUi,
+    onBack: () -> Unit,
+    showRotate: Boolean,
+    landscapeLocked: Boolean,
+    onToggleOrientation: () -> Unit,
+) {
     val s = LocalAppStyle.current
     val st by ctrl.state.collectAsStateWithLifecycle()
     val stateRef = rememberUpdatedState(st)
@@ -256,6 +316,14 @@ private fun PlayerContent(vm: PlayerViewModel, ctrl: PlayerController, ui: Playe
                                 "Favorit",
                                 { vm.toggleFavorite() },
                                 tint = if (ui.isFavorite) Color(0xFFFFC857) else null,
+                            )
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        if (showRotate) {
+                            GlassIconButton(
+                                Icons.Rounded.ScreenRotation,
+                                if (landscapeLocked) "Hochformat" else "Vollbild",
+                                onToggleOrientation,
                             )
                             Spacer(Modifier.width(8.dp))
                         }
@@ -486,5 +554,25 @@ private fun LiveInfo(ui: PlayerUi) {
         } else {
             Text("Keine Programminformationen verfügbar", color = Color(0xCCFFFFFF), fontSize = 13.sp)
         }
+    }
+}
+
+/** Querformat nur bei physischer Drehung und eingeschalteter Autorotation, sonst Hochformat. */
+private fun playerRequestedOrientation(sensorDegrees: Int, autoRotate: Boolean, userLandscape: Boolean): Int {
+    if (!autoRotate) {
+        return if (userLandscape) {
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        } else {
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
+    }
+    if (sensorDegrees == OrientationEventListener.ORIENTATION_UNKNOWN) {
+        return ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+    }
+    val landscape = sensorDegrees in 45..134 || sensorDegrees in 225..314
+    return if (landscape) {
+        ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+    } else {
+        ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
     }
 }

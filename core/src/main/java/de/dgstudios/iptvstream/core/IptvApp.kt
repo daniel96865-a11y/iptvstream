@@ -15,6 +15,7 @@ import de.dgstudios.iptvstream.core.data.remote.HttpService
 import de.dgstudios.iptvstream.core.data.remote.Net
 import de.dgstudios.iptvstream.core.data.remote.XtreamApi
 import de.dgstudios.iptvstream.core.settings.SettingsStore
+import de.dgstudios.iptvstream.core.update.UpdateChecker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -43,6 +44,7 @@ class AppContainer(context: Context) {
     val epg = EpgManager(db, http, appScope)
     val repo = ContentRepository(db, http, xtream, epg, appScope)
     val session = PlaybackSession()
+    val updates = UpdateChecker(context.applicationContext, okHttp, appScope)
 
     val active: StateFlow<ActiveProfile> = combine(settings.flow, repo.profiles()) { s, profiles ->
         val wanted = s.raw[SettingsStore.ACTIVE_PROFILE]?.toLongOrNull()

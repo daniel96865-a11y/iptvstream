@@ -13,7 +13,7 @@ Die App enthält keine Senderlisten. Sie spielt nur Live-TV, Filme und Serien vo
 | Smartphone / Tablet | [iptvstream-mobile.apk](https://github.com/daniel96865-a11y/iptvstream/releases/latest/download/iptvstream-mobile.apk) |
 | Android TV / Fire TV | [iptvstream-tv.apk](https://github.com/daniel96865-a11y/iptvstream/releases/latest/download/iptvstream-tv.apk) |
 
-Aktuelle Version: [Release v1.0.0](https://github.com/daniel96865-a11y/iptvstream/releases/tag/v1.0.0)
+Aktuelle Version: [Release v1.0.1](https://github.com/daniel96865-a11y/iptvstream/releases/tag/v1.0.1)
 
 Installation außerhalb des Play Store: in den Android-Einstellungen „Unbekannte Apps“ für den Browser bzw. Dateimanager erlauben, die APK öffnen und installieren. Auf Fire TV die APK per „Downloader“ oder `adb install` aufspielen.
 
@@ -23,7 +23,7 @@ Zwei Oberflächen in einem Projekt:
 
 | Modul | Zielgerät | Oberfläche |
 |---|---|---|
-| `:mobile` | Smartphone/Tablet | Glas-Look, untere Navigation (blendet beim Scrollen aus), Vollbild-Player im Querformat |
+| `:mobile` | Smartphone/Tablet | Glas-Look, untere Navigation (blendet beim Scrollen aus), Player in der aktuellen Ausrichtung |
 | `:tv` | Android TV / Fire TV | Komplett per Fernbedienung, deutlicher Fokus, Zahleneingabe für Sender |
 | `:core` | beide | Daten, Repository, EPG, Player, Einstellungen, ViewModels |
 
@@ -32,8 +32,19 @@ Zwei Oberflächen in einem Projekt:
 - **EPG** (Xtream/XMLTV): lokal zwischengespeichert, sofort sichtbar, Aktualisierung im Hintergrund, manuell mit Fortschritt, Zuordnung auch bei HD/FHD/4K-Namen.
 - Live-TV: Sendernummer, Logo, Jetzt/Danach mit Fortschritt, letzter Sender, gemerkte Listenposition (auch nach Neustart).
 - Filme und Serien: Details, Fortsetzen, Fortschritt, nächste Episode.
-- Player (Media3/ExoPlayer): HLS, TS, MP4, MKV, Audio- und Untertitelspuren, automatische Audiospur (Deutsch, Polnisch oder automatisch) mit Fallback, Decoder-Fallback, Passthrough, Stereo-Fallback, Bildmodi, automatisches Wiederverbinden.
-- Einstellungen: Design (Akzent, Hintergrund, Glass-Stärke, Animationen, Dunkel/Hell), Uhr, Player, Live-TV, Allgemein. Alles bleibt gespeichert.
+- Player (Media3/ExoPlayer): HLS, TS, MP4, MKV, Audio- und Untertitelspuren, automatische Audiospur (Deutsch, Polnisch oder automatisch) mit Fallback, Decoder-Fallback, Passthrough (standardmäßig aus), Stereo-Fallback, Bildmodi, automatisches Wiederverbinden. AC3, E-AC3, MP2 und DTS werden bei Bedarf per FFmpeg dekodiert; Hardware-Decoder bleiben zuerst dran. Die Puffergrößen sind unverändert.
+- Handy-Player: startet in der aktuellen Ausrichtung. Querformat nur, wenn das Gerät gedreht wird und die Autorotation an ist. Ist die Autorotation aus, bleibt Hochformat, ein Knopf schaltet auf Vollbild.
+- Updates in der App: beim Start, höchstens alle vier Stunden, und in den Einstellungen über „Nach Updates suchen“. Neuere Versionen zeigen den Changelog; die APK wird geladen und mit dem System-Installer installiert.
+- Einstellungen: Design (Akzent, Hintergrund, Glass-Stärke, Animationen, Dunkel/Hell), Uhr, Player, Live-TV, Allgemein inklusive Version. Alles bleibt gespeichert.
+
+## Updates
+
+Öffentliche Feeds auf `main`:
+
+- https://raw.githubusercontent.com/daniel96865-a11y/iptvstream/main/docs/iptvstream-mobile.json
+- https://raw.githubusercontent.com/daniel96865-a11y/iptvstream/main/docs/iptvstream-tv.json
+
+Felder: `versionCode`, `versionName`, `apkUrl`, `changelog`. `apkUrl` zeigt auf die Release-Dateien `iptvstream-mobile.apk` und `iptvstream-tv.apk`. Bei einem Tag `v*` aktualisiert GitHub Actions diese Dateien auf `main`, falls die gebaute Version noch nicht eingetragen ist (`scripts/update-feeds.sh`).
 
 Der Glas-Look auf dem Handy sind halbtransparente, getönte Flächen mit Rand und Verlauf.
 
@@ -80,7 +91,7 @@ export SIGNING_KEY_ALIAS="iptvstream"
 
 Keystore-Dateien (`*.jks`, `*.keystore`) gehören nicht ins Repository.
 
-GitHub Actions (`.github/workflows/build.yml`) baut beide APKs bei jedem Push, lädt sie als Artefakt hoch und hängt sie bei Tags `v*` an ein GitHub-Release (`iptvstream-mobile.apk`, `iptvstream-tv.apk`). In CI werden die vier Variablen aus den Repository-Secrets gelesen; das Keystore wird vor dem Build dekodiert.
+GitHub Actions (`.github/workflows/build.yml`) baut beide APKs bei jedem Push, lädt sie als Artefakt hoch und hängt sie bei Tags `v*` an ein GitHub-Release (`iptvstream-mobile.apk`, `iptvstream-tv.apk`). Danach werden die Update-Feeds auf `main` nachgezogen. In CI werden die vier Variablen aus den Repository-Secrets gelesen; das Keystore wird vor dem Build dekodiert.
 
 ## Pakete
 

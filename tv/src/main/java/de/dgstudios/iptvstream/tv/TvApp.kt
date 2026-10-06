@@ -64,6 +64,7 @@ import de.dgstudios.iptvstream.core.settings.AppSettings
 import de.dgstudios.iptvstream.core.ui.AppBackground
 import de.dgstudios.iptvstream.core.ui.AppTheme
 import de.dgstudios.iptvstream.core.ui.ClockOverlay
+import de.dgstudios.iptvstream.core.update.UpdateHost
 import de.dgstudios.iptvstream.core.ui.LocalAppStyle
 import de.dgstudios.iptvstream.core.ui.NumberOverlay
 import de.dgstudios.iptvstream.core.ui.digitOrNull
@@ -148,6 +149,7 @@ fun TvApp(mainVm: MainViewModel = viewModel()) {
             }
             // Zusätzlicher Rand wegen Overscan, damit die Uhr nie abgeschnitten wird.
             ClockOverlay(s, Modifier.padding(horizontal = 36.dp, vertical = 15.dp))
+            UpdateHost(ctx.container.updates, television = true)
         }
     }
 }
