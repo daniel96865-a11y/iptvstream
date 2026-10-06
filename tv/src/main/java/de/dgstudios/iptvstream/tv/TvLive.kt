@@ -1,0 +1,312 @@
+package de.dgstudios.iptvstream.tv
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.dgstudios.iptvstream.core.data.Cat
+import de.dgstudios.iptvstream.core.data.db.CategoryEntity
+import de.dgstudios.iptvstream.core.data.db.ChannelEntity
+import de.dgstudios.iptvstream.core.settings.AppSettings
+import de.dgstudios.iptvstream.core.ui.LocalAppStyle
+import de.dgstudios.iptvstream.core.ui.Poster
+import de.dgstudios.iptvstream.core.ui.rememberClockTick
+import de.dgstudios.iptvstream.core.ui.rememberNowNext
+import de.dgstudios.iptvstream.core.vm.LiveViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+
+class CatItem(val id: String, val label: String)
+
+fun buildCatItems(cats: List<CategoryEntity>, withRecent: Boolean = true): List<CatItem> =
+    buildList {
+        add(CatItem(Cat.ALL, "Alle"))
+        add(CatItem(Cat.FAV, "★ Favoriten"))
+        if (withRecent) add(CatItem(Cat.RECENT, "Zuletzt"))
+        cats.forEach { add(CatItem(it.id, it.name)) }
+    }
+
+/** Kategorieliste links (Auswahl per OK). */
+@Composable
+fun TvCategoryList(
+    items: List<CatItem>,
+    selected: String,
+    registry: FocusRegistry,
+    onSelect: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val s = LocalAppStyle.current
+    LazyColumn(
+        modifier = modifier.width(240.dp).fillMaxHeight(),
+        contentPadding = PaddingValues(vertical = 8.dp, horizontal = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        itemsIndexed(items, key = { _, c -> c.id }) { index, c ->
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(46.dp)
+                    .registered(registry, index)
+                    .tvFocus(onClick = { onSelect(c.id) }, selected = c.id == selected)
+                    .padding(horizontal = 14.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                Text(
+                    c.label,
+                    color = s.onSurface,
+                    fontSize = 18.sp,
+                    fontWeight = if (c.id == selected) FontWeight.Bold else FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun TvLiveScreen(
+    vm: LiveViewModel,
+    settings: AppSettings,
+    entry: EntryHandle,
+    first: FirstFocus,
+    onPlay: () -> Unit,
+) {
+    val cats by vm.categories.collectAsStateWithLifecycle()
+    val selected by vm.selectedCategory.collectAsStateWithLifecycle()
+    val items by vm.items.collectAsStateWithLifecycle()
+    val favs by vm.favoriteIds.collectAsStateWithLifecycle()
+    val restored by vm.restored.collectAsStateWithLifecycle()
+    val tick by rememberClockTick(30_000)
+
+    val listState = rememberLazyListState()
+    val listReg = remember { FocusRegistry() }
+    val catReg = remember { FocusRegistry() }
+    val scope = rememberCoroutineScope()
+    val itemsRef = rememberUpdatedState(items)
+    val selectedRef = rememberUpdatedState(selected)
+    var menuFor by remember { mutableStateOf<ChannelEntity?>(null) }
+    var pendingFrom by remember { mutableStateOf<List<ChannelEntity>?>(null) }
+    val catItems = remember(cats) { buildCatItems(cats) }
+    val catItemsRef = rememberUpdatedState(catItems)
+
+    fun enter() {
+        scope.launch {
+            val list = itemsRef.value
+            if (list.isNotEmpty()) {
+                val idx = vm.focusIndex.coerceIn(0, list.lastIndex)
+                listState.ensureVisible(idx)
+                listReg.focus(idx)
+            } else {
+                val ci = catItemsRef.value.indexOfFirst { it.id == selectedRef.value }.coerceAtLeast(0)
+                catReg.focus(ci)
+            }
+        }
+    }
+    RegisterEntry(entry) { enter() }
+
+    // Gemerkte Kategorie/Position wiederherstellen; beim Start/Zurück aus dem Player dorthin fokussieren.
+    LaunchedEffect(restored) {
+        if (!restored) return@LaunchedEffect
+        delay(120)
+        withTimeoutOrNull(4_000) { snapshotFlow { itemsRef.value.size }.first { it > 0 } } ?: return@LaunchedEffect
+        val list = itemsRef.value
+        val idx = vm.focusIndex.coerceIn(0, list.lastIndex)
+        listState.scrollToItem((idx - 2).coerceAtLeast(0))
+        if (first.pending) {
+            first.pending = false
+            listReg.focus(idx)
+        }
+    }
+
+    // Nach Kategoriewechsel (OK) in die neue Liste springen, sobald sie da ist.
+    LaunchedEffect(items, pendingFrom) {
+        val p = pendingFrom ?: return@LaunchedEffect
+        if (items !== p) {
+            pendingFrom = null
+            listState.scrollToItem(0)
+            if (items.isNotEmpty()) listReg.focus(0)
+        }
+    }
+    LaunchedEffect(pendingFrom) {
+        if (pendingFrom != null) {
+            delay(2_000)
+            pendingFrom = null
+        }
+    }
+
+    Row(Modifier.fillMaxSize()) {
+        TvCategoryList(
+            items = catItems,
+            selected = selected,
+            registry = catReg,
+            onSelect = { id ->
+                if (id == selected) {
+                    enter()
+                } else {
+                    pendingFrom = items
+                    vm.selectCategory(id)
+                }
+            },
+        )
+        Spacer(Modifier.width(16.dp))
+        Box(Modifier.weight(1f).fillMaxHeight()) {
+            if (items.isEmpty()) {
+                when (selected) {
+                    Cat.FAV -> TvEmpty("Noch keine Favoriten", "Sender lange drücken (oder Menü-Taste) und zu Favoriten hinzufügen.")
+                    Cat.RECENT -> TvEmpty("Noch nichts gesehen", "Zuletzt gesehene Sender erscheinen hier.")
+                    else -> TvEmpty("Keine Sender", "Inhalte werden geladen oder die Kategorie ist leer.")
+                }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(vertical = 8.dp, horizontal = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    itemsIndexed(items, key = { _, c -> c.streamId }) { index, ch ->
+                        ChannelRow(
+                            ch = ch,
+                            index = index,
+                            showNumber = settings.showNumbers,
+                            isFav = ch.streamId in favs,
+                            tick = tick,
+                            registry = listReg,
+                            onFocus = {
+                                vm.focusIndex = index
+                                vm.onScroll(index, 0)
+                            },
+                            onClick = {
+                                vm.focusIndex = index
+                                vm.play(ch)
+                                onPlay()
+                            },
+                            onMenu = { menuFor = ch },
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    val m = menuFor
+    if (m != null) {
+        val isFav = m.streamId in favs
+        TvActionDialog(
+            title = m.name,
+            actions = listOf(
+                TvAction(if (isFav) "Aus Favoriten entfernen" else "Zu Favoriten hinzufügen") { vm.toggleFavorite(m.streamId) },
+                TvAction("Als Startsender festlegen") { vm.setStartChannel(m) },
+                TvAction("Schließen") {},
+            ),
+            onDismiss = { menuFor = null },
+        )
+    }
+}
+
+@Composable
+private fun ChannelRow(
+    ch: ChannelEntity,
+    index: Int,
+    showNumber: Boolean,
+    isFav: Boolean,
+    tick: Long,
+    registry: FocusRegistry,
+    onFocus: () -> Unit,
+    onClick: () -> Unit,
+    onMenu: () -> Unit,
+) {
+    val s = LocalAppStyle.current
+    val nn by rememberNowNext(ch.profileId, ch.epgKey, tick)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(78.dp)
+            .registered(registry, index)
+            .onPreviewKeyEvent { ev ->
+                if (ev.type == KeyEventType.KeyUp && ev.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_MENU) {
+                    onMenu()
+                    true
+                } else {
+                    false
+                }
+            }
+            .tvFocus(onClick = onClick, onLongClick = onMenu, onFocus = { if (it) onFocus() })
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (showNumber) {
+            Text(
+                ch.num.toString(),
+                color = s.onSurfaceDim,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.width(62.dp),
+            )
+        }
+        Poster(
+            ch.logo,
+            Modifier.size(58.dp).clip(RoundedCornerShape(10.dp)).background(Color(0x1AFFFFFF)).padding(4.dp),
+            ContentScale.Fit,
+        )
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+            Text(ch.name, color = s.onSurface, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val now = nn?.now
+            if (now != null) {
+                Text(now.title, color = s.onSurfaceDim, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                LinearProgressIndicator(
+                    progress = { nn?.progress(tick) ?: 0f },
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp).height(3.dp),
+                    color = s.accent,
+                    trackColor = Color.White.copy(alpha = 0.15f),
+                )
+            }
+        }
+        if (isFav) {
+            Spacer(Modifier.width(10.dp))
+            Text("★", color = Color(0xFFFFC857), fontSize = 22.sp)
+        }
+    }
+}

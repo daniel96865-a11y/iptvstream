@@ -1,0 +1,76 @@
+name: Build APKs
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: SDK-Pakete
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Keystore dekodieren
+        env:
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$SIGNING_KEYSTORE_BASE64" ]; then
+            echo "Kein SIGNING_KEYSTORE_BASE64 – lokaler/unsigned Fallback."
+            exit 0
+          fi
+          mkdir -p "$RUNNER_TEMP/signing"
+          printf '%s' "$SIGNING_KEYSTORE_BASE64" | tr -d '[:space:]' | base64 --decode > "$RUNNER_TEMP/signing/release.keystore"
+          test -s "$RUNNER_TEMP/signing/release.keystore"
+
+      - name: Release-APKs bauen
+        env:
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+        run: ./gradlew --no-daemon :mobile:assembleRelease :tv:assembleRelease
+
+      - name: APKs einsammeln
+        run: |
+          mkdir -p dist
+          cp mobile/build/outputs/apk/release/mobile-release.apk dist/iptvstream-mobile.apk
+          cp tv/build/outputs/apk/release/tv-release.apk dist/iptvstream-tv.apk
+          ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: iptv-apks
+          path: |
+            dist/iptvstream-mobile.apk
+            dist/iptvstream-tv.apk
+          if-no-files-found: error
+
+      - name: GitHub-Release (nur bei Tags)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/iptvstream-mobile.apk
+            dist/iptvstream-tv.apk
+          fail_on_unmatched_files: true

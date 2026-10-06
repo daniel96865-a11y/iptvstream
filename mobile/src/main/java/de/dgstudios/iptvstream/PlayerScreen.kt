@@ -1,0 +1,490 @@
+package de.dgstudios.iptvstream
+
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.pm.ActivityInfo
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Forward10
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Replay10
+import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.SkipPrevious
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import de.dgstudios.iptvstream.core.data.PlayKind
+import de.dgstudios.iptvstream.core.player.PlayerController
+import de.dgstudios.iptvstream.core.ui.LocalAppStyle
+import de.dgstudios.iptvstream.core.ui.VideoSurface
+import de.dgstudios.iptvstream.core.ui.formatClock
+import de.dgstudios.iptvstream.core.ui.formatDuration
+import de.dgstudios.iptvstream.core.vm.PlayerUi
+import de.dgstudios.iptvstream.core.vm.PlayerViewModel
+import kotlinx.coroutines.delay
+
+private fun Context.findActivity(): Activity? {
+    var c: Context? = this
+    while (c is ContextWrapper) {
+        if (c is Activity) return c
+        c = c.baseContext
+    }
+    return null
+}
+
+@Composable
+fun PlayerScreen(onBack: () -> Unit) {
+    val vm: PlayerViewModel = viewModel()
+    val ui by vm.ui.collectAsStateWithLifecycle()
+    val controller by vm.controller.collectAsStateWithLifecycle()
+    val view = LocalView.current
+
+    // Vollbild im Querformat; beim Verlassen alles zurücksetzen.
+    DisposableEffect(Unit) {
+        val act = view.context.findActivity()
+        val window = act?.window
+        val insets = window?.let { WindowCompat.getInsetsController(it, view) }
+        insets?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        insets?.hide(WindowInsetsCompat.Type.systemBars())
+        act?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        onDispose {
+            insets?.show(WindowInsetsCompat.Type.systemBars())
+            act?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
+
+    // Beim Wechsel in den Hintergrund Wiedergabe beenden/pausieren, danach wieder aufnehmen.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, vm) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_STOP -> vm.onBackground()
+                Lifecycle.Event.ON_START -> vm.onForeground()
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    LaunchedEffect(ui.noRequest) { if (ui.noRequest) onBack() }
+
+    val ctrl = controller
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        if (ctrl == null) {
+            CircularProgressIndicator(Modifier.align(Alignment.Center), color = Color.White)
+        } else {
+            PlayerContent(vm, ctrl, ui, onBack)
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PlayerContent(vm: PlayerViewModel, ctrl: PlayerController, ui: PlayerUi, onBack: () -> Unit) {
+    val s = LocalAppStyle.current
+    val st by ctrl.state.collectAsStateWithLifecycle()
+    val stateRef = rememberUpdatedState(st)
+    var showControls by remember { mutableStateOf(true) }
+    var sheet by remember { mutableStateOf(false) }
+    var interaction by remember { mutableIntStateOf(0) }
+    val item = ui.item
+    val isLive = item?.kind == PlayKind.LIVE
+
+    BackHandler { if (sheet) sheet = false else onBack() }
+
+    LaunchedEffect(st.ended, item?.kind) {
+        if (st.ended && item?.kind == PlayKind.MOVIE) onBack()
+    }
+
+    // Steuerung nach kurzer Zeit ausblenden, solange es läuft.
+    LaunchedEffect(showControls, st.playing, interaction, sheet) {
+        if (showControls && st.playing && !sheet && st.error == null) {
+            delay(4_000)
+            showControls = false
+        }
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        VideoSurface(
+            player = ctrl.player,
+            resize = st.resize,
+            videoWidth = st.videoWidth,
+            videoHeight = st.videoHeight,
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onTap = { showControls = !showControls },
+                        onDoubleTap = { offset ->
+                            if (!stateRef.value.isLive) {
+                                ctrl.seekBy(if (offset.x < size.width / 2) -10_000L else 10_000L)
+                                interaction++
+                            }
+                        },
+                    )
+                },
+        )
+
+        if (st.loading && st.error == null) {
+            CircularProgressIndicator(Modifier.align(Alignment.Center), color = Color.White, strokeWidth = 3.dp)
+        }
+
+        // Hinweise (Audiowechsel, Wiederverbindung …)
+        val notice = st.notice ?: ui.toast
+        if (notice != null) {
+            Text(
+                notice,
+                color = Color.White,
+                fontSize = 13.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .padding(top = 56.dp)
+                    .glass(RoundedCornerShape(50), strong = true)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+        }
+
+        AnimatedVisibility(
+            visible = showControls || st.error != null,
+            enter = fadeIn(),
+            exit = fadeOut(),
+        ) {
+            Box(Modifier.fillMaxSize()) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color(0xB3000000), Color.Transparent, Color.Transparent, Color(0xCC000000)),
+                            ),
+                        ),
+                )
+                Column(
+                    Modifier
+                        .fillMaxSize()
+                        .windowInsetsPadding(WindowInsets.safeDrawing)
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    // Oben: Zurück, Titel, Favorit, Einstellungen
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        GlassIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "Zurück", onBack)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                item?.title ?: "",
+                                color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            )
+                            val sub = if (isLive) ui.nowNext?.now?.title else item?.subtitle
+                            if (!sub.isNullOrBlank()) {
+                                Text(sub, color = Color(0xCCFFFFFF), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                        if (isLive) {
+                            GlassIconButton(
+                                if (ui.isFavorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                                "Favorit",
+                                { vm.toggleFavorite() },
+                                tint = if (ui.isFavorite) Color(0xFFFFC857) else null,
+                            )
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        GlassIconButton(Icons.Rounded.Tune, "Einstellungen", {
+                            sheet = true
+                            interaction++
+                        })
+                    }
+
+                    // Mitte: Transport
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (ui.canPrev) {
+                            TransportButton(Icons.Rounded.SkipPrevious, 52) { vm.prev(); interaction++ }
+                            Spacer(Modifier.width(18.dp))
+                        }
+                        if (!isLive) {
+                            TransportButton(Icons.Rounded.Replay10, 52) { ctrl.seekBy(-10_000); interaction++ }
+                            Spacer(Modifier.width(18.dp))
+                        }
+                        TransportButton(if (st.playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, 72, accent = true) {
+                            ctrl.togglePlay()
+                            interaction++
+                        }
+                        if (!isLive) {
+                            Spacer(Modifier.width(18.dp))
+                            TransportButton(Icons.Rounded.Forward10, 52) { ctrl.seekBy(10_000); interaction++ }
+                        }
+                        if (ui.canNext) {
+                            Spacer(Modifier.width(18.dp))
+                            TransportButton(Icons.Rounded.SkipNext, 52) { vm.next(); interaction++ }
+                        }
+                    }
+
+                    // Unten: Fortschritt
+                    if (isLive) {
+                        LiveInfo(ui)
+                    } else {
+                        SeekBar(ctrl, st.positionMs, st.durationMs) { interaction++ }
+                    }
+                }
+            }
+        }
+
+        // Fehleranzeige mit Wiederholen
+        val err = st.error
+        if (err != null) {
+            Column(
+                Modifier
+                    .align(Alignment.Center)
+                    .padding(24.dp)
+                    .glass(RoundedCornerShape(22.dp), strong = true)
+                    .padding(22.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text("Wiedergabe nicht möglich", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(6.dp))
+                Text(err, color = Color(0xE6FFFFFF), fontSize = 14.sp, textAlign = TextAlign.Center)
+                Spacer(Modifier.height(16.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    PrimaryButton("Erneut versuchen", onClick = { ctrl.retry() })
+                    SecondaryButton("Zurück", onClick = onBack)
+                }
+            }
+        }
+
+        // Nächste Episode
+        if (ui.nextOfferSeconds > 0) {
+            Column(
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .padding(20.dp)
+                    .glass(RoundedCornerShape(20.dp), strong = true)
+                    .padding(16.dp),
+            ) {
+                Text("Nächste Episode in ${ui.nextOfferSeconds} s", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Text(ui.nextTitle.orEmpty(), color = Color(0xCCFFFFFF), fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PrimaryButton("Jetzt", onClick = { vm.playNextNow() })
+                    SecondaryButton("Abbrechen", onClick = { vm.cancelNextOffer() })
+                }
+            }
+        }
+    }
+
+    if (sheet) {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = { sheet = false },
+            sheetState = sheetState,
+            containerColor = s.backgroundColors[1],
+        ) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 28.dp),
+            ) {
+                SheetTitle("Bildmodus")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for ((id, label) in listOf("fit" to "Anpassen", "fill" to "Füllen", "stretch" to "Strecken", "original" to "Original")) {
+                        GlassChip(label, st.resize == id) { vm.setResize(id) }
+                    }
+                }
+                SheetTitle("Audio")
+                if (st.audioTracks.isEmpty()) {
+                    Text("Keine Audiospuren gefunden", color = s.onSurfaceDim, fontSize = 14.sp)
+                }
+                for (t in st.audioTracks) {
+                    TrackRow(t.label + if (!t.supported) " (nicht unterstützt)" else "", t.selected) {
+                        if (t.supported) ctrl.selectAudio(t.id)
+                    }
+                }
+                SheetTitle("Untertitel")
+                TrackRow("Aus", !st.textEnabled) { ctrl.selectText(null) }
+                for (t in st.textTracks) {
+                    TrackRow(t.label, t.selected && st.textEnabled) { ctrl.selectText(t.id) }
+                }
+                if (st.textTracks.isEmpty()) {
+                    Text("Keine Untertitel verfügbar", color = s.onSurfaceDim, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SheetTitle(text: String) {
+    val s = LocalAppStyle.current
+    Text(text, color = s.onSurface, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
+}
+
+@Composable
+private fun TrackRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    val s = LocalAppStyle.current
+    Row(
+        Modifier.fillMaxWidth().pressable(onClick).padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, color = if (selected) s.accent else s.onSurface, fontSize = 15.sp, modifier = Modifier.weight(1f))
+        if (selected) Icon(Icons.Rounded.Check, null, tint = s.accent, modifier = Modifier.size(20.dp))
+    }
+}
+
+@Composable
+private fun TransportButton(icon: androidx.compose.ui.graphics.vector.ImageVector, size: Int, accent: Boolean = false, onClick: () -> Unit) {
+    val s = LocalAppStyle.current
+    val m = if (accent) Modifier.size(size.dp).clip(CircleShape).background(s.accent, CircleShape) else Modifier.size(size.dp).glass(CircleShape, strong = true)
+    Box(m.pressable(onClick), contentAlignment = Alignment.Center) {
+        Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size((size * 0.5f).dp))
+    }
+}
+
+@Composable
+private fun SeekBar(ctrl: PlayerController, positionMs: Long, durationMs: Long, onInteract: () -> Unit) {
+    val s = LocalAppStyle.current
+    var dragging by remember { mutableStateOf(false) }
+    var dragValue by remember { mutableFloatStateOf(0f) }
+    val dur = durationMs.coerceAtLeast(1L).toFloat()
+    val shown = if (dragging) dragValue else positionMs.toFloat().coerceIn(0f, dur)
+    Column(Modifier.fillMaxWidth()) {
+        Slider(
+            value = shown,
+            onValueChange = {
+                dragging = true
+                dragValue = it
+                onInteract()
+            },
+            onValueChangeFinished = {
+                ctrl.seekTo(dragValue.toLong())
+                dragging = false
+            },
+            valueRange = 0f..dur,
+            colors = SliderDefaults.colors(
+                thumbColor = Color.White,
+                activeTrackColor = s.accent,
+                inactiveTrackColor = Color.White.copy(alpha = 0.3f),
+            ),
+        )
+        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(formatDuration(shown.toLong()), color = Color.White, fontSize = 12.sp)
+            Text(formatDuration(durationMs), color = Color(0xCCFFFFFF), fontSize = 12.sp)
+        }
+    }
+}
+
+@Composable
+private fun LiveInfo(ui: PlayerUi) {
+    val s = LocalAppStyle.current
+    val nn = ui.nowNext
+    val cur = nn?.now
+    val next = nn?.next
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .glass(RoundedCornerShape(18.dp), strong = true)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        if (cur != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "${formatClock(cur.start)} – ${formatClock(cur.stop)}",
+                    color = Color(0xCCFFFFFF), fontSize = 12.sp,
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(cur.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(8.dp))
+            LinearProgressIndicator(
+                progress = { nn?.progress(System.currentTimeMillis()) ?: 0f },
+                modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
+                color = s.accent,
+                trackColor = Color.White.copy(alpha = 0.2f),
+            )
+            if (next != null) {
+                Text(
+                    "Danach ${formatClock(next.start)}: ${next.title}",
+                    color = Color(0xCCFFFFFF), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
+        } else {
+            Text("Keine Programminformationen verfügbar", color = Color(0xCCFFFFFF), fontSize = 13.sp)
+        }
+    }
+}
