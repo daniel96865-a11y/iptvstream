@@ -50,7 +50,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
@@ -156,14 +155,14 @@ fun TvCategoryDrawer(
     val filterState = rememberLazyListState()
     val browsingAll = query.isBlank()
     val rowShape = RoundedCornerShape(14.dp)
-    val listBottom = maxOf(drawerSystemBottom(), outerBottom) + 28.dp
+    val listBottom = maxOf(drawerSystemBottom(), outerBottom) + 48.dp
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Row(Modifier.fillMaxSize()) {
             Column(
                 Modifier
                     .width(480.dp)
                     .fillMaxHeight()
-                    .background(Brush.verticalGradient(s.backgroundColors))
+                    .background(s.backgroundColors[0])
                     .padding(horizontal = 18.dp, vertical = 16.dp),
             ) {
                 Text("Kategorien", color = s.onSurface, fontSize = 26.sp, fontWeight = FontWeight.Bold)
@@ -186,7 +185,7 @@ fun TvCategoryDrawer(
                                 false
                             }
                         }
-                        .background(s.card, rowShape)
+                        .background(s.backgroundColors[2], rowShape)
                         .then(
                             if (searchFocused) Modifier.border(3.dp, Color.White, rowShape) else Modifier,
                         )
@@ -215,7 +214,7 @@ fun TvCategoryDrawer(
                                     .heightIn(min = 56.dp)
                                     .registered(reg, index)
                                     .then(if (index == 0) Modifier.focusProperties { up = search } else Modifier)
-                                    .tvFocus(onClick = { onSelect(c.id) }, selected = c.id == selected)
+                                    .tvFocus(onClick = { onSelect(c.id) }, selected = c.id == selected, opaque = true)
                                     .padding(horizontal = 16.dp, vertical = 14.dp),
                                 contentAlignment = Alignment.CenterStart,
                             ) {

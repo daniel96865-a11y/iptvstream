@@ -72,6 +72,7 @@ fun Modifier.tvFocus(
     onFocus: ((Boolean) -> Unit)? = null,
     requester: FocusRequester? = null,
     selected: Boolean = false,
+    opaque: Boolean = false,
 ): Modifier {
     val s = LocalAppStyle.current
     var focused by remember { mutableStateOf(false) }
@@ -80,10 +81,19 @@ fun Modifier.tvFocus(
         animationSpec = tween(120),
         label = "focusScale",
     )
-    val bg = when {
-        focused -> s.accent.copy(alpha = 0.60f)
-        selected -> s.accent.copy(alpha = 0.22f)
-        else -> s.card
+    val card = s.backgroundColors[2]
+    val bg = if (opaque) {
+        when {
+            focused -> solidMix(card, s.accent, 0.72f)
+            selected -> solidMix(card, s.accent, 0.5f)
+            else -> card
+        }
+    } else {
+        when {
+            focused -> s.accent.copy(alpha = 0.60f)
+            selected -> s.accent.copy(alpha = 0.22f)
+            else -> s.card
+        }
     }
     return this
         .then(if (requester != null) Modifier.focusRequester(requester) else Modifier)
@@ -106,6 +116,13 @@ fun Modifier.tvFocus(
         )
         .combinedClickable(onClick = onClick, onLongClick = onLongClick)
 }
+
+private fun solidMix(base: Color, accent: Color, amount: Float): Color = Color(
+    red = base.red * (1f - amount) + accent.red * amount,
+    green = base.green * (1f - amount) + accent.green * amount,
+    blue = base.blue * (1f - amount) + accent.blue * amount,
+    alpha = 1f,
+)
 
 @Composable
 fun TvButton(

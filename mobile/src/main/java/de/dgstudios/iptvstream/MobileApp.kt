@@ -232,7 +232,7 @@ private fun HomeScreen(
     }
 
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val bottomPad: Dp = BAR_HEIGHT + 28.dp + navBottom
+    val bottomPad: Dp = BAR_HEIGHT + 36.dp + navBottom
 
     Box(
         Modifier
@@ -273,7 +273,7 @@ private fun HomeScreen(
     }
 }
 
-/** Schwebende Glas-Navigation mit gleitender Auswahlmarke. */
+/** Untere Navigation, deckend, damit die Liste nicht durchscheint. */
 @Composable
 private fun BottomBar(selected: Tab, onSelect: (Tab) -> Unit) {
     val s = LocalAppStyle.current
@@ -296,8 +296,7 @@ private fun BottomBar(selected: Tab, onSelect: (Tab) -> Unit) {
             Modifier
                 .fillMaxSize()
                 .clip(shape)
-                .background(s.backgroundColors[1].copy(alpha = 0.72f), shape)
-                .glass(shape, strong = true),
+                .background(s.backgroundColors[0], shape),
         ) {
             Box(
                 Modifier

@@ -59,7 +59,6 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
@@ -192,7 +191,7 @@ private fun CategoryDrawer(
     val filterState = rememberLazyListState()
     val browsingAll = query.isBlank()
     // Dialog liefert die Navigationsleiste oft nicht. Der Wert von außen (Activity) bleibt gültig.
-    val listBottom = maxOf(drawerSystemBottom(), outerBottom) + 28.dp
+    val listBottom = maxOf(drawerSystemBottom(), outerBottom) + 48.dp
     LaunchedEffect(browsingAll, selected, entries) {
         if (!browsingAll) {
             filterState.scrollToItem(0)
@@ -222,7 +221,7 @@ private fun CategoryDrawer(
                     .fillMaxHeight()
                     .fillMaxWidth(0.88f)
                     .widthIn(max = 420.dp)
-                    .background(Brush.verticalGradient(s.backgroundColors))
+                    .background(s.backgroundColors[0])
                     .windowInsetsPadding(
                         WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
                     )
@@ -251,23 +250,18 @@ private fun CategoryDrawer(
     }
 }
 
-/** Gleiche Karte wie die Senderliste: Glas, 18.dp, 15.sp halbfett. Auswahl wie die Tab-Marke, kein Vollflächen-Pill. */
+/** Deckende Karte, gleiche Ecke und Schrift wie die Senderliste, ohne durchscheinendes Glas. */
 @Composable
 private fun CategoryDrawerRow(name: String, selected: Boolean, onClick: () -> Unit) {
     val s = LocalAppStyle.current
     val shape = RoundedCornerShape(18.dp)
-    val surface = if (selected) {
-        Modifier
-            .clip(shape)
-            .background(s.accent.copy(alpha = 0.30f), shape)
-            .border(1.dp, s.accent.copy(alpha = 0.65f), shape)
-    } else {
-        Modifier.glass(shape)
-    }
+    val fill = if (selected) solidMix(s.backgroundColors[2], s.accent, 0.5f) else s.backgroundColors[2]
     Box(
         Modifier
             .fillMaxWidth()
-            .then(surface)
+            .clip(shape)
+            .background(fill, shape)
+            .then(if (selected) Modifier.border(1.5.dp, s.accent, shape) else Modifier)
             .pressable({ onClick() })
             .padding(horizontal = 14.dp, vertical = 13.dp),
         contentAlignment = Alignment.CenterStart,
@@ -303,7 +297,7 @@ private fun DrawerSearch(value: String, onChange: (String) -> Unit) {
                 Modifier
                     .fillMaxWidth()
                     .clip(shape)
-                    .background(s.card, shape)
+                    .background(s.backgroundColors[2], shape)
                     .padding(horizontal = 14.dp, vertical = 14.dp),
             ) {
                 if (value.isEmpty()) {
@@ -314,6 +308,13 @@ private fun DrawerSearch(value: String, onChange: (String) -> Unit) {
         },
     )
 }
+
+private fun solidMix(base: Color, accent: Color, amount: Float): Color = Color(
+    red = base.red * (1f - amount) + accent.red * amount,
+    green = base.green * (1f - amount) + accent.green * amount,
+    blue = base.blue * (1f - amount) + accent.blue * amount,
+    alpha = 1f,
+)
 
 /** Unterer Systembereich (Navigation, Gestenleiste, Tastatur), wie ihn das aktuelle Fenster meldet. */
 @Composable

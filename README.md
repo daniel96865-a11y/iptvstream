@@ -13,7 +13,7 @@ Die App enthält keine Senderlisten. Sie spielt nur Live-TV, Filme und Serien vo
 | Smartphone / Tablet | [iptvstream-mobile.apk](https://github.com/daniel96865-a11y/iptvstream/releases/latest/download/iptvstream-mobile.apk) |
 | Android TV / Fire TV | [iptvstream-tv.apk](https://github.com/daniel96865-a11y/iptvstream/releases/latest/download/iptvstream-tv.apk) |
 
-Aktuelle Version: [Release v1.0.6](https://github.com/daniel96865-a11y/iptvstream/releases/tag/v1.0.6)
+Aktuelle Version: [Release v1.0.7](https://github.com/daniel96865-a11y/iptvstream/releases/tag/v1.0.7)
 
 Installation außerhalb des Play Store: in den Android-Einstellungen „Unbekannte Apps“ für den Browser bzw. Dateimanager erlauben, die APK öffnen und installieren. Auf Fire TV die APK per „Downloader“ oder `adb install` aufspielen.
 
