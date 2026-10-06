@@ -11,7 +11,12 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -117,6 +122,7 @@ fun CategoryPicker(
         return
     }
     var open by remember { mutableStateOf(false) }
+    val outerBottom = drawerSystemBottom()
     val listState = rememberLazyListState(drawerIndex, drawerOffset)
     LaunchedEffect(listState) {
         snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
@@ -150,6 +156,7 @@ fun CategoryPicker(
             categories = categories,
             selected = selected,
             listState = listState,
+            outerBottom = outerBottom,
             onSelect = {
                 onSelect(it)
                 open = false
@@ -164,6 +171,7 @@ private fun CategoryDrawer(
     categories: List<CategoryEntity>,
     selected: String,
     listState: LazyListState,
+    outerBottom: Dp,
     onSelect: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -183,6 +191,8 @@ private fun CategoryDrawer(
     }
     val filterState = rememberLazyListState()
     val browsingAll = query.isBlank()
+    // Dialog liefert die Navigationsleiste oft nicht. Der Wert von außen (Activity) bleibt gültig.
+    val listBottom = maxOf(drawerSystemBottom(), outerBottom) + 28.dp
     LaunchedEffect(browsingAll, selected, entries) {
         if (!browsingAll) {
             filterState.scrollToItem(0)
@@ -213,7 +223,9 @@ private fun CategoryDrawer(
                     .fillMaxWidth(0.88f)
                     .widthIn(max = 420.dp)
                     .background(Brush.verticalGradient(s.backgroundColors))
-                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .windowInsetsPadding(
+                        WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
+                    )
                     .padding(horizontal = 14.dp, vertical = 12.dp),
             ) {
                 Text("Kategorien", color = s.onSurface, fontSize = 22.sp, fontWeight = FontWeight.Bold)
@@ -225,8 +237,9 @@ private fun CategoryDrawer(
                 } else {
                     LazyColumn(
                         state = if (browsingAll) listState else filterState,
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
-                        contentPadding = PaddingValues(bottom = 12.dp),
+                        contentPadding = PaddingValues(bottom = listBottom),
                     ) {
                         items(shown, key = { it.first }) { (id, name) ->
                             CategoryDrawerRow(name, id == selected) { onSelect(id) }
@@ -300,6 +313,15 @@ private fun DrawerSearch(value: String, onChange: (String) -> Unit) {
             }
         },
     )
+}
+
+/** Unterer Systembereich (Navigation, Gestenleiste, Tastatur), wie ihn das aktuelle Fenster meldet. */
+@Composable
+private fun drawerSystemBottom(): Dp {
+    val nav = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val safe = WindowInsets.safeDrawing.asPaddingValues().calculateBottomPadding()
+    val imePad = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
+    return maxOf(nav, safe, imePad)
 }
 
 /** Zeigt die gewählte Kategorie, ohne eine fast weggescrollte Zeile als Haarlinie stehen zu lassen. */

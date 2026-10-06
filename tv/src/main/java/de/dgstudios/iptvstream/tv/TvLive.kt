@@ -11,8 +11,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -57,6 +62,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -133,6 +139,7 @@ fun TvCategoryDrawer(
     items: List<CatItem>,
     selected: String,
     listState: LazyListState,
+    outerBottom: Dp,
     onSelect: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -149,6 +156,7 @@ fun TvCategoryDrawer(
     val filterState = rememberLazyListState()
     val browsingAll = query.isBlank()
     val rowShape = RoundedCornerShape(14.dp)
+    val listBottom = maxOf(drawerSystemBottom(), outerBottom) + 28.dp
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Row(Modifier.fillMaxSize()) {
             Column(
@@ -198,7 +206,7 @@ fun TvCategoryDrawer(
                         state = if (browsingAll) listState else filterState,
                         modifier = Modifier.weight(1f).fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
-                        contentPadding = PaddingValues(bottom = 12.dp),
+                        contentPadding = PaddingValues(bottom = listBottom),
                     ) {
                         itemsIndexed(shown, key = { _, c -> c.id }) { index, c ->
                             Box(
@@ -256,6 +264,15 @@ fun TvCategoryDrawer(
     }
 }
 
+/** Unterer Systembereich. Im Dialog oft 0, deshalb zusätzlich von außen übergeben. */
+@Composable
+internal fun drawerSystemBottom(): Dp {
+    val nav = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val safe = WindowInsets.safeDrawing.asPaddingValues().calculateBottomPadding()
+    val imePad = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
+    return maxOf(nav, safe, imePad)
+}
+
 /** Zeigt die gewählte Kategorie, ohne eine fast weggescrollte Zeile als Haarlinie stehen zu lassen. */
 private suspend fun LazyListState.reveal(index: Int) {
     if (index < 0) return
@@ -303,6 +320,7 @@ fun TvLiveScreen(
     val openButton = remember { FocusRequester() }
     var drawerOpen by remember { mutableStateOf(false) }
     val drawerListState = rememberLazyListState(vm.drawerIndex, vm.drawerOffset)
+    val drawerBottom = drawerSystemBottom()
     LaunchedEffect(drawerListState) {
         snapshotFlow { drawerListState.firstVisibleItemIndex to drawerListState.firstVisibleItemScrollOffset }
             .collect { (i, o) -> vm.onDrawerScroll(i, o) }
@@ -422,6 +440,7 @@ fun TvLiveScreen(
                 items = catItems,
                 selected = selected,
                 listState = drawerListState,
+                outerBottom = drawerBottom,
                 onSelect = {
                     drawerOpen = false
                     chooseCategory(it)

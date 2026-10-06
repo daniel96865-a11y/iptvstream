@@ -111,6 +111,7 @@ private fun <T> PosterBrowse(
     val openButton = remember { FocusRequester() }
     var drawerOpen by remember { mutableStateOf(false) }
     val drawerListState = rememberLazyListState(vm.drawerIndex, vm.drawerOffset)
+    val drawerBottom = drawerSystemBottom()
     LaunchedEffect(drawerListState) {
         snapshotFlow { drawerListState.firstVisibleItemIndex to drawerListState.firstVisibleItemScrollOffset }
             .collect { (i, o) -> vm.onDrawerScroll(i, o) }
@@ -226,6 +227,7 @@ private fun <T> PosterBrowse(
                 items = catItems,
                 selected = selected,
                 listState = drawerListState,
+                outerBottom = drawerBottom,
                 onSelect = {
                     drawerOpen = false
                     chooseCategory(it)
