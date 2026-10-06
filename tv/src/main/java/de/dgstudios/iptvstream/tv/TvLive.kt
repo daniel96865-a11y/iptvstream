@@ -247,6 +247,8 @@ fun TvCategoryDrawer(
         val idx = items.indexOfFirst { it.id == selected }.coerceAtLeast(0)
         snapshotFlow { listState.layoutInfo.visibleItemsInfo }.first { it.isNotEmpty() }
         listState.reveal(idx)
+        // Wer die Suche gerade leert, tippt weiter: Fokus im Suchfeld lassen.
+        if (searchFocused) return@LaunchedEffect
         if (!reg.focus(idx)) {
             try {
                 search.requestFocus()
