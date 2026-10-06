@@ -17,6 +17,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -33,8 +36,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
@@ -319,7 +328,9 @@ fun TvTextInputDialog(
 ) {
     val s = LocalAppStyle.current
     var value by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(initial, androidx.compose.ui.text.TextRange(initial.length))) }
+    var revealed by remember { mutableStateOf(false) }
     val field = remember { FocusRequester() }
+    val eye = remember { FocusRequester() }
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val shape = RoundedCornerShape(14.dp)
     Dialog(onDismissRequest = onCancel, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -333,33 +344,83 @@ fun TvTextInputDialog(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(title, color = s.onSurface, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-            androidx.compose.foundation.text.BasicTextField(
-                value = value,
-                onValueChange = { value = it },
-                singleLine = true,
-                textStyle = androidx.compose.ui.text.TextStyle(color = s.onSurface, fontSize = 22.sp),
-                cursorBrush = androidx.compose.ui.graphics.SolidColor(s.accent),
-                visualTransformation = if (password) {
-                    androidx.compose.ui.text.input.PasswordVisualTransformation()
-                } else {
-                    androidx.compose.ui.text.input.VisualTransformation.None
-                },
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                    imeAction = androidx.compose.ui.text.input.ImeAction.Done,
-                    keyboardType = if (password) {
-                        androidx.compose.ui.text.input.KeyboardType.Password
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                androidx.compose.foundation.text.BasicTextField(
+                    value = value,
+                    onValueChange = { value = it },
+                    singleLine = true,
+                    textStyle = androidx.compose.ui.text.TextStyle(color = s.onSurface, fontSize = 22.sp),
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(s.accent),
+                    visualTransformation = if (password && !revealed) {
+                        androidx.compose.ui.text.input.PasswordVisualTransformation()
                     } else {
-                        androidx.compose.ui.text.input.KeyboardType.Text
+                        androidx.compose.ui.text.input.VisualTransformation.None
                     },
-                ),
-                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { onDone(value.text) }),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .focusRequester(field)
-                    .background(Color.White.copy(alpha = 0.10f), shape)
-                    .border(2.dp, s.accent, shape)
-                    .padding(16.dp),
-            )
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                        keyboardType = if (password) {
+                            androidx.compose.ui.text.input.KeyboardType.Password
+                        } else {
+                            androidx.compose.ui.text.input.KeyboardType.Text
+                        },
+                    ),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { onDone(value.text) }),
+                    modifier = Modifier
+                        .weight(1f)
+                        .focusRequester(field)
+                        .then(if (password) Modifier.focusProperties { right = eye } else Modifier)
+                        .onPreviewKeyEvent { event ->
+                            if (
+                                password &&
+                                event.type == KeyEventType.KeyDown &&
+                                event.key == Key.DirectionRight &&
+                                value.selection.end >= value.text.length
+                            ) {
+                                try {
+                                    eye.requestFocus()
+                                } catch (_: IllegalStateException) {
+                                }
+                                true
+                            } else {
+                                false
+                            }
+                        }
+                        .background(Color.White.copy(alpha = 0.10f), shape)
+                        .border(2.dp, s.accent, shape)
+                        .padding(16.dp),
+                )
+                if (password) {
+                    Box(
+                        Modifier
+                            .size(56.dp)
+                            .focusProperties { left = field }
+                            .onPreviewKeyEvent { event ->
+                                if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) {
+                                    try {
+                                        field.requestFocus()
+                                    } catch (_: IllegalStateException) {
+                                    }
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
+                            .tvFocus(
+                                onClick = { revealed = !revealed },
+                                requester = eye,
+                                shape = RoundedCornerShape(14.dp),
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            if (revealed) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                            contentDescription = if (revealed) "Passwort verbergen" else "Passwort anzeigen",
+                            tint = s.onSurface,
+                            modifier = Modifier.size(28.dp),
+                        )
+                    }
+                }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 TvButton("OK", onClick = { onDone(value.text) })
                 TvButton("Abbrechen", onClick = onCancel)
@@ -391,19 +452,49 @@ fun TvField(
 ) {
     val s = LocalAppStyle.current
     var open by remember { mutableStateOf(false) }
-    Column(
-        modifier
-            .fillMaxWidth()
-            .tvFocus(onClick = { open = true })
-            .padding(horizontal = 18.dp, vertical = 10.dp),
-    ) {
-        Text(label, color = s.onSurfaceDim, fontSize = 14.sp)
-        val shown = when {
-            value.isEmpty() -> "–"
-            password -> "•".repeat(value.length.coerceAtMost(24))
-            else -> value
+    var revealed by remember { mutableStateOf(false) }
+    if (password) {
+        Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(
+                Modifier
+                    .weight(1f)
+                    .tvFocus(onClick = { open = true })
+                    .padding(horizontal = 18.dp, vertical = 10.dp),
+            ) {
+                Text(label, color = s.onSurfaceDim, fontSize = 14.sp)
+                val shown = when {
+                    value.isEmpty() -> "–"
+                    revealed -> value
+                    else -> "•".repeat(value.length.coerceAtMost(24))
+                }
+                Text(shown, color = s.onSurface, fontSize = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Spacer(Modifier.width(8.dp))
+            Box(
+                Modifier
+                    .size(52.dp)
+                    .tvFocus(onClick = { revealed = !revealed }, shape = RoundedCornerShape(14.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    if (revealed) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                    contentDescription = if (revealed) "Passwort verbergen" else "Passwort anzeigen",
+                    tint = s.onSurface,
+                    modifier = Modifier.size(26.dp),
+                )
+            }
         }
-        Text(shown, color = s.onSurface, fontSize = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    } else {
+        Column(
+            modifier
+                .fillMaxWidth()
+                .tvFocus(onClick = { open = true })
+                .padding(horizontal = 18.dp, vertical = 10.dp),
+        ) {
+            Text(label, color = s.onSurfaceDim, fontSize = 14.sp)
+            val shown = if (value.isEmpty()) "–" else value
+            Text(shown, color = s.onSurface, fontSize = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
     }
     if (open) {
         TvTextInputDialog(

@@ -21,10 +21,15 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,6 +63,8 @@ fun GlassTextField(
     onDone: (() -> Unit)? = null,
 ) {
     val s = LocalAppStyle.current
+    var passwordVisible by remember { mutableStateOf(false) }
+    val conceal = password && !passwordVisible
     BasicTextField(
         value = value,
         onValueChange = onChange,
@@ -69,7 +76,7 @@ fun GlassTextField(
             onSearch = { onDone?.invoke() },
             onDone = { onDone?.invoke() },
         ),
-        visualTransformation = if (password) {
+        visualTransformation = if (conceal) {
             androidx.compose.ui.text.input.PasswordVisualTransformation()
         } else {
             androidx.compose.ui.text.input.VisualTransformation.None
@@ -94,6 +101,15 @@ fun GlassTextField(
                 if (trailing != null) {
                     Spacer(Modifier.width(8.dp))
                     trailing()
+                }
+                if (password) {
+                    Spacer(Modifier.width(8.dp))
+                    Icon(
+                        if (passwordVisible) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                        contentDescription = if (passwordVisible) "Passwort verbergen" else "Passwort anzeigen",
+                        tint = s.onSurfaceDim,
+                        modifier = Modifier.size(22.dp).pressable({ passwordVisible = !passwordVisible }),
+                    )
                 }
             }
         },

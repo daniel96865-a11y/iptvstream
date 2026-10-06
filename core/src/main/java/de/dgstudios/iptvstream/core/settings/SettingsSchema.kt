@@ -138,7 +138,7 @@ object SettingsSchema {
                 ActionDef("reload", "Inhalte neu laden", "Sender, Filme und Serien aktualisieren"),
                 ActionDef("check_update", "Nach Updates suchen"),
                 InfoDef("language", "App-Sprache", "Deutsch"),
-                InfoDef("version", "Version", "1.0.1"),
+                InfoDef("version", "Version", "1.0.2"),
             ),
         ),
     )

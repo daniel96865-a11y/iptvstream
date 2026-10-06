@@ -1,6 +1,6 @@
 {
-  "versionCode": 2,
-  "versionName": "1.0.1",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.1/iptvstream-tv.apk",
-  "changelog": "AC3- und E-AC3-Ton wird auf dem Gerät dekodiert. Updates können in der App geladen werden."
+  "versionCode": 3,
+  "versionName": "1.0.2",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.2/iptvstream-tv.apk",
+  "changelog": "Passwort lässt sich jetzt anzeigen."
 }
