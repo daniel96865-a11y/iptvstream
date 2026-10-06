@@ -105,6 +105,7 @@ class EpgManager(
             val batch = ArrayList<EpgEntity>(1000)
             val names = HashMap<String, String>()
             var lastReport = 0L
+            var replaced = false
             var event = parser.eventType
 
             while (event != XmlPullParser.END_DOCUMENT) {
@@ -155,8 +156,8 @@ class EpgManager(
                     }
                 }
                 if (batch.size >= 1000) {
-                    epg.insertAll(ArrayList(batch))
-                    batch.clear()
+                    flushProgrammes(p.id, batch, replaced)
+                    replaced = true
                     currentCoroutineContext().ensureActive()
                 }
                 val t = System.nanoTime()
@@ -172,12 +173,32 @@ class EpgManager(
                 }
                 event = parser.next()
             }
-            if (batch.isNotEmpty()) epg.insertAll(ArrayList(batch))
+            if (batch.isNotEmpty()) {
+                flushProgrammes(p.id, batch, replaced)
+            }
             epg.pruneBySync(p.id, token)
 
             epg.clearNames(p.id)
             val nameRows = names.entries.map { EpgNameEntity(p.id, it.key, it.value) }
             for (chunk in nameRows.chunked(500)) epg.insertNames(chunk)
+        }
+    }
+
+    /**
+     * Alte Sendungen des Profils werden vor dem ersten Einfügen gelöscht (eine Transaktion),
+     * damit ein Abbruch mitten im Import keine Mischung aus alt und neu hinterlässt.
+     */
+    private suspend fun flushProgrammes(profileId: Long, batch: ArrayList<EpgEntity>, alreadyReplaced: Boolean) {
+        val rows = ArrayList(batch)
+        batch.clear()
+        if (rows.isEmpty()) return
+        if (!alreadyReplaced) {
+            db.withTransaction {
+                db.epg().clear(profileId)
+                db.epg().insertAll(rows)
+            }
+        } else {
+            db.epg().insertAll(rows)
         }
     }
 

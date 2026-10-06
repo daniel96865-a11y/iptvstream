@@ -78,9 +78,10 @@ class ContentRepository(
             } else {
                 withContext(Dispatchers.IO) {
                     http.get(p.url).use { body ->
-                        val head = body.byteStream().bufferedReader().readLine().orEmpty().trim()
-                        if (head.startsWith("#EXTM3U", true) || head.startsWith("#EXTINF", true)) null
-                        else "Die Adresse liefert keine gültige M3U-Playlist."
+                        BufferedReader(InputStreamReader(body.byteStream(), Charsets.UTF_8)).use { reader ->
+                            if (M3uParser.looksLikePlaylist(reader)) null
+                            else "Die Adresse liefert keine gültige M3U-Playlist."
+                        }
                     }
                 }
             }
@@ -97,7 +98,7 @@ class ContentRepository(
             name = p.name.trim().ifEmpty { "Meine Liste" },
             url = if (p.type == ProfileType.XTREAM) Urls.normalizeServer(p.url) else p.url.trim(),
             username = p.username.trim(),
-            password = p.password.trim(),
+            password = p.password,
             epgUrl = p.epgUrl.trim(),
         )
         return if (clean.id == 0L) {
@@ -120,6 +121,7 @@ class ContentRepository(
             db.user().clearProgress(id)
             db.profiles().delete(id)
         }
+        withContext(Dispatchers.IO) { M3uSeriesStore.removeProfile(db, id) }
     }
 
     // ------------------------------------------------------------------ Listen
@@ -202,19 +204,22 @@ class ContentRepository(
     }
 
     fun movieItem(p: ProfileEntity, m: MovieEntity): PlayItem {
-        val url = m.directUrl ?: Urls.join(p.url, "movie", p.username, p.password, "${m.streamId}.${m.ext}")
+        val ext = m.ext.lowercase()
+        val url = m.directUrl ?: Urls.join(p.url, "movie", p.username, p.password, "${m.streamId}.$ext")
         return PlayItem(
             kind = PlayKind.MOVIE,
             id = m.streamId,
             title = m.name,
             url = url,
             image = m.poster,
-            ext = m.ext,
+            ext = ext,
         )
     }
 
     fun episodeItem(p: ProfileEntity, s: SeriesEntity, e: EpisodeInfo): PlayItem {
-        val url = Urls.join(p.url, "series", p.username, p.password, "${e.id}.${e.ext}")
+        val ext = e.ext.lowercase()
+        val url = e.directUrl?.takeIf { it.isNotBlank() }
+            ?: Urls.join(p.url, "series", p.username, p.password, "${e.id}.$ext")
         return PlayItem(
             kind = PlayKind.EPISODE,
             id = e.id,
@@ -225,7 +230,7 @@ class ContentRepository(
             parentId = s.seriesId,
             season = e.season,
             episode = e.number,
-            ext = e.ext,
+            ext = ext,
         )
     }
 
@@ -239,8 +244,11 @@ class ContentRepository(
         val key = "$profileId:$id"
         synchronized(seriesCache) { seriesCache[key] }?.let { return it }
         val p = db.profiles().get(profileId) ?: return null
-        if (p.type != ProfileType.XTREAM) return null
-        val d = try { xtream.seriesDetail(p, id) } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
+        val d = if (p.type == ProfileType.XTREAM) {
+            try { xtream.seriesDetail(p, id) } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
+        } else {
+            withContext(Dispatchers.IO) { M3uSeriesStore.load(db, profileId, id) }
+        }
         if (d != null) synchronized(seriesCache) { seriesCache[key] = d }
         return d
     }
@@ -261,11 +269,11 @@ class ContentRepository(
     suspend fun lastLive(profileId: Long): ProgressEntity? = db.user().lastLive(profileId)
 
     suspend fun saveProgress(profileId: Long, item: PlayItem, positionMs: Long, durationMs: Long) {
-        // Fast fertig angesehen: Fortschritt zurücksetzen, damit nicht am Abspann fortgesetzt wird.
+        // Fast fertig: eigener Wert, nicht 0. 0 bleibt „nur geöffnet / noch nicht angefangen“.
         val finished = durationMs > 0 && positionMs > durationMs * 95 / 100
         val pos = when {
             item.kind == PlayKind.LIVE -> 0L
-            finished -> 0L
+            finished -> WatchPos.COMPLETED_MS
             else -> positionMs.coerceAtLeast(0)
         }
         db.user().putProgress(
@@ -379,7 +387,7 @@ class ContentRepository(
                             logo = rec["stream_icon"]?.takeIf { it.isNotBlank() },
                             categoryId = rec["category_id"] ?: "0",
                             epgKey = rec["epg_channel_id"].orEmpty().trim().lowercase(),
-                            directUrl = null,
+                            directUrl = rec["direct_source"]?.takeIf { it.isNotBlank() },
                             sync = token,
                         ),
                     )
@@ -420,8 +428,8 @@ class ContentRepository(
                             rating = rec["rating"]?.toDoubleOrNull() ?: 0.0,
                             year = rec["year"]?.takeIf { it.isNotBlank() },
                             added = rec["added"]?.toLongOrNull() ?: 0L,
-                            ext = rec["container_extension"]?.takeIf { it.isNotBlank() } ?: "mp4",
-                            directUrl = null,
+                            ext = (rec["container_extension"]?.takeIf { it.isNotBlank() } ?: "mp4").lowercase(),
+                            directUrl = rec["direct_source"]?.takeIf { it.isNotBlank() },
                             sync = token,
                         ),
                     )
@@ -498,6 +506,7 @@ class ContentRepository(
         var counter = 0
         var number = 0
         var foundEpg: String? = null
+        val m3uSeries = M3uSeriesCollector()
 
         withContext(Dispatchers.IO) {
             http.get(p.url).use { body ->
@@ -508,7 +517,7 @@ class ContentRepository(
                         val lower = e.url.lowercase()
                         val id = UUID.nameUUIDFromBytes(e.url.toByteArray()).toString().replace("-", "")
                         if ("/series/" in lower) {
-                            // Serien-Einzelepisoden aus M3U lassen sich nicht sinnvoll gruppieren.
+                            m3uSeries.add(e)
                         } else if ("/movie/" in lower) {
                             movieGroups.getOrPut(e.group) { movieGroups.size }
                             movies.add(
@@ -521,7 +530,7 @@ class ContentRepository(
                                     rating = 0.0,
                                     year = null,
                                     added = 0L,
-                                    ext = e.url.substringBefore('?').substringAfterLast('.', "mp4").take(5),
+                                    ext = e.url.substringBefore('?').substringAfterLast('.', "mp4").take(5).lowercase(),
                                     directUrl = e.url,
                                     sync = token,
                                 ),
@@ -566,8 +575,19 @@ class ContentRepository(
         c.pruneCategories(p.id, CatType.LIVE, token)
         c.upsertCategories(movieGroups.entries.map { CategoryEntity(p.id, CatType.MOVIE, it.key, it.key, it.value, token) })
         c.pruneCategories(p.id, CatType.MOVIE, token)
-        c.pruneCategories(p.id, CatType.SERIES, token)
+        m3uSeries.finish()
+        for (chunk in m3uSeries.entities(p.id, token).chunked(BATCH)) {
+            c.upsertSeries(chunk)
+        }
         c.pruneSeries(p.id, token)
+        val seriesCats = m3uSeries.categories(p.id, token)
+        if (seriesCats.isNotEmpty()) c.upsertCategories(seriesCats)
+        c.pruneCategories(p.id, CatType.SERIES, token)
+        withContext(Dispatchers.IO) { M3uSeriesStore.replace(db, p.id, m3uSeries.details()) }
+        synchronized(seriesCache) {
+            val prefix = "${p.id}:"
+            seriesCache.keys.filter { it.startsWith(prefix) }.forEach { seriesCache.remove(it) }
+        }
 
         val epgFromHeader = foundEpg
         if (!epgFromHeader.isNullOrBlank() && p.epgUrl.isBlank()) {

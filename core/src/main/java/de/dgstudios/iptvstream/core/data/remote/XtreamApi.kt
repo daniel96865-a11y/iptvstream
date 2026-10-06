@@ -105,7 +105,7 @@ class XtreamApi(private val http: HttpService) {
                     season = season,
                     number = number,
                     title = o.str("title") ?: "Episode $number",
-                    ext = o.str("container_extension") ?: "mp4",
+                    ext = (o.str("container_extension") ?: "mp4").lowercase(),
                     plot = ei?.str("plot"),
                     durationSec = dur,
                     image = ei?.str("movie_image"),

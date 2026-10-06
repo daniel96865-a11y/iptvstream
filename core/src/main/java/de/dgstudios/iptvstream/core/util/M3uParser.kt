@@ -28,7 +28,7 @@ class M3uParser {
         var groupOverride: String? = null
         while (true) {
             val line = reader.readLine() ?: break
-            val t = line.trim()
+            val t = stripLine(line)
             if (t.isEmpty()) continue
             if (t.startsWith("#EXTM3U", ignoreCase = true)) {
                 val a = parseAttrs(t)
@@ -75,6 +75,20 @@ class M3uParser {
             name = null
             groupOverride = null
         }
+    }
+
+    companion object {
+        /** Wie der Parser: BOM und führende Leerzeilen zählen nicht als Inhalt. */
+        fun looksLikePlaylist(reader: BufferedReader): Boolean {
+            while (true) {
+                val line = reader.readLine() ?: return false
+                val t = stripLine(line)
+                if (t.isEmpty()) continue
+                return t.startsWith("#EXTM3U", ignoreCase = true) || t.startsWith("#EXTINF", ignoreCase = true)
+            }
+        }
+
+        fun stripLine(line: String): String = line.removePrefix("\uFEFF").trim()
     }
 
     private fun parseAttrs(s: String): Map<String, String> {

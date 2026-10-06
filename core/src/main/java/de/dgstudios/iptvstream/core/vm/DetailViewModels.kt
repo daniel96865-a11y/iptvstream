@@ -10,6 +10,7 @@ import de.dgstudios.iptvstream.core.data.MovieDetail
 import de.dgstudios.iptvstream.core.data.PlayKind
 import de.dgstudios.iptvstream.core.data.SeriesDetail
 import de.dgstudios.iptvstream.core.data.VodRequest
+import de.dgstudios.iptvstream.core.data.WatchPos
 import de.dgstudios.iptvstream.core.data.db.MovieEntity
 import de.dgstudios.iptvstream.core.data.db.ProfileEntity
 import de.dgstudios.iptvstream.core.data.db.ProgressEntity
@@ -138,7 +139,7 @@ class SeriesDetailViewModel(app: Application, handle: SavedStateHandle) : Androi
         val last = progress.maxByOrNull { it.updatedAt } ?: return all.first()
         val idx = all.indexOfFirst { it.id == last.itemId }
         if (idx < 0) return all.first()
-        return if (last.positionMs > 0) all[idx] else all.getOrNull(idx + 1) ?: all[idx]
+        return if (last.positionMs == WatchPos.COMPLETED_MS) all.getOrNull(idx + 1) ?: all[idx] else all[idx]
     }
 
     fun play(episode: EpisodeInfo, fromStart: Boolean = false) {

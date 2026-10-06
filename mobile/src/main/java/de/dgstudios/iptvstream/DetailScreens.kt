@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import de.dgstudios.iptvstream.core.data.EpisodeInfo
+import de.dgstudios.iptvstream.core.data.WatchPos
 import de.dgstudios.iptvstream.core.ui.LocalAppStyle
 import de.dgstudios.iptvstream.core.ui.Poster
 import de.dgstudios.iptvstream.core.ui.formatDuration
@@ -318,7 +319,7 @@ fun SeriesDetailScreen(onBack: () -> Unit, onPlay: () -> Unit) {
 @Composable
 private fun EpisodeRow(ep: EpisodeInfo, pos: Pair<Long, Long>?, hasProgress: Boolean, onClick: () -> Unit) {
     val s = LocalAppStyle.current
-    val watched = hasProgress && (pos?.first ?: 0L) == 0L
+    val watched = hasProgress && (pos?.first ?: 0L) == WatchPos.COMPLETED_MS
     val fraction = if (pos != null && pos.second > 0 && pos.first > 0) (pos.first.toFloat() / pos.second).coerceIn(0f, 1f) else 0f
     Row(
         Modifier

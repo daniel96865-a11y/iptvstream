@@ -15,8 +15,10 @@ import de.dgstudios.iptvstream.core.data.db.ProfileEntity
 import de.dgstudios.iptvstream.core.player.PlayerController
 import de.dgstudios.iptvstream.core.settings.AppSettings
 import de.dgstudios.iptvstream.core.settings.SettingsStore
+import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -66,6 +68,8 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private var nowNextJob: Job? = null
     private var autoNextJob: Job? = null
     private var toastJob: Job? = null
+    /** Laufendes Umschalten inkl. Fortschritt-Lesen, damit ein langsamer Zap load() nicht nachholt. */
+    private var playJob: Job? = null
 
     init {
         viewModelScope.launch { start() }
@@ -133,41 +137,54 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun playIndex(i: Int, fromStart: Boolean = false) {
+        if (profile == null || _controller.value == null) return
+        if (i !in 0 until size) return
+        launchPlay { playLoaded(i, fromStart) }
+    }
+
+    /** Bricht jedes laufende Umschalten ab, bevor ein neues load() starten kann. */
+    private fun launchPlay(block: suspend kotlinx.coroutines.CoroutineScope.() -> Unit) {
+        autoNextJob?.cancel()
+        nowNextJob?.cancel()
+        playJob?.cancel()
+        playJob = viewModelScope.launch(block = block)
+    }
+
+    private suspend fun playLoaded(i: Int, fromStart: Boolean) {
         val p = profile ?: return
         val ctrl = _controller.value ?: return
         if (i !in 0 until size) return
         index = i
         val item = itemAt(i)
-        autoNextJob?.cancel()
-        nowNextJob?.cancel()
-        viewModelScope.launch {
-            var startMs = 0L
-            if (item.kind != PlayKind.LIVE && !fromStart) {
-                val pr = repo.progress(p.id, item.kind, item.id)
-                if (pr != null && pr.positionMs > 10_000) startMs = (pr.positionMs - 2_000).coerceAtLeast(0)
-            }
-            ctrl.load(item, startMs)
-            _ui.update {
-                it.copy(
-                    ready = true,
-                    item = item,
-                    nowNext = null,
-                    canPrev = if (isLive) size > 1 else index > 0,
-                    canNext = if (isLive) size > 1 else index < size - 1,
-                    nextOfferSeconds = 0,
-                    nextTitle = null,
-                    isFavorite = item.id in favIds,
-                )
-            }
-            if (item.kind == PlayKind.LIVE) {
-                repo.saveProgress(p.id, item, 0, 0)
-                c.settings.set(SettingsStore.lastChannelKey(p.id), item.id)
-                nowNextJob = viewModelScope.launch {
-                    while (isActive) {
-                        val nn = repo.nowNext(p.id, item.epgKey)
-                        _ui.update { u -> if (u.item?.id == item.id) u.copy(nowNext = nn) else u }
-                        delay(30_000)
-                    }
+        var startMs = 0L
+        if (item.kind != PlayKind.LIVE && !fromStart) {
+            val pr = repo.progress(p.id, item.kind, item.id)
+            coroutineContext.ensureActive()
+            if (pr != null && pr.positionMs > 10_000) startMs = (pr.positionMs - 2_000).coerceAtLeast(0)
+        }
+        coroutineContext.ensureActive()
+        ctrl.load(item, startMs)
+        coroutineContext.ensureActive()
+        _ui.update {
+            it.copy(
+                ready = true,
+                item = item,
+                nowNext = null,
+                canPrev = if (isLive) size > 1 else index > 0,
+                canNext = if (isLive) size > 1 else index < size - 1,
+                nextOfferSeconds = 0,
+                nextTitle = null,
+                isFavorite = item.id in favIds,
+            )
+        }
+        if (item.kind == PlayKind.LIVE) {
+            repo.saveProgress(p.id, item, 0, 0)
+            c.settings.set(SettingsStore.lastChannelKey(p.id), item.id)
+            nowNextJob = viewModelScope.launch {
+                while (isActive) {
+                    val nn = repo.nowNext(p.id, item.epgKey)
+                    _ui.update { u -> if (u.item?.id == item.id) u.copy(nowNext = nn) else u }
+                    delay(30_000)
                 }
             }
         }
@@ -191,18 +208,20 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun zapNumber(n: Int) {
         val p = profile ?: return
         if (!isLive) return
-        viewModelScope.launch {
+        launchPlay {
             val ch = repo.channelByNumber(p.id, n)
+            coroutineContext.ensureActive()
             if (ch == null) {
                 showToast("Sender $n nicht gefunden")
-                return@launch
+                return@launchPlay
             }
             var i = channels.indexOfFirst { it.streamId == ch.streamId }
             if (i < 0) {
                 channels = repo.channels(p.id, Cat.ALL).first()
+                coroutineContext.ensureActive()
                 i = channels.indexOfFirst { it.streamId == ch.streamId }
             }
-            if (i >= 0) playIndex(i)
+            if (i >= 0) playLoaded(i, false)
         }
     }
 

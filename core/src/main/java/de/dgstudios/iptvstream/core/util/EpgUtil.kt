@@ -1,9 +1,18 @@
 package de.dgstudios.iptvstream.core.util
 
 import java.text.Normalizer
+import java.util.Calendar
+import java.util.TimeZone
 
 /** Zeit- und Namenslogik für XMLTV. Keine Android-Abhängigkeiten. */
 object XmltvTime {
+    /**
+     * Zeitzone für XMLTV-Zeitstempel ohne Offset.
+     * Europe/Berlin (CET/CEST), damit deutsche Programmlisten nicht 1–2 Stunden nach UTC verrutschen.
+     * Explizite Offsets wie `+0100` bleiben unverändert.
+     */
+    private val defaultZone: TimeZone = TimeZone.getTimeZone("Europe/Berlin")
+
     /** Parst "20260101120000 +0200" (Sekunden und Offset optional) nach Epoch-Millisekunden. */
     fun parse(raw: String?): Long? {
         val t = raw?.trim() ?: return null
@@ -17,19 +26,35 @@ object XmltvTime {
             val hasSec = t.length >= 14 && t[12].isDigit() && t[13].isDigit()
             val sec = if (hasSec) t.substring(12, 14).toInt() else 0
             val rest = t.substring(if (hasSec) 14 else 12).trim()
-            var offsetMin = 0
             if (rest.isNotEmpty() && (rest[0] == '+' || rest[0] == '-')) {
                 val sign = if (rest[0] == '-') -1 else 1
                 val digits = rest.substring(1).filter { it.isDigit() }
-                if (digits.length >= 4) {
-                    offsetMin = sign * (digits.substring(0, 2).toInt() * 60 + digits.substring(2, 4).toInt())
+                val offsetMin = if (digits.length >= 4) {
+                    sign * (digits.substring(0, 2).toInt() * 60 + digits.substring(2, 4).toInt())
+                } else {
+                    0
                 }
+                val days = daysFromCivil(y, mo, d)
+                ((days * 86_400L + h * 3_600L + mi * 60L + sec) - offsetMin * 60L) * 1000L
+            } else {
+                berlinMillis(y, mo, d, h, mi, sec)
             }
-            val days = daysFromCivil(y, mo, d)
-            ((days * 86_400L + h * 3_600L + mi * 60L + sec) - offsetMin * 60L) * 1000L
         } catch (e: NumberFormatException) {
             null
         }
+    }
+
+    private fun berlinMillis(y: Int, mo: Int, d: Int, h: Int, mi: Int, sec: Int): Long {
+        val cal = Calendar.getInstance(defaultZone)
+        cal.clear()
+        cal.set(Calendar.YEAR, y)
+        cal.set(Calendar.MONTH, mo - 1)
+        cal.set(Calendar.DAY_OF_MONTH, d)
+        cal.set(Calendar.HOUR_OF_DAY, h)
+        cal.set(Calendar.MINUTE, mi)
+        cal.set(Calendar.SECOND, sec)
+        cal.set(Calendar.MILLISECOND, 0)
+        return cal.timeInMillis
     }
 
     private fun daysFromCivil(y0: Int, m: Int, d: Int): Long {

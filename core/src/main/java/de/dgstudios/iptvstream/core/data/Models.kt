@@ -51,7 +51,17 @@ data class EpisodeInfo(
     val plot: String?,
     val durationSec: Int,
     val image: String?,
+    /** Gesetzte Direkt-URL (M3U). Sonst wird die Xtream-URL aus id und ext gebaut. */
+    val directUrl: String? = null,
 )
+
+/**
+ * Gespeicherte Abspielposition.
+ * 0 heißt nur geöffnet bzw. noch nicht angefangen. [COMPLETED_MS] heißt fertig gesehen.
+ */
+object WatchPos {
+    const val COMPLETED_MS = -1L
+}
 
 data class Season(val number: Int, val episodes: List<EpisodeInfo>)
 
