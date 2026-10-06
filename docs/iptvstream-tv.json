@@ -1,6 +1,6 @@
 {
-  "versionCode": 5,
-  "versionName": "1.0.4",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.4/iptvstream-tv.apk",
-  "changelog": "Kategorien als Schublade wählbar. Update erscheint auf dem Startbildschirm."
+  "versionCode": 6,
+  "versionName": "1.0.5",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.5/iptvstream-tv.apk",
+  "changelog": "Kategorien-Schublade optisch angepasst, Scrollposition bleibt erhalten."
 }

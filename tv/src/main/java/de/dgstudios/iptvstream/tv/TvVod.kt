@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
@@ -109,6 +110,11 @@ private fun <T> PosterBrowse(
     val catItemsRef = rememberUpdatedState(catItems)
     val openButton = remember { FocusRequester() }
     var drawerOpen by remember { mutableStateOf(false) }
+    val drawerListState = rememberLazyListState(vm.drawerIndex, vm.drawerOffset)
+    LaunchedEffect(drawerListState) {
+        snapshotFlow { drawerListState.firstVisibleItemIndex to drawerListState.firstVisibleItemScrollOffset }
+            .collect { (i, o) -> vm.onDrawerScroll(i, o) }
+    }
 
     fun enter() {
         scope.launch {
@@ -219,6 +225,7 @@ private fun <T> PosterBrowse(
             TvCategoryDrawer(
                 items = catItems,
                 selected = selected,
+                listState = drawerListState,
                 onSelect = {
                     drawerOpen = false
                     chooseCategory(it)

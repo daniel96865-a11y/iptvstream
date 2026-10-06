@@ -1,6 +1,7 @@
 package de.dgstudios.iptvstream
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -27,8 +28,11 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Menu
@@ -50,8 +54,11 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -76,6 +83,7 @@ import de.dgstudios.iptvstream.core.vm.LiveViewModel
 import de.dgstudios.iptvstream.core.vm.MainViewModel
 import de.dgstudios.iptvstream.core.vm.MoviesViewModel
 import de.dgstudios.iptvstream.core.vm.SeriesViewModel
+import kotlinx.coroutines.flow.first
 
 /** Horizontale Kategorieauswahl inkl. "Alle", "Favoriten" und "Zuletzt". */
 @Composable
@@ -100,12 +108,20 @@ fun CategoryPicker(
     selected: String,
     drawer: Boolean,
     onSelect: (String) -> Unit,
+    drawerIndex: Int = 0,
+    drawerOffset: Int = 0,
+    onDrawerScroll: (Int, Int) -> Unit = { _, _ -> },
 ) {
     if (!drawer) {
         CategoryRow(categories, selected, onSelect)
         return
     }
     var open by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState(drawerIndex, drawerOffset)
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .collect { (i, o) -> onDrawerScroll(i, o) }
+    }
     val label = Cat.label(selected, categories.firstOrNull { it.id == selected }?.name)
     val s = LocalAppStyle.current
     Row(
@@ -133,6 +149,7 @@ fun CategoryPicker(
         CategoryDrawer(
             categories = categories,
             selected = selected,
+            listState = listState,
             onSelect = {
                 onSelect(it)
                 open = false
@@ -146,6 +163,7 @@ fun CategoryPicker(
 private fun CategoryDrawer(
     categories: List<CategoryEntity>,
     selected: String,
+    listState: LazyListState,
     onSelect: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -162,6 +180,17 @@ private fun CategoryDrawer(
     val shown = remember(entries, query) {
         val q = query.trim()
         if (q.isEmpty()) entries else entries.filter { it.second.contains(q, ignoreCase = true) }
+    }
+    val filterState = rememberLazyListState()
+    val browsingAll = query.isBlank()
+    LaunchedEffect(browsingAll, selected, entries) {
+        if (!browsingAll) {
+            filterState.scrollToItem(0)
+            return@LaunchedEffect
+        }
+        val index = entries.indexOfFirst { it.first == selected }
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo }.first { it.isNotEmpty() }
+        listState.reveal(index)
     }
     Dialog(
         onDismissRequest = onDismiss,
@@ -183,50 +212,113 @@ private fun CategoryDrawer(
                     .fillMaxHeight()
                     .fillMaxWidth(0.88f)
                     .widthIn(max = 420.dp)
-                    .background(s.backgroundColors[1])
+                    .background(Brush.verticalGradient(s.backgroundColors))
                     .windowInsetsPadding(WindowInsets.safeDrawing)
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
             ) {
                 Text("Kategorien", color = s.onSurface, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(10.dp))
-                GlassTextField(
-                    value = query,
-                    onChange = { query = it },
-                    placeholder = "Kategorie suchen",
-                    imeAction = ImeAction.Search,
-                )
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(12.dp))
+                DrawerSearch(query) { query = it }
+                Spacer(Modifier.height(12.dp))
                 if (shown.isEmpty()) {
-                    Text("Keine Kategorie", color = s.onSurfaceDim, fontSize = 14.sp, modifier = Modifier.padding(8.dp))
+                    Text("Keine Kategorie", color = s.onSurfaceDim, fontSize = 15.sp, modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp))
                 } else {
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    LazyColumn(
+                        state = if (browsingAll) listState else filterState,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(bottom = 12.dp),
+                    ) {
                         items(shown, key = { it.first }) { (id, name) ->
-                            val on = id == selected
-                            val shape = RoundedCornerShape(14.dp)
-                            Box(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .height(46.dp)
-                                    .then(if (on) Modifier.clip(shape).background(s.accent, shape) else Modifier.glass(shape))
-                                    .pressable({ onSelect(id) })
-                                    .padding(horizontal = 14.dp),
-                                contentAlignment = Alignment.CenterStart,
-                            ) {
-                                Text(
-                                    name,
-                                    color = if (on) Color.White else s.onSurface,
-                                    fontSize = 15.sp,
-                                    fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
+                            CategoryDrawerRow(name, id == selected) { onSelect(id) }
                         }
                     }
                 }
             }
         }
     }
+}
+
+/** Gleiche Karte wie die Senderliste: Glas, 18.dp, 15.sp halbfett. Auswahl wie die Tab-Marke, kein Vollflächen-Pill. */
+@Composable
+private fun CategoryDrawerRow(name: String, selected: Boolean, onClick: () -> Unit) {
+    val s = LocalAppStyle.current
+    val shape = RoundedCornerShape(18.dp)
+    val surface = if (selected) {
+        Modifier
+            .clip(shape)
+            .background(s.accent.copy(alpha = 0.30f), shape)
+            .border(1.dp, s.accent.copy(alpha = 0.65f), shape)
+    } else {
+        Modifier.glass(shape)
+    }
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .then(surface)
+            .pressable({ onClick() })
+            .padding(horizontal = 14.dp, vertical = 13.dp),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Text(
+            name,
+            color = s.onSurface,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            lineHeight = 20.sp,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** Suchfeld ohne zusätzliche Haarlinie über der Fläche. */
+@Composable
+private fun DrawerSearch(value: String, onChange: (String) -> Unit) {
+    val s = LocalAppStyle.current
+    val shape = RoundedCornerShape(16.dp)
+    BasicTextField(
+        value = value,
+        onValueChange = onChange,
+        singleLine = true,
+        textStyle = TextStyle(color = s.onSurface, fontSize = 16.sp, fontWeight = FontWeight.Medium),
+        cursorBrush = SolidColor(s.accent),
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        modifier = Modifier.fillMaxWidth(),
+        decorationBox = { inner ->
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(shape)
+                    .background(s.card, shape)
+                    .padding(horizontal = 14.dp, vertical = 14.dp),
+            ) {
+                if (value.isEmpty()) {
+                    Text("Kategorie suchen", color = s.onSurfaceDim, fontSize = 16.sp)
+                }
+                inner()
+            }
+        },
+    )
+}
+
+/** Zeigt die gewählte Kategorie, ohne eine fast weggescrollte Zeile als Haarlinie stehen zu lassen. */
+private suspend fun LazyListState.reveal(index: Int) {
+    if (index < 0) return
+    snapshotFlow { layoutInfo.visibleItemsInfo }.first { it.isNotEmpty() }
+    fun visibleFully(): Boolean {
+        val info = layoutInfo
+        val vis = info.visibleItemsInfo.find { it.index == index } ?: return false
+        return vis.offset >= info.viewportStartOffset && vis.offset + vis.size <= info.viewportEndOffset
+    }
+    if (!visibleFully()) scrollToItem(index)
+    val info = layoutInfo
+    val first = info.visibleItemsInfo.firstOrNull()
+    if (first != null && first.index != index && first.offset < info.viewportStartOffset) {
+        val shown = first.size - (info.viewportStartOffset - first.offset)
+        if (shown in 1 until 24) scrollToItem(first.index + 1)
+    }
+    if (!visibleFully()) scrollToItem(index)
 }
 
 @Composable
@@ -247,7 +339,15 @@ fun LiveScreen(
 
     Column(Modifier.fillMaxSize()) {
         ScreenHeader("Live TV", if (items.isNotEmpty()) "${items.size} Sender" else null)
-        CategoryPicker(categories, selected, settings.categoryDrawer, vm::selectCategory)
+        CategoryPicker(
+            categories,
+            selected,
+            settings.categoryDrawer,
+            vm::selectCategory,
+            drawerIndex = vm.drawerIndex,
+            drawerOffset = vm.drawerOffset,
+            onDrawerScroll = vm::onDrawerScroll,
+        )
         if (!restored) return@Column
 
         val listState = rememberLazyListState(vm.scrollIndex, vm.scrollOffset)
@@ -445,7 +545,15 @@ private fun <T> PosterBrowse(
 
     Column(Modifier.fillMaxSize()) {
         ScreenHeader(title, if (items.isNotEmpty()) "${items.size} Titel" else null)
-        CategoryPicker(categories, selected, drawer, vm::selectCategory)
+        CategoryPicker(
+            categories,
+            selected,
+            drawer,
+            vm::selectCategory,
+            drawerIndex = vm.drawerIndex,
+            drawerOffset = vm.drawerOffset,
+            onDrawerScroll = vm::onDrawerScroll,
+        )
         if (!restored) return@Column
 
         val gridState = rememberLazyGridState(vm.scrollIndex, vm.scrollOffset)

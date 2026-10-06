@@ -13,10 +13,12 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -43,6 +45,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
@@ -129,6 +132,7 @@ fun TvCategoryList(
 fun TvCategoryDrawer(
     items: List<CatItem>,
     selected: String,
+    listState: LazyListState,
     onSelect: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -142,13 +146,16 @@ fun TvCategoryDrawer(
     val search = remember { FocusRequester() }
     val scope = rememberCoroutineScope()
     var searchFocused by remember { mutableStateOf(false) }
+    val filterState = rememberLazyListState()
+    val browsingAll = query.isBlank()
+    val rowShape = RoundedCornerShape(14.dp)
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Row(Modifier.fillMaxSize()) {
             Column(
                 Modifier
                     .width(480.dp)
                     .fillMaxHeight()
-                    .background(s.backgroundColors[1])
+                    .background(Brush.verticalGradient(s.backgroundColors))
                     .padding(horizontal = 18.dp, vertical = 16.dp),
             ) {
                 Text("Kategorien", color = s.onSurface, fontSize = 26.sp, fontWeight = FontWeight.Bold)
@@ -157,7 +164,7 @@ fun TvCategoryDrawer(
                     value = query,
                     onValueChange = { query = it },
                     singleLine = true,
-                    textStyle = TextStyle(color = s.onSurface, fontSize = 20.sp),
+                    textStyle = TextStyle(color = s.onSurface, fontSize = 20.sp, fontWeight = FontWeight.Medium),
                     cursorBrush = SolidColor(s.accent),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -171,11 +178,9 @@ fun TvCategoryDrawer(
                                 false
                             }
                         }
-                        .background(Color.White.copy(alpha = 0.10f), RoundedCornerShape(14.dp))
-                        .border(
-                            if (searchFocused) 3.dp else 1.dp,
-                            if (searchFocused) Color.White else Color.White.copy(alpha = 0.25f),
-                            RoundedCornerShape(14.dp),
+                        .background(s.card, rowShape)
+                        .then(
+                            if (searchFocused) Modifier.border(3.dp, Color.White, rowShape) else Modifier,
                         )
                         .padding(16.dp),
                     decorationBox = { inner ->
@@ -187,29 +192,33 @@ fun TvCategoryDrawer(
                 )
                 Spacer(Modifier.height(12.dp))
                 if (shown.isEmpty()) {
-                    Text("Keine Kategorie", color = s.onSurfaceDim, fontSize = 18.sp)
+                    Text("Keine Kategorie", color = s.onSurfaceDim, fontSize = 20.sp)
                 } else {
                     LazyColumn(
+                        state = if (browsingAll) listState else filterState,
                         modifier = Modifier.weight(1f).fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(bottom = 12.dp),
                     ) {
                         itemsIndexed(shown, key = { _, c -> c.id }) { index, c ->
                             Box(
                                 Modifier
                                     .fillMaxWidth()
-                                    .height(52.dp)
+                                    .heightIn(min = 56.dp)
                                     .registered(reg, index)
                                     .then(if (index == 0) Modifier.focusProperties { up = search } else Modifier)
                                     .tvFocus(onClick = { onSelect(c.id) }, selected = c.id == selected)
-                                    .padding(horizontal = 14.dp),
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
                                 contentAlignment = Alignment.CenterStart,
                             ) {
                                 Text(
                                     c.label,
                                     color = s.onSurface,
                                     fontSize = 20.sp,
-                                    fontWeight = if (c.id == selected) FontWeight.Bold else FontWeight.Medium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    lineHeight = 26.sp,
                                     maxLines = 1,
+                                    softWrap = false,
                                     overflow = TextOverflow.Ellipsis,
                                 )
                             }
@@ -230,8 +239,14 @@ fun TvCategoryDrawer(
             )
         }
     }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(browsingAll, selected, items) {
+        if (!browsingAll) {
+            filterState.scrollToItem(0)
+            return@LaunchedEffect
+        }
         val idx = items.indexOfFirst { it.id == selected }.coerceAtLeast(0)
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo }.first { it.isNotEmpty() }
+        listState.reveal(idx)
         if (!reg.focus(idx)) {
             try {
                 search.requestFocus()
@@ -239,6 +254,24 @@ fun TvCategoryDrawer(
             }
         }
     }
+}
+
+/** Zeigt die gewählte Kategorie, ohne eine fast weggescrollte Zeile als Haarlinie stehen zu lassen. */
+private suspend fun LazyListState.reveal(index: Int) {
+    if (index < 0) return
+    fun visibleFully(): Boolean {
+        val info = layoutInfo
+        val vis = info.visibleItemsInfo.find { it.index == index } ?: return false
+        return vis.offset >= info.viewportStartOffset && vis.offset + vis.size <= info.viewportEndOffset
+    }
+    if (!visibleFully()) scrollToItem(index)
+    val info = layoutInfo
+    val first = info.visibleItemsInfo.firstOrNull()
+    if (first != null && first.index != index && first.offset < info.viewportStartOffset) {
+        val shown = first.size - (info.viewportStartOffset - first.offset)
+        if (shown in 1 until 24) scrollToItem(first.index + 1)
+    }
+    if (!visibleFully()) scrollToItem(index)
 }
 
 @Composable
@@ -269,6 +302,11 @@ fun TvLiveScreen(
     val drawer = settings.categoryDrawer
     val openButton = remember { FocusRequester() }
     var drawerOpen by remember { mutableStateOf(false) }
+    val drawerListState = rememberLazyListState(vm.drawerIndex, vm.drawerOffset)
+    LaunchedEffect(drawerListState) {
+        snapshotFlow { drawerListState.firstVisibleItemIndex to drawerListState.firstVisibleItemScrollOffset }
+            .collect { (i, o) -> vm.onDrawerScroll(i, o) }
+    }
 
     fun enter() {
         scope.launch {
@@ -383,6 +421,7 @@ fun TvLiveScreen(
             TvCategoryDrawer(
                 items = catItems,
                 selected = selected,
+                listState = drawerListState,
                 onSelect = {
                     drawerOpen = false
                     chooseCategory(it)

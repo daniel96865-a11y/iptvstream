@@ -70,6 +70,10 @@ abstract class BrowseViewModel<T>(
     var scrollOffset = 0
     var focusIndex = 0
 
+    /** Scroll der Kategorien-Schublade. Gilt nur für diese Sitzung, getrennt je Bereich. */
+    var drawerIndex = 0
+    var drawerOffset = 0
+
     private var persistJob: Job? = null
 
     init {
@@ -93,7 +97,25 @@ abstract class BrowseViewModel<T>(
         scrollIndex = 0
         scrollOffset = 0
         focusIndex = 0
+        drawerIndex = drawerIndexFor(id)
+        drawerOffset = 0
         persist()
+    }
+
+    fun onDrawerScroll(index: Int, offset: Int) {
+        drawerIndex = index
+        drawerOffset = offset
+    }
+
+    /** Alle, Favoriten und Zuletzt stehen vor den Playlist-Gruppen. */
+    private fun drawerIndexFor(id: String): Int = when (id) {
+        Cat.ALL -> 0
+        Cat.FAV -> 1
+        Cat.RECENT -> 2
+        else -> {
+            val i = categories.value.indexOfFirst { it.id == id }
+            if (i >= 0) i + 3 else 0
+        }
     }
 
     fun onScroll(index: Int, offset: Int) {
