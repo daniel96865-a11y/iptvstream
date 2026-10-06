@@ -16,6 +16,8 @@ data class PlayItem(
     val ext: String? = null,
     val number: Int = 0,
     val epgKey: String? = null,
+    /** Archiv einer vergangenen Sendung: spulbar, kein Live-Rand. */
+    val catchup: Boolean = false,
 )
 
 sealed interface PlayRequest {

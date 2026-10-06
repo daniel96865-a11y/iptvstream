@@ -9,6 +9,9 @@ data class M3uEntry(
     val group: String,
     val tvgId: String,
     val number: Int?,
+    val archiveDays: Int = 0,
+    val catchupMode: String = "",
+    val catchupSource: String = "",
 )
 
 /**
@@ -61,6 +64,7 @@ class M3uParser {
             // URL-Zeile
             val displayName = (name?.takeIf { it.isNotBlank() } ?: attrs["tvg-name"] ?: t).trim()
             val group = (attrs["group-title"]?.takeIf { it.isNotBlank() } ?: groupOverride ?: "Ohne Kategorie").trim()
+            val archive = Catchup.fromM3u(attrs)
             yield(
                 M3uEntry(
                     name = displayName,
@@ -69,6 +73,9 @@ class M3uParser {
                     group = group,
                     tvgId = attrs["tvg-id"].orEmpty(),
                     number = attrs["tvg-chno"]?.trim()?.toIntOrNull(),
+                    archiveDays = archive.days,
+                    catchupMode = archive.mode,
+                    catchupSource = archive.source,
                 ),
             )
             attrs = emptyMap()

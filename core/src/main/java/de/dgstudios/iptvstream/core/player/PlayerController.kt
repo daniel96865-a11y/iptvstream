@@ -222,7 +222,7 @@ class PlayerController(
             it.copy(
                 loading = true, playing = false, error = null, notice = null, ended = false,
                 audioTracks = emptyList(), textTracks = emptyList(), positionMs = 0, durationMs = 0,
-                isLive = item.kind == PlayKind.LIVE,
+                isLive = liveEdge(item),
             )
         }
         player.setMediaItem(mediaItem, if (startMs > 0) startMs else C.TIME_UNSET)
@@ -234,7 +234,7 @@ class PlayerController(
         if (released) return
         reconnectAttempts = 0
         _state.update { it.copy(error = null, loading = true) }
-        if (current?.kind == PlayKind.LIVE) player.seekToDefaultPosition()
+        if (liveEdge(current)) player.seekToDefaultPosition()
         player.prepare()
         player.playWhenReady = true
     }
@@ -246,7 +246,7 @@ class PlayerController(
         if (released) return
         current?.let { saveProgress(it, force = true) }
         player.pause()
-        if (current?.kind == PlayKind.LIVE) {
+        if (liveEdge(current)) {
             player.stop()
             stoppedForBackground = true
         }
@@ -486,7 +486,7 @@ class PlayerController(
     private fun handleError(error: PlaybackException) {
         if (released) return
         val code = error.errorCode
-        val isLive = current?.kind == PlayKind.LIVE
+        val isLive = liveEdge(current)
 
         // Live-Fenster überholt: einfach zum Live-Rand springen.
         if (code == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
@@ -524,7 +524,7 @@ class PlayerController(
         reconnectJob = scope.launch {
             delay(wait)
             if (released) return@launch
-            if (current?.kind == PlayKind.LIVE) player.seekToDefaultPosition()
+            if (liveEdge(current)) player.seekToDefaultPosition()
             player.prepare()
             player.playWhenReady = true
         }
@@ -576,7 +576,7 @@ class PlayerController(
                 if (released) break
                 val item = current ?: continue
                 val dur = player.duration
-                val live = item.kind == PlayKind.LIVE
+                val live = liveEdge(item)
                 _state.update {
                     it.copy(
                         positionMs = if (live) 0 else player.currentPosition,
@@ -604,6 +604,9 @@ class PlayerController(
             }
         }
     }
+
+    /** Live-Rand. Archiv einer vergangenen Sendung bleibt spulbar. */
+    private fun liveEdge(item: PlayItem?): Boolean = item != null && item.kind == PlayKind.LIVE && !item.catchup
 
     private companion object {
         const val MAX_RECONNECTS = 5

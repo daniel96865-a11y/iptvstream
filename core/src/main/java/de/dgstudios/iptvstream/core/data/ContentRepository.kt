@@ -6,6 +6,7 @@ import de.dgstudios.iptvstream.core.data.db.AppDatabase
 import de.dgstudios.iptvstream.core.data.db.CatType
 import de.dgstudios.iptvstream.core.data.db.CategoryEntity
 import de.dgstudios.iptvstream.core.data.db.ChannelEntity
+import de.dgstudios.iptvstream.core.data.db.EpgEntity
 import de.dgstudios.iptvstream.core.data.db.FavoriteEntity
 import de.dgstudios.iptvstream.core.data.db.MovieEntity
 import de.dgstudios.iptvstream.core.data.db.ProfileEntity
@@ -16,6 +17,7 @@ import de.dgstudios.iptvstream.core.data.remote.HttpService
 import de.dgstudios.iptvstream.core.data.remote.Json
 import de.dgstudios.iptvstream.core.data.remote.Net
 import de.dgstudios.iptvstream.core.data.remote.XtreamApi
+import de.dgstudios.iptvstream.core.util.Catchup
 import de.dgstudios.iptvstream.core.util.M3uParser
 import de.dgstudios.iptvstream.core.util.Urls
 import kotlinx.coroutines.CancellationException
@@ -195,6 +197,16 @@ class ContentRepository(
     suspend fun schedule(profileId: Long, epgKey: String?, hours: Int = 24) =
         epg.schedule(profileId, epgKey, System.currentTimeMillis() - 3_600_000L, System.currentTimeMillis() + hours * 3_600_000L)
 
+    /** Vergangene Sendungen im Archivfenster, neueste zuerst. Leer, wenn der Sender kein Archiv hat. */
+    suspend fun archiveProgrammes(profileId: Long, channel: ChannelEntity): List<EpgEntity> {
+        if (channel.archiveDays <= 0 || channel.epgKey.isBlank()) return emptyList()
+        val now = System.currentTimeMillis()
+        val from = now - channel.archiveDays * 24L * 3_600_000L
+        return epg.schedule(profileId, channel.epgKey, from, now)
+            .filter { it.start < now }
+            .sortedByDescending { it.start }
+    }
+
     // ------------------------------------------------------------------ Abspielen
 
     fun liveItem(p: ProfileEntity, c: ChannelEntity, format: String): PlayItem {
@@ -207,6 +219,35 @@ class ContentRepository(
             image = c.logo,
             number = c.num,
             epgKey = c.epgKey,
+        )
+    }
+
+    /** Archiv-URL einer vergangenen Sendung. Null, wenn sich keine URL bauen lässt. */
+    fun catchupItem(p: ProfileEntity, c: ChannelEntity, programme: EpgEntity, format: String): PlayItem? {
+        if (c.archiveDays <= 0) return null
+        val xtream = p.type == ProfileType.XTREAM
+        val url = Catchup.url(
+            mode = if (xtream) "xc" else c.catchupMode,
+            source = if (xtream) "" else c.catchupSource,
+            liveUrl = c.directUrl,
+            server = if (xtream) p.url else null,
+            username = if (xtream) p.username else null,
+            password = if (xtream) p.password else null,
+            streamId = c.streamId,
+            ext = format.ifBlank { "ts" },
+            startMs = programme.start,
+            stopMs = programme.stop,
+        ) ?: return null
+        return PlayItem(
+            kind = PlayKind.LIVE,
+            id = c.streamId,
+            title = c.name,
+            subtitle = programme.title,
+            url = url,
+            image = c.logo,
+            number = c.num,
+            epgKey = c.epgKey,
+            catchup = true,
         )
     }
 
@@ -385,6 +426,7 @@ class ContentRepository(
                 Json.forEachRecord(r) { rec ->
                     val id = rec["stream_id"] ?: return@forEachRecord
                     count++
+                    val archiveDays = Catchup.xtreamDays(rec["tv_archive"], rec["tv_archive_duration"])
                     batch.add(
                         ChannelEntity(
                             profileId = p.id,
@@ -396,6 +438,8 @@ class ContentRepository(
                             epgKey = rec["epg_channel_id"].orEmpty().trim().lowercase(),
                             directUrl = rec["direct_source"]?.takeIf { it.isNotBlank() },
                             sync = token,
+                            archiveDays = archiveDays,
+                            catchupMode = if (archiveDays > 0) "xc" else "",
                         ),
                     )
                     if (batch.size >= BATCH) {
@@ -556,6 +600,9 @@ class ContentRepository(
                                     epgKey = e.tvgId.trim().lowercase(),
                                     directUrl = e.url,
                                     sync = token,
+                                    archiveDays = e.archiveDays,
+                                    catchupMode = e.catchupMode,
+                                    catchupSource = e.catchupSource,
                                 ),
                             )
                         }

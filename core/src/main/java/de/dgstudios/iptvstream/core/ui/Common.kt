@@ -63,6 +63,18 @@ fun rememberClockTick(periodMs: Long = 30_000): State<Long> =
 
 fun formatClock(epochMs: Long): String = SimpleDateFormat("HH:mm", Locale.GERMANY).format(Date(epochMs))
 
+/** Uhrzeit, an einem anderen Tag mit Datum davor. */
+fun formatProgrammeRange(startMs: Long, stopMs: Long, nowMs: Long = System.currentTimeMillis()): String {
+    val day = SimpleDateFormat("dd.MM.", Locale.GERMANY)
+    val clock = SimpleDateFormat("HH:mm", Locale.GERMANY)
+    val startLabel = if (day.format(Date(startMs)) == day.format(Date(nowMs))) {
+        clock.format(Date(startMs))
+    } else {
+        day.format(Date(startMs)) + " " + clock.format(Date(startMs))
+    }
+    return "$startLabel – ${clock.format(Date(stopMs))}"
+}
+
 fun formatDuration(ms: Long): String {
     val total = (ms / 1000).coerceAtLeast(0)
     val h = total / 3600

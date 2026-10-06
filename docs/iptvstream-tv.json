@@ -1,6 +1,6 @@
 {
-  "versionCode": 8,
-  "versionName": "1.0.7",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.7/iptvstream-tv.apk",
-  "changelog": "Schublade und untere Leiste undurchsichtig."
+  "versionCode": 9,
+  "versionName": "1.0.8",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.8/iptvstream-tv.apk",
+  "changelog": "Zurückblicken bei Sendern mit Archive."
 }

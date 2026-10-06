@@ -11,6 +11,7 @@ import de.dgstudios.iptvstream.core.data.PlayItem
 import de.dgstudios.iptvstream.core.data.PlayKind
 import de.dgstudios.iptvstream.core.data.VodRequest
 import de.dgstudios.iptvstream.core.data.db.ChannelEntity
+import de.dgstudios.iptvstream.core.data.db.EpgEntity
 import de.dgstudios.iptvstream.core.data.db.ProfileEntity
 import de.dgstudios.iptvstream.core.player.PlayerController
 import de.dgstudios.iptvstream.core.settings.AppSettings
@@ -41,6 +42,10 @@ data class PlayerUi(
     val toast: String? = null,
     val isFavorite: Boolean = false,
     val settings: AppSettings = AppSettings(),
+    /** Sender hat ein Archiv. Der Eintrag erscheint nur dann. */
+    val archive: Boolean = false,
+    /** Gerade läuft eine vergangene Sendung, nicht der Live-Rand. */
+    val catchingUp: Boolean = false,
 )
 
 /**
@@ -156,6 +161,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         if (i !in 0 until size) return
         index = i
         val item = itemAt(i)
+        val archive = isLive && (channels.getOrNull(i)?.archiveDays ?: 0) > 0
         var startMs = 0L
         if (item.kind != PlayKind.LIVE && !fromStart) {
             val pr = repo.progress(p.id, item.kind, item.id)
@@ -175,6 +181,8 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                 nextOfferSeconds = 0,
                 nextTitle = null,
                 isFavorite = item.id in favIds,
+                archive = archive,
+                catchingUp = false,
             )
         }
         if (item.kind == PlayKind.LIVE) {
@@ -223,6 +231,47 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             }
             if (i >= 0) playLoaded(i, false)
         }
+    }
+
+    suspend fun archiveProgrammes(): List<EpgEntity> {
+        val p = profile ?: return emptyList()
+        val ch = channels.getOrNull(index) ?: return emptyList()
+        return repo.archiveProgrammes(p.id, ch)
+    }
+
+    /** Spielt eine vergangene Sendung. False, wenn keine Archiv-URL gebaut werden konnte. */
+    fun playCatchup(programme: EpgEntity): Boolean {
+        val p = profile ?: return false
+        if (!isLive) return false
+        val ch = channels.getOrNull(index) ?: return false
+        val ctrl = _controller.value ?: return false
+        val item = repo.catchupItem(p, ch, programme, settings.liveFormat)
+        if (item == null) {
+            showToast("Diese Sendung ist im Archiv nicht verfügbar")
+            return false
+        }
+        launchPlay {
+            ctrl.load(item, 0)
+            _ui.update {
+                it.copy(
+                    ready = true,
+                    item = item,
+                    canPrev = size > 1,
+                    canNext = size > 1,
+                    nextOfferSeconds = 0,
+                    nextTitle = null,
+                    isFavorite = item.id in favIds,
+                    archive = true,
+                    catchingUp = true,
+                )
+            }
+        }
+        return true
+    }
+
+    fun returnToLive() {
+        if (!isLive) return
+        playIndex(index)
     }
 
     fun toggleFavorite() {

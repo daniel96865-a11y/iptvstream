@@ -14,13 +14,17 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -29,6 +33,8 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -78,6 +84,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -87,11 +95,13 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import de.dgstudios.iptvstream.core.data.PlayKind
+import de.dgstudios.iptvstream.core.data.db.EpgEntity
 import de.dgstudios.iptvstream.core.player.PlayerController
 import de.dgstudios.iptvstream.core.ui.LocalAppStyle
 import de.dgstudios.iptvstream.core.ui.VideoSurface
 import de.dgstudios.iptvstream.core.ui.formatClock
 import de.dgstudios.iptvstream.core.ui.formatDuration
+import de.dgstudios.iptvstream.core.ui.formatProgrammeRange
 import de.dgstudios.iptvstream.core.vm.PlayerUi
 import de.dgstudios.iptvstream.core.vm.PlayerViewModel
 import kotlinx.coroutines.delay
@@ -213,19 +223,29 @@ private fun PlayerContent(
     val stateRef = rememberUpdatedState(st)
     var showControls by remember { mutableStateOf(true) }
     var sheet by remember { mutableStateOf(false) }
+    var archiveOpen by remember { mutableStateOf(false) }
     var interaction by remember { mutableIntStateOf(0) }
     val item = ui.item
     val isLive = item?.kind == PlayKind.LIVE
+    val liveEdge = isLive && !ui.catchingUp
 
-    BackHandler { if (sheet) sheet = false else onBack() }
+    BackHandler {
+        when {
+            archiveOpen -> archiveOpen = false
+            sheet -> sheet = false
+            else -> onBack()
+        }
+    }
 
     LaunchedEffect(st.ended, item?.kind) {
         if (st.ended && item?.kind == PlayKind.MOVIE) onBack()
     }
 
     // Steuerung nach kurzer Zeit ausblenden, solange es läuft.
-    LaunchedEffect(showControls, st.playing, interaction, sheet) {
-        if (showControls && st.playing && !sheet && st.error == null) {
+    LaunchedEffect(ui.item?.id) { archiveOpen = false }
+
+    LaunchedEffect(showControls, st.playing, interaction, sheet, archiveOpen) {
+        if (showControls && st.playing && !sheet && !archiveOpen && st.error == null) {
             delay(4_000)
             showControls = false
         }
@@ -305,7 +325,11 @@ private fun PlayerContent(
                                 color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold,
                                 maxLines = 1, overflow = TextOverflow.Ellipsis,
                             )
-                            val sub = if (isLive) ui.nowNext?.now?.title else item?.subtitle
+                            val sub = when {
+                                ui.catchingUp -> item?.subtitle
+                                isLive -> ui.nowNext?.now?.title
+                                else -> item?.subtitle
+                            }
                             if (!sub.isNullOrBlank()) {
                                 Text(sub, color = Color(0xCCFFFFFF), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
@@ -343,7 +367,7 @@ private fun PlayerContent(
                             TransportButton(Icons.Rounded.SkipPrevious, 52) { vm.prev(); interaction++ }
                             Spacer(Modifier.width(18.dp))
                         }
-                        if (!isLive) {
+                        if (!liveEdge) {
                             TransportButton(Icons.Rounded.Replay10, 52) { ctrl.seekBy(-10_000); interaction++ }
                             Spacer(Modifier.width(18.dp))
                         }
@@ -351,7 +375,7 @@ private fun PlayerContent(
                             ctrl.togglePlay()
                             interaction++
                         }
-                        if (!isLive) {
+                        if (!liveEdge) {
                             Spacer(Modifier.width(18.dp))
                             TransportButton(Icons.Rounded.Forward10, 52) { ctrl.seekBy(10_000); interaction++ }
                         }
@@ -362,10 +386,32 @@ private fun PlayerContent(
                     }
 
                     // Unten: Fortschritt
-                    if (isLive) {
+                    if (liveEdge) {
                         LiveInfo(ui)
+                        if (ui.archive) {
+                            Spacer(Modifier.height(8.dp))
+                            ArchiveAction("Zurückblicken", Modifier.fillMaxWidth()) {
+                                archiveOpen = true
+                                interaction++
+                            }
+                        }
                     } else {
                         SeekBar(ctrl, st.positionMs, st.durationMs) { interaction++ }
+                        if (isLive && (ui.archive || ui.catchingUp)) {
+                            Spacer(Modifier.height(8.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if (ui.archive) {
+                                    ArchiveAction("Zurückblicken", Modifier.weight(1f), filled = false) {
+                                        archiveOpen = true
+                                        interaction++
+                                    }
+                                }
+                                ArchiveAction("Live", Modifier.weight(1f), filled = true) {
+                                    vm.returnToLive()
+                                    interaction++
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -450,6 +496,107 @@ private fun PlayerContent(
                 }
                 if (st.textTracks.isEmpty()) {
                     Text("Keine Untertitel verfügbar", color = s.onSurfaceDim, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
+        }
+    }
+
+    if (archiveOpen) {
+        ArchiveDialog(vm, item?.title.orEmpty()) { archiveOpen = false }
+    }
+}
+
+@Composable
+private fun ArchiveAction(label: String, modifier: Modifier = Modifier, filled: Boolean = true, onClick: () -> Unit) {
+    val s = LocalAppStyle.current
+    Box(
+        modifier
+            .height(44.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (filled) s.accent else s.backgroundColors[2])
+            .pressable(onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+    }
+}
+
+@Composable
+private fun ArchiveDialog(vm: PlayerViewModel, channel: String, onDismiss: () -> Unit) {
+    val s = LocalAppStyle.current
+    var loading by remember { mutableStateOf(true) }
+    var rows by remember { mutableStateOf<List<EpgEntity>>(emptyList()) }
+    LaunchedEffect(channel) {
+        loading = true
+        rows = vm.archiveProgrammes()
+        loading = false
+    }
+    val now = System.currentTimeMillis()
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Box(Modifier.fillMaxSize()) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.45f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onDismiss,
+                    ),
+            )
+            Column(
+                Modifier
+                    .align(Alignment.Center)
+                    .fillMaxWidth(0.92f)
+                    .fillMaxHeight(0.82f)
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(s.backgroundColors[0])
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .padding(16.dp),
+            ) {
+                Text("Zurückblicken", color = s.onSurface, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                if (channel.isNotBlank()) {
+                    Text(channel, color = s.onSurfaceDim, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Spacer(Modifier.height(12.dp))
+                when {
+                    loading -> CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally), color = s.accent)
+                    rows.isEmpty() -> Text(
+                        "Keine Sendungen im Archiv. Das Programm muss geladen sein.",
+                        color = s.onSurfaceDim,
+                        fontSize = 15.sp,
+                    )
+                    else -> LazyColumn(
+                        Modifier.weight(1f).fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(bottom = 8.dp),
+                    ) {
+                        items(rows, key = { it.start }) { programme ->
+                            val running = programme.stop > now
+                            Column(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .background(s.backgroundColors[2])
+                                    .pressable({ if (vm.playCatchup(programme)) onDismiss() })
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                            ) {
+                                Text(
+                                    formatProgrammeRange(programme.start, programme.stop, now) + if (running) " · läuft" else "",
+                                    color = if (running) s.accent else s.onSurfaceDim,
+                                    fontSize = 12.sp,
+                                )
+                                Text(
+                                    programme.title,
+                                    color = s.onSurface,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

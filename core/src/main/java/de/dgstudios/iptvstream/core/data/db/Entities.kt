@@ -53,6 +53,12 @@ data class ChannelEntity(
     val epgKey: String,
     val directUrl: String?,
     val sync: Long = 0,
+    /** Tage mit Archiv. 0 heißt: Zurückblicken gibt es für diesen Sender nicht. */
+    val archiveDays: Int = 0,
+    /** xc, append, shift, flussonic, source – leer bei Sendern ohne Archiv. */
+    val catchupMode: String = "",
+    /** M3U-Vorlage `catchup-source`, sonst leer. Xtream baut die URL aus dem Zugang. */
+    val catchupSource: String = "",
 )
 
 @Entity(
