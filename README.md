@@ -29,6 +29,8 @@ Zwei Oberflächen in einem Projekt:
 
 - Anmeldung per **Xtream Codes** (Server, Benutzer, Passwort) oder **M3U/M3U8**. Mehrere Profile, bearbeiten und löschen. Nach dem Login werden die Inhalte automatisch geladen.
 - Live-TV, Filme, Serien, Kategorien, Favoriten, Suche, zuletzt gesehen.
+- **Zurückblicken** (Catch-up/Timeshift) bei Sendern mit Archiv: vergangene Sendungen direkt aus dem Player abspielen.
+- **Favoriten-Widget** für den Startbildschirm (Handy): Lieblingssender mit Logo und aktuellem Programm, Tippen startet den Sender.
 - **EPG** (Xtream/XMLTV): lokal zwischengespeichert, sofort sichtbar, Aktualisierung im Hintergrund, manuell mit Fortschritt, Zuordnung auch bei HD/FHD/4K-Namen.
 - Live-TV: Sendernummer, Logo, Jetzt/Danach mit Fortschritt, letzter Sender, gemerkte Listenposition (auch nach Neustart).
 - Filme und Serien: Details, Fortsetzen, Fortschritt, nächste Episode.
@@ -44,7 +46,7 @@ Zwei Oberflächen in einem Projekt:
 - https://raw.githubusercontent.com/daniel96865-a11y/iptvstream/main/docs/iptvstream-mobile.json
 - https://raw.githubusercontent.com/daniel96865-a11y/iptvstream/main/docs/iptvstream-tv.json
 
-Felder: `versionCode`, `versionName`, `apkUrl`, `changelog`. `apkUrl` zeigt auf die Release-Dateien `iptvstream-mobile.apk` und `iptvstream-tv.apk`. Bei einem Tag `v*` aktualisiert GitHub Actions diese Dateien auf `main`, falls die gebaute Version noch nicht eingetragen ist (`scripts/update-feeds.sh`).
+Felder: `versionCode`, `versionName`, `apkUrl`, `changelog`. `apkUrl` zeigt auf die Release-Dateien `iptvstream-mobile.apk` und `iptvstream-tv.apk`. Tags mit Bindestrich (z. B. `v1.0.14-beta1`) werden als Vorabversion (Pre-release) veröffentlicht und ändern die Feeds nicht. Bei einem normalen Tag `v*` aktualisiert GitHub Actions diese Dateien auf `main`, falls die gebaute Version noch nicht eingetragen ist (`scripts/update-feeds.sh`).
 
 Der Glas-Look auf dem Handy sind halbtransparente, getönte Flächen mit Rand und Verlauf.
 
