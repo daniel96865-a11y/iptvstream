@@ -6,6 +6,7 @@ import de.dgstudios.iptvstream.core.data.db.AppDatabase
 import de.dgstudios.iptvstream.core.data.db.EpgEntity
 import de.dgstudios.iptvstream.core.data.db.EpgNameEntity
 import de.dgstudios.iptvstream.core.data.db.ProfileEntity
+import de.dgstudios.iptvstream.core.data.db.ProfileCrypto
 import de.dgstudios.iptvstream.core.data.db.ProfileType
 import de.dgstudios.iptvstream.core.data.remote.HttpService
 import de.dgstudios.iptvstream.core.data.remote.Net
@@ -51,7 +52,7 @@ class EpgManager(
     /** Startet eine Aktualisierung im Hintergrund (falls noch keine läuft). */
     fun launchRefresh(profileId: Long) {
         scope.launch {
-            val p = db.profiles().get(profileId) ?: return@launch
+            val p = db.profiles().get(profileId)?.let(ProfileCrypto::fromStorage) ?: return@launch
             refresh(p)
         }
     }
@@ -59,7 +60,7 @@ class EpgManager(
     /** Startet nur, wenn die letzte Aktualisierung länger als [maxAgeMs] zurückliegt. */
     fun launchRefreshIfStale(profileId: Long, maxAgeMs: Long) {
         scope.launch {
-            val p = db.profiles().get(profileId) ?: return@launch
+            val p = db.profiles().get(profileId)?.let(ProfileCrypto::fromStorage) ?: return@launch
             if (System.currentTimeMillis() - p.lastEpgSync > maxAgeMs) refresh(p)
         }
     }

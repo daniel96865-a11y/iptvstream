@@ -65,9 +65,14 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            // Release-APKs dürfen niemals mit dem Debug-Schlüssel veröffentlicht werden.
+            if (!hasReleaseSigning && System.getenv("CI")?.equals("true", ignoreCase = true) == true) {
+                throw GradleException("Release-Signierung fehlt: CI benötigt SIGNING_KEYSTORE_BASE64, SIGNING_STORE_PASSWORD, SIGNING_KEY_PASSWORD und SIGNING_KEY_ALIAS.")
+            }
             signingConfig = if (hasReleaseSigning) {
                 signingConfigs.getByName("release")
             } else {
+                // Nur für bewusst lokale Test-Builds zulässig; CI bricht oben ab.
                 signingConfigs.getByName("debug")
             }
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -89,8 +94,8 @@ android {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
     lint {
-        abortOnError = false
-        checkReleaseBuilds = false
+        abortOnError = true
+        checkReleaseBuilds = true
     }
 }
 

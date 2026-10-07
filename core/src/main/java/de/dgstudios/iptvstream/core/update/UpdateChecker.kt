@@ -21,12 +21,14 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import java.io.File
+import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
 data class UpdateInfo(
     val versionCode: Int,
     val versionName: String,
     val apkUrl: String,
+    val sha256: String,
     val changelog: String,
 )
 
@@ -225,6 +227,7 @@ class UpdateChecker(
             if (!response.isSuccessful) error("HTTP ${response.code}")
             val body = response.body ?: error("leer")
             val total = body.contentLength()
+            val digest = MessageDigest.getInstance("SHA-256")
             val file = apkFile()
             file.parentFile?.mkdirs()
             val tmp = File(file.parentFile, file.name + ".part")
@@ -238,6 +241,7 @@ class UpdateChecker(
                         val n = input.read(buf)
                         if (n < 0) break
                         output.write(buf, 0, n)
+                        digest.update(buf, 0, n)
                         readTotal += n
                         val now = System.currentTimeMillis()
                         if (isActive && total > 0 && now - lastEmit > 80) {
@@ -255,6 +259,11 @@ class UpdateChecker(
                 throw CancellationException()
             }
             if (tmp.length() <= 0L) error("leer")
+            val actualSha256 = digest.digest().joinToString("") { "%02x".format(it) }
+            if (!actualSha256.equals(info.sha256, ignoreCase = true)) {
+                tmp.delete()
+                error("Update-Prüfung fehlgeschlagen: SHA-256 stimmt nicht überein")
+            }
             if (file.exists()) file.delete()
             if (!tmp.renameTo(file)) {
                 tmp.copyTo(file, overwrite = true)
@@ -282,8 +291,11 @@ class UpdateChecker(
             val code = o.getInt("versionCode")
             val name = o.getString("versionName")
             val apk = o.getString("apkUrl")
-            if (code <= 0 || name.isBlank() || !apk.startsWith("https://")) error("ungültiger Feed")
-            return UpdateInfo(code, name, apk, o.optString("changelog"))
+            val sha256 = o.getString("sha256").trim().lowercase()
+            val expectedPrefix = "https://github.com/daniel96865-a11y/iptvstream/releases/download/"
+            if (code <= 0 || name.isBlank() || !apk.startsWith(expectedPrefix) ||
+                !sha256.matches(Regex("[0-9a-f]{64}"))) error("ungültiger Feed")
+            return UpdateInfo(code, name, apk, sha256, o.optString("changelog"))
         }
     }
 }
