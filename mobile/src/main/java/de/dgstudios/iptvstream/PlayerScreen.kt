@@ -419,19 +419,21 @@ private fun PlayerContent(
                             // Unten: Fortschritt
                             if (liveEdge) {
                                 LiveInfo(ui)
-                                Spacer(Modifier.height(10.dp))
-                                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                                    ArchivePill(enabled = ui.archive) {
-                                        archiveOpen = true
-                                        interaction++
-                                    }
-                                    if (!ui.archive) {
-                                        Text(
-                                            "Sender unterstützt kein Zurückblicken",
-                                            color = Color.White.copy(alpha = 0.55f),
-                                            fontSize = 11.sp,
-                                            modifier = Modifier.padding(top = 4.dp),
-                                        )
+                                if (!portrait) {
+                                    Spacer(Modifier.height(10.dp))
+                                    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                                        ArchivePill(enabled = ui.archive) {
+                                            archiveOpen = true
+                                            interaction++
+                                        }
+                                        if (!ui.archive) {
+                                            Text(
+                                                "Sender unterstützt kein Zurückblicken",
+                                                color = Color.White.copy(alpha = 0.55f),
+                                                fontSize = 11.sp,
+                                                modifier = Modifier.padding(top = 4.dp),
+                                            )
+                                        }
                                     }
                                 }
                             } else {
@@ -452,6 +454,30 @@ private fun PlayerContent(
                                     }
                                 }
                             }
+                    }
+                    // Hochformat: Zurückblicken unten über der Systemleiste, Platz für den Hinweis darunter.
+                    if (portrait && liveEdge) {
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .align(Alignment.BottomCenter)
+                                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
+                                .padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                        ArchivePill(enabled = ui.archive) {
+                            archiveOpen = true
+                            interaction++
+                        }
+                        if (!ui.archive) {
+                            Text(
+                                "Sender unterstützt kein Zurückblicken",
+                                color = Color.White.copy(alpha = 0.55f),
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
+                        }
                     }
                 }
             }
