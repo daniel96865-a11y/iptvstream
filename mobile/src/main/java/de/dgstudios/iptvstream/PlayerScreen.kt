@@ -19,6 +19,9 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -310,118 +313,145 @@ private fun PlayerContent(
                             ),
                         ),
                 )
-                Column(
-                    Modifier
-                        .fillMaxSize()
-                        .windowInsetsPadding(WindowInsets.safeDrawing)
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    // Oben: Zurück, Titel, Favorit, Einstellungen
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        GlassIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "Zurück", onBack)
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                item?.title ?: "",
-                                color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold,
-                                maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            )
-                            val sub = when {
-                                ui.catchingUp -> item?.subtitle
-                                isLive -> ui.nowNext?.now?.title
-                                else -> item?.subtitle
-                            }
-                            if (!sub.isNullOrBlank()) {
-                                Text(sub, color = Color(0xCCFFFFFF), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            }
-                        }
-                        if (isLive) {
-                            GlassIconButton(
-                                if (ui.isFavorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
-                                "Favorit",
-                                { vm.toggleFavorite() },
-                                tint = if (ui.isFavorite) Color(0xFFFFC857) else null,
-                            )
-                            Spacer(Modifier.width(8.dp))
-                        }
-                        if (showRotate) {
-                            GlassIconButton(
-                                Icons.Rounded.ScreenRotation,
-                                if (landscapeLocked) "Hochformat" else "Vollbild",
-                                onToggleOrientation,
-                            )
-                            Spacer(Modifier.width(8.dp))
-                        }
-                        GlassIconButton(Icons.Rounded.Tune, "Einstellungen", {
-                            sheet = true
-                            interaction++
-                        })
-                    }
-
-                    // Mitte: Transport
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically,
+                BoxWithConstraints(Modifier.fillMaxSize()) {
+                    // Hochformat: Bild ist bildschirmbreit und vertikal zentriert (Seitenverhältnis des Videos, sonst 16:9).
+                    val portrait = maxHeight > maxWidth
+                    val aspect = if (st.videoWidth > 0 && st.videoHeight > 0) st.videoHeight.toFloat() / st.videoWidth else 9f / 16f
+                    val videoH = (maxWidth * aspect).coerceAtMost(maxHeight)
+                    val videoBottom = (maxHeight + videoH) / 2
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.TopCenter)
+                            .windowInsetsPadding(WindowInsets.safeDrawing)
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
                     ) {
-                        if (ui.canPrev) {
-                            TransportButton(Icons.Rounded.SkipPrevious, 52) { vm.prev(); interaction++ }
-                            Spacer(Modifier.width(18.dp))
-                        }
-                        if (!liveEdge) {
-                            TransportButton(Icons.Rounded.Replay10, 52) { ctrl.seekBy(-10_000); interaction++ }
-                            Spacer(Modifier.width(18.dp))
-                        }
-                        TransportButton(if (st.playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, 72, accent = true) {
-                            ctrl.togglePlay()
-                            interaction++
-                        }
-                        if (!liveEdge) {
-                            Spacer(Modifier.width(18.dp))
-                            TransportButton(Icons.Rounded.Forward10, 52) { ctrl.seekBy(10_000); interaction++ }
-                        }
-                        if (ui.canNext) {
-                            Spacer(Modifier.width(18.dp))
-                            TransportButton(Icons.Rounded.SkipNext, 52) { vm.next(); interaction++ }
-                        }
-                    }
+                            // Oben: Zurück, Titel, Favorit, Einstellungen
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                GlassIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "Zurück", onBack)
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        item?.title ?: "",
+                                        color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                    )
+                                    val sub = when {
+                                        ui.catchingUp -> item?.subtitle
+                                        isLive -> ui.nowNext?.now?.title
+                                        else -> item?.subtitle
+                                    }
+                                    if (!sub.isNullOrBlank()) {
+                                        Text(sub, color = Color(0xCCFFFFFF), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    }
+                                }
+                                if (isLive) {
+                                    GlassIconButton(
+                                        if (ui.isFavorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                                        "Favorit",
+                                        { vm.toggleFavorite() },
+                                        tint = if (ui.isFavorite) Color(0xFFFFC857) else null,
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                }
+                                if (showRotate) {
+                                    GlassIconButton(
+                                        Icons.Rounded.ScreenRotation,
+                                        if (landscapeLocked) "Hochformat" else "Vollbild",
+                                        onToggleOrientation,
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                }
+                                GlassIconButton(Icons.Rounded.Tune, "Einstellungen", {
+                                    sheet = true
+                                    interaction++
+                                })
+                            }
 
-                    // Unten: Fortschritt
-                    if (liveEdge) {
-                        LiveInfo(ui)
-                        Spacer(Modifier.height(10.dp))
-                        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                            ArchivePill(enabled = ui.archive) {
-                                archiveOpen = true
-                                interaction++
+                    }
+                    // Mitte: Transport, mittig auf dem Bild
+                    Box(Modifier.align(Alignment.Center).padding(horizontal = 16.dp)) {
+                            // Mitte: Transport
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                if (ui.canPrev) {
+                                    TransportButton(Icons.Rounded.SkipPrevious, 52) { vm.prev(); interaction++ }
+                                    Spacer(Modifier.width(18.dp))
+                                }
+                                if (!liveEdge) {
+                                    TransportButton(Icons.Rounded.Replay10, 52) { ctrl.seekBy(-10_000); interaction++ }
+                                    Spacer(Modifier.width(18.dp))
+                                }
+                                TransportButton(if (st.playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, 72, accent = true) {
+                                    ctrl.togglePlay()
+                                    interaction++
+                                }
+                                if (!liveEdge) {
+                                    Spacer(Modifier.width(18.dp))
+                                    TransportButton(Icons.Rounded.Forward10, 52) { ctrl.seekBy(10_000); interaction++ }
+                                }
+                                if (ui.canNext) {
+                                    Spacer(Modifier.width(18.dp))
+                                    TransportButton(Icons.Rounded.SkipNext, 52) { vm.next(); interaction++ }
+                                }
                             }
-                            if (!ui.archive) {
-                                Text(
-                                    "Sender unterstützt kein Zurückblicken",
-                                    color = Color.White.copy(alpha = 0.55f),
-                                    fontSize = 11.sp,
-                                    modifier = Modifier.padding(top = 4.dp),
-                                )
-                            }
-                        }
-                    } else {
-                        SeekBar(ctrl, st.positionMs, st.durationMs) { interaction++ }
-                        if (isLive && (ui.archive || ui.catchingUp)) {
-                            Spacer(Modifier.height(8.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                if (ui.archive) {
-                                    ArchiveAction("Zurückblicken", Modifier.weight(1f), filled = false) {
+
+                    }
+                    Column(
+                        if (portrait) {
+                            Modifier
+                                .fillMaxWidth()
+                                .align(Alignment.TopCenter)
+                                .padding(top = videoBottom + 12.dp)
+                                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
+                                .padding(horizontal = 16.dp)
+                        } else {
+                            Modifier
+                                .fillMaxWidth()
+                                .align(Alignment.BottomCenter)
+                                .windowInsetsPadding(WindowInsets.safeDrawing)
+                                .padding(horizontal = 16.dp, vertical = 10.dp)
+                        },
+                    ) {
+                            // Unten: Fortschritt
+                            if (liveEdge) {
+                                LiveInfo(ui)
+                                Spacer(Modifier.height(10.dp))
+                                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    ArchivePill(enabled = ui.archive) {
                                         archiveOpen = true
                                         interaction++
                                     }
+                                    if (!ui.archive) {
+                                        Text(
+                                            "Sender unterstützt kein Zurückblicken",
+                                            color = Color.White.copy(alpha = 0.55f),
+                                            fontSize = 11.sp,
+                                            modifier = Modifier.padding(top = 4.dp),
+                                        )
+                                    }
                                 }
-                                ArchiveAction("Live", Modifier.weight(1f), filled = true) {
-                                    vm.returnToLive()
-                                    interaction++
+                            } else {
+                                SeekBar(ctrl, st.positionMs, st.durationMs) { interaction++ }
+                                if (isLive && (ui.archive || ui.catchingUp)) {
+                                    Spacer(Modifier.height(8.dp))
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        if (ui.archive) {
+                                            ArchiveAction("Zurückblicken", Modifier.weight(1f), filled = false) {
+                                                archiveOpen = true
+                                                interaction++
+                                            }
+                                        }
+                                        ArchiveAction("Live", Modifier.weight(1f), filled = true) {
+                                            vm.returnToLive()
+                                            interaction++
+                                        }
+                                    }
                                 }
                             }
-                        }
                     }
                 }
             }
