@@ -42,6 +42,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Forward10
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -73,6 +74,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -388,19 +390,20 @@ private fun PlayerContent(
                     // Unten: Fortschritt
                     if (liveEdge) {
                         LiveInfo(ui)
-                        Spacer(Modifier.height(8.dp))
-                        ArchiveAction("Zurückblicken", Modifier.fillMaxWidth(), enabled = ui.archive) {
-                            archiveOpen = true
-                            interaction++
-                        }
-                        if (!ui.archive) {
-                            Text(
-                                "Sender unterstützt kein Zurückblicken",
-                                color = s.onSurfaceDim,
-                                fontSize = 12.sp,
-                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                            )
+                        Spacer(Modifier.height(10.dp))
+                        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                            ArchivePill(enabled = ui.archive) {
+                                archiveOpen = true
+                                interaction++
+                            }
+                            if (!ui.archive) {
+                                Text(
+                                    "Sender unterstützt kein Zurückblicken",
+                                    color = Color.White.copy(alpha = 0.55f),
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.padding(top = 4.dp),
+                                )
+                            }
                         }
                     } else {
                         SeekBar(ctrl, st.positionMs, st.durationMs) { interaction++ }
@@ -510,6 +513,22 @@ private fun PlayerContent(
 
     if (archiveOpen) {
         ArchiveDialog(vm, item?.title.orEmpty()) { archiveOpen = false }
+    }
+}
+
+/** Kompakter Glas-Knopf zum Zurückblicken, mittig unter der Programmkarte. */
+@Composable
+private fun ArchivePill(enabled: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(50)
+    val base = Modifier
+        .height(40.dp)
+        .glass(shape, strong = true)
+        .let { if (enabled) it.pressable(onClick) else it.alpha(0.45f) }
+        .padding(horizontal = 16.dp)
+    Row(base, verticalAlignment = Alignment.CenterVertically) {
+        Icon(androidx.compose.material.icons.Icons.Rounded.History, null, tint = Color.White, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text("Zurückblicken", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
     }
 }
 

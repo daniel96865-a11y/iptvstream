@@ -184,7 +184,8 @@ fun MobileApp(mainVm: MainViewModel = viewModel()) {
                     ProfileFormScreen(mainVm = mainVm, profileId = id, first = false, onDone = { nav.popBackStack() })
                 }
             }
-            ClockOverlay(s)
+            // Im Player keine Uhr: sie lag über den Knöpfen der oberen Leiste.
+            if (route != "player") ClockOverlay(s)
             UpdateHost(updates)
         }
     }
