@@ -21,7 +21,7 @@ Handy-Oberfläche im Glas-Look (Hintergrund „Mitternacht“, Akzent Blau) mit 
 | Smartphone / Tablet | [iptvstream-mobile.apk](https://github.com/daniel96865-a11y/iptvstream/releases/latest/download/iptvstream-mobile.apk) |
 | Android TV / Fire TV | [iptvstream-tv.apk](https://github.com/daniel96865-a11y/iptvstream/releases/latest/download/iptvstream-tv.apk) |
 
-Aktuelle Version: [Release v1.0.14](https://github.com/daniel96865-a11y/iptvstream/releases/tag/v1.0.14)
+Aktuelle Version: [Release v1.0.15](https://github.com/daniel96865-a11y/iptvstream/releases/tag/v1.0.15)
 
 Installation außerhalb des Play Store: in den Android-Einstellungen „Unbekannte Apps“ für den Browser bzw. Dateimanager erlauben, die APK öffnen und installieren. Auf Fire TV die APK per „Downloader“ oder `adb install` aufspielen.
 
@@ -54,7 +54,7 @@ Zwei Oberflächen in einem Projekt:
 - https://raw.githubusercontent.com/daniel96865-a11y/iptvstream/main/docs/iptvstream-mobile.json
 - https://raw.githubusercontent.com/daniel96865-a11y/iptvstream/main/docs/iptvstream-tv.json
 
-Felder: `versionCode`, `versionName`, `apkUrl`, `changelog`. `apkUrl` zeigt auf die Release-Dateien `iptvstream-mobile.apk` und `iptvstream-tv.apk`. Tags mit Bindestrich (z. B. `v1.0.14-beta1`) werden als Vorabversion (Pre-release) veröffentlicht und ändern die Feeds nicht. Bei einem normalen Tag `v*` aktualisiert GitHub Actions diese Dateien auf `main`, falls die gebaute Version noch nicht eingetragen ist (`scripts/update-feeds.sh`).
+Felder: `versionCode`, `versionName`, `apkUrl`, `changelog`. `apkUrl` zeigt auf die Release-Dateien `iptvstream-mobile.apk` und `iptvstream-tv.apk`. Tags mit Bindestrich (z. B. `v1.0.15-beta1`) werden als Vorabversion (Pre-release) veröffentlicht und ändern die Feeds nicht. Bei einem normalen Tag `v*` aktualisiert GitHub Actions diese Dateien auf `main`, falls die gebaute Version noch nicht eingetragen ist (`scripts/update-feeds.sh`).
 
 Der Glas-Look auf dem Handy sind halbtransparente, getönte Flächen mit Rand und Verlauf.
 
