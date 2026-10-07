@@ -1,5 +1,8 @@
 package de.dgstudios.iptvstream
 
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.EnterTransition
@@ -280,6 +283,9 @@ private fun BottomBar(selected: Tab, onSelect: (Tab) -> Unit) {
     val s = LocalAppStyle.current
     val tabs = Tab.entries
     val shape = RoundedCornerShape(30.dp)
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    // Index unter dem Finger beim Wischen über die Leiste, sonst null.
+    var hover by remember { mutableStateOf<Int?>(null) }
     BoxWithConstraints(
         Modifier
             .fillMaxWidth()
@@ -288,8 +294,9 @@ private fun BottomBar(selected: Tab, onSelect: (Tab) -> Unit) {
             .height(BAR_HEIGHT),
     ) {
         val itemW = maxWidth / tabs.size
+        val target = hover ?: selected.ordinal
         val offset by animateDpAsState(
-            targetValue = itemW * selected.ordinal,
+            targetValue = itemW * target,
             animationSpec = if (s.animations) spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow) else tween(0),
             label = "tabOffset",
         )
@@ -297,7 +304,29 @@ private fun BottomBar(selected: Tab, onSelect: (Tab) -> Unit) {
             Modifier
                 .fillMaxSize()
                 .clip(shape)
-                .background(s.backgroundColors[0], shape),
+                .background(s.backgroundColors[0], shape)
+                .pointerInput(tabs.size) {
+                    fun indexAt(x: Float) = (x / (size.width.toFloat() / tabs.size)).toInt().coerceIn(0, tabs.size - 1)
+                    detectHorizontalDragGestures(
+                        onDragStart = { pos ->
+                            hover = indexAt(pos.x)
+                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                        },
+                        onDragEnd = {
+                            hover?.let { onSelect(tabs[it]) }
+                            hover = null
+                        },
+                        onDragCancel = { hover = null },
+                        onHorizontalDrag = { change, _ ->
+                            val i = indexAt(change.position.x)
+                            if (i != hover) {
+                                hover = i
+                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                            }
+                            change.consume()
+                        },
+                    )
+                },
         ) {
             Box(
                 Modifier
@@ -311,11 +340,27 @@ private fun BottomBar(selected: Tab, onSelect: (Tab) -> Unit) {
             )
             Row(Modifier.fillMaxSize()) {
                 for (t in tabs) {
-                    val isSel = t == selected
+                    val isSel = if (hover != null) t.ordinal == hover else t == selected
+                    val lifted = hover == t.ordinal && s.animations
+                    val scale by androidx.compose.animation.core.animateFloatAsState(
+                        targetValue = if (lifted) 1.14f else 1f,
+                        animationSpec = if (s.animations) spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium) else tween(0),
+                        label = "tabScale",
+                    )
+                    val lift by animateDpAsState(
+                        targetValue = if (lifted) (-4).dp else 0.dp,
+                        animationSpec = if (s.animations) spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium) else tween(0),
+                        label = "tabLift",
+                    )
                     Column(
                         Modifier
                             .weight(1f)
                             .fillMaxHeight()
+                            .graphicsLayer {
+                                scaleX = scale
+                                scaleY = scale
+                                translationY = lift.toPx()
+                            }
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
