@@ -1,5 +1,9 @@
+@file:OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+
 package de.dgstudios.iptvstream
 
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
@@ -137,9 +141,36 @@ fun MobileApp(mainVm: MainViewModel = viewModel()) {
                 lifecycleOwner.lifecycle.addObserver(observer)
                 onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
             }
+            // Widget: Sender direkt abspielen, Zurück führt zur App-Liste.
+            val widgetReq by WidgetLaunch.pending.collectAsStateWithLifecycle()
+            LaunchedEffect(widgetReq) {
+                val (pid, ch) = widgetReq ?: return@LaunchedEffect
+                WidgetLaunch.pending.value = null
+                mainVm.consumeAutoStart()
+                ctx.container.session.request = de.dgstudios.iptvstream.core.data.LiveRequest(pid, de.dgstudios.iptvstream.core.data.Cat.FAV, ch)
+                nav.navigate("player") {
+                    popUpTo("player") { inclusive = true }
+                    launchSingleTop = false
+                }
+            }
+            // Widget aktuell halten, wenn sich Favoriten oder das Profil ändern.
+            LaunchedEffect(Unit) {
+                ctx.container.active
+                    .flatMapLatest { a ->
+                        val p = a.profile
+                        if (p == null) kotlinx.coroutines.flow.flowOf(emptyList()) else ctx.container.repo.favoriteIds(p.id, "LIVE")
+                    }
+                    .distinctUntilChanged()
+                    .collect { de.dgstudios.iptvstream.widget.FavoritesWidget.refresh(ctx) }
+            }
             val auto by mainVm.autoStart.collectAsStateWithLifecycle()
             LaunchedEffect(auto) {
                 val req = auto ?: return@LaunchedEffect
+                if (route == "player") {
+                    // Schon im Player (z. B. vom Widget gestartet): Autostart nicht darüberlegen.
+                    mainVm.consumeAutoStart()
+                    return@LaunchedEffect
+                }
                 ctx.container.session.request = req
                 mainVm.consumeAutoStart()
                 nav.navigate("player")

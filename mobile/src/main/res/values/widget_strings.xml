@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_favorites_name">Favoriten</string>
+    <string name="widget_favorites_desc">Deine Lieblingssender mit aktuellem Programm</string>
+</resources>
