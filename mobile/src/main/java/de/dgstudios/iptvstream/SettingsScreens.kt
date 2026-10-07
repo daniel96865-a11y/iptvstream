@@ -154,7 +154,7 @@ private fun formatDate(ms: Long): String {
 }
 
 @Composable
-private fun SettingRow(
+internal fun SettingRow(
     def: SettingDef,
     settings: AppSettings,
     epgRunning: Boolean,

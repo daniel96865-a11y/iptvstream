@@ -5,6 +5,8 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    // Nur für JVM-Screenshot-Tests (README-Bilder), nicht Teil der Release-APK.
+    id("app.cash.paparazzi")
 }
 
 fun signingProp(name: String): String? =

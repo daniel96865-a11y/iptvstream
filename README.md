@@ -6,6 +6,14 @@ IPTV-Player für Android-Smartphones und Android TV / Fire TV.
 
 Die App enthält keine Senderlisten. Sie spielt nur Live-TV, Filme und Serien von einem IPTV-Zugang, den du selbst einträgst (Xtream Codes oder M3U/M3U8).
 
+## Screenshots
+
+| Live TV | Filme | Player | Einstellungen |
+|---|---|---|---|
+| <img src="docs/screenshots/phone-live-tv.png" width="200" alt="Live TV"> | <img src="docs/screenshots/phone-filme.png" width="200" alt="Filme"> | <img src="docs/screenshots/phone-player.png" width="200" alt="Player"> | <img src="docs/screenshots/phone-einstellungen.png" width="200" alt="Einstellungen"> |
+
+Handy-Oberfläche im Glas-Look (Hintergrund „Mitternacht“, Akzent Blau) mit Demo-Inhalten. Die Bilder entstehen per JVM-Screenshot-Test (`./gradlew :mobile:recordPaparazziDebug`, Klasse `ReadmeScreenshots`).
+
 ## Download
 
 | Gerät | APK |

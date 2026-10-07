@@ -10,3 +10,4 @@ captures/
 *.jks
 *.keystore
 !gradle/wrapper/gradle-wrapper.jar
+mobile/src/test/snapshots/

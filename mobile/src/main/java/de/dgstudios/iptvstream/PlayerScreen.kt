@@ -574,7 +574,7 @@ private fun PlayerContent(
 
 /** Kompakter Glas-Knopf zum Zurückblicken, mittig unter der Programmkarte. */
 @Composable
-private fun ArchivePill(enabled: Boolean, onClick: () -> Unit) {
+internal fun ArchivePill(enabled: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(50)
     val base = Modifier
         .height(40.dp)
@@ -715,7 +715,7 @@ private fun TrackRow(label: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun TransportButton(icon: androidx.compose.ui.graphics.vector.ImageVector, size: Int, accent: Boolean = false, onClick: () -> Unit) {
+internal fun TransportButton(icon: androidx.compose.ui.graphics.vector.ImageVector, size: Int, accent: Boolean = false, onClick: () -> Unit) {
     val s = LocalAppStyle.current
     val m = if (accent) Modifier.size(size.dp).clip(CircleShape).background(s.accent, CircleShape) else Modifier.size(size.dp).glass(CircleShape, strong = true)
     Box(m.pressable(onClick), contentAlignment = Alignment.Center) {
@@ -757,7 +757,7 @@ private fun SeekBar(ctrl: PlayerController, positionMs: Long, durationMs: Long, 
 }
 
 @Composable
-private fun LiveInfo(ui: PlayerUi) {
+internal fun LiveInfo(ui: PlayerUi) {
     val s = LocalAppStyle.current
     val nn = ui.nowNext
     val cur = nn?.now

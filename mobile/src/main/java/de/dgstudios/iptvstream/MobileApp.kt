@@ -310,7 +310,7 @@ private fun HomeScreen(
 
 /** Untere Navigation, deckend, damit die Liste nicht durchscheint. */
 @Composable
-private fun BottomBar(selected: Tab, onSelect: (Tab) -> Unit) {
+internal fun BottomBar(selected: Tab, onSelect: (Tab) -> Unit) {
     val s = LocalAppStyle.current
     val tabs = Tab.entries
     val shape = RoundedCornerShape(30.dp)
