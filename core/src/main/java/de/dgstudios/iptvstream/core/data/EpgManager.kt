@@ -91,7 +91,8 @@ class EpgManager(
     private suspend fun importXmltv(p: ProfileEntity, url: String) {
         val now = System.currentTimeMillis()
         val token = now
-        val minStop = now - 3 * 3_600_000L
+        // Vergangenheit für Zurückblicken behalten (Archivfenster bis 7 Tage).
+        val minStop = now - 7 * 24 * 3_600_000L
         val maxStart = now + 72 * 3_600_000L
         val epg = db.epg()
 

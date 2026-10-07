@@ -23,6 +23,8 @@ object Catchup {
     private val xcLive = Regex("""^(https?://[^?]+)/live/([^/]+)/([^/]+)/([^/]+)\.([A-Za-z0-9]+)(?:\?.*)?$""")
 
     fun xtreamDays(flag: String?, duration: String?): Int {
+        val off = flag?.trim()?.lowercase()
+        if (off == "0" || off == "false") return 0
         val dur = positiveInt(duration)
         if (dur != null) return dur.coerceAtMost(MAX_DAYS)
         val raw = flag?.trim()?.lowercase().orEmpty()

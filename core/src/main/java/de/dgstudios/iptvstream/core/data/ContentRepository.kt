@@ -197,14 +197,72 @@ class ContentRepository(
     suspend fun schedule(profileId: Long, epgKey: String?, hours: Int = 24) =
         epg.schedule(profileId, epgKey, System.currentTimeMillis() - 3_600_000L, System.currentTimeMillis() + hours * 3_600_000L)
 
-    /** Vergangene Sendungen im Archivfenster, neueste zuerst. Leer, wenn der Sender kein Archiv hat. */
+    /**
+     * Vergangene Sendungen im Archivfenster, neueste zuerst. Leer, wenn der Sender kein Archiv hat.
+     * Xtream: zusätzlich die Archivliste des Servers (get_simple_data_table), weil das XMLTV
+     * oft nur wenige Stunden Vergangenheit enthält.
+     */
     suspend fun archiveProgrammes(profileId: Long, channel: ChannelEntity): List<EpgEntity> {
-        if (channel.archiveDays <= 0 || channel.epgKey.isBlank()) return emptyList()
+        if (channel.archiveDays <= 0) return emptyList()
         val now = System.currentTimeMillis()
         val from = now - channel.archiveDays * 24L * 3_600_000L
-        return epg.schedule(profileId, channel.epgKey, from, now)
-            .filter { it.start < now }
+        val local = if (channel.epgKey.isBlank()) emptyList() else epg.schedule(profileId, channel.epgKey, from, now)
+        val p = db.profiles().get(profileId)
+        val remote = if (p != null && p.type == ProfileType.XTREAM && channel.directUrl == null) {
+            try {
+                xtreamArchive(p, channel, from, now)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                emptyList()
+            }
+        } else {
+            emptyList()
+        }
+        val merged = LinkedHashMap<Long, EpgEntity>()
+        for (e in remote) merged[e.start] = e
+        for (e in local) if (e.start !in merged) merged[e.start] = e
+        return merged.values
+            .filter { it.start < now && it.start >= from - 3_600_000L }
             .sortedByDescending { it.start }
+    }
+
+    private suspend fun xtreamArchive(p: ProfileEntity, c: ChannelEntity, from: Long, now: Long): List<EpgEntity> {
+        val url = Urls.api(p.url, p.username, p.password, "get_simple_data_table", mapOf("stream_id" to c.streamId))
+        val out = ArrayList<EpgEntity>()
+        streamJson(url) { r ->
+            if (r.peek() != android.util.JsonToken.BEGIN_OBJECT) {
+                r.skipValue()
+                return@streamJson
+            }
+            r.beginObject()
+            while (r.hasNext()) {
+                if (r.nextName() != "epg_listings" || r.peek() != android.util.JsonToken.BEGIN_ARRAY) {
+                    r.skipValue()
+                    continue
+                }
+                Json.forEachRecord(r) { rec ->
+                    val start = rec["start_timestamp"]?.toLongOrNull()?.times(1000L) ?: return@forEachRecord
+                    val stop = rec["stop_timestamp"]?.toLongOrNull()?.times(1000L) ?: return@forEachRecord
+                    val flag = rec["has_archive"]
+                    if (flag != null && flag != "1" && !flag.equals("true", true)) return@forEachRecord
+                    if (start >= now || stop < from) return@forEachRecord
+                    val title = b64(rec["title"]).ifBlank { return@forEachRecord }
+                    out.add(EpgEntity(p.id, c.epgKey.ifBlank { "xc:" + c.streamId }, start, stop, title, b64(rec["description"]).ifBlank { null }))
+                }
+            }
+            r.endObject()
+        }
+        return out
+    }
+
+    private fun b64(raw: String?): String {
+        if (raw.isNullOrBlank()) return ""
+        return try {
+            String(android.util.Base64.decode(raw, android.util.Base64.DEFAULT), Charsets.UTF_8).trim()
+        } catch (_: IllegalArgumentException) {
+            raw.trim()
+        }
     }
 
     // ------------------------------------------------------------------ Abspielen

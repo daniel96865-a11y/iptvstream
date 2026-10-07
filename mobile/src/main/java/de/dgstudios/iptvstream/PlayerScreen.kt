@@ -388,12 +388,19 @@ private fun PlayerContent(
                     // Unten: Fortschritt
                     if (liveEdge) {
                         LiveInfo(ui)
-                        if (ui.archive) {
-                            Spacer(Modifier.height(8.dp))
-                            ArchiveAction("Zurückblicken", Modifier.fillMaxWidth()) {
-                                archiveOpen = true
-                                interaction++
-                            }
+                        Spacer(Modifier.height(8.dp))
+                        ArchiveAction("Zurückblicken", Modifier.fillMaxWidth(), enabled = ui.archive) {
+                            archiveOpen = true
+                            interaction++
+                        }
+                        if (!ui.archive) {
+                            Text(
+                                "Sender unterstützt kein Zurückblicken",
+                                color = s.onSurfaceDim,
+                                fontSize = 12.sp,
+                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            )
                         }
                     } else {
                         SeekBar(ctrl, st.positionMs, st.durationMs) { interaction++ }
@@ -507,17 +514,28 @@ private fun PlayerContent(
 }
 
 @Composable
-private fun ArchiveAction(label: String, modifier: Modifier = Modifier, filled: Boolean = true, onClick: () -> Unit) {
+private fun ArchiveAction(
+    label: String,
+    modifier: Modifier = Modifier,
+    filled: Boolean = true,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
     val s = LocalAppStyle.current
+    val base = modifier
+        .height(44.dp)
+        .clip(RoundedCornerShape(14.dp))
+        .background(if (filled && enabled) s.accent else s.backgroundColors[2])
     Box(
-        modifier
-            .height(44.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(if (filled) s.accent else s.backgroundColors[2])
-            .pressable(onClick),
+        if (enabled) base.pressable(onClick) else base,
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+        Text(
+            label,
+            color = if (enabled) Color.White else Color.White.copy(alpha = 0.45f),
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 15.sp,
+        )
     }
 }
 
@@ -562,7 +580,7 @@ private fun ArchiveDialog(vm: PlayerViewModel, channel: String, onDismiss: () ->
                 when {
                     loading -> CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally), color = s.accent)
                     rows.isEmpty() -> Text(
-                        "Keine Sendungen im Archiv. Das Programm muss geladen sein.",
+                        "Keine vergangenen Sendungen gefunden. Programm (EPG) in den Einstellungen neu laden und erneut versuchen.",
                         color = s.onSurfaceDim,
                         fontSize = 15.sp,
                     )

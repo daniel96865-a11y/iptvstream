@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -75,10 +77,15 @@ fun SettingsScreen(mainVm: MainViewModel, settings: AppSettings, bottomPad: Dp, 
     val active by mainVm.active.collectAsStateWithLifecycle()
     val epg by mainVm.epg.collectAsStateWithLifecycle()
     val profile = active.profile
+    // Untere Leiste (Höhe + Abstand) plus System-Navigationsleiste, damit die letzte Karte
+    // vollständig über die Leiste gescrollt werden kann.
+    val sysNav = androidx.compose.foundation.layout.WindowInsets.navigationBars
+        .asPaddingValues().calculateBottomPadding()
+    val listBottom = maxOf(bottomPad, 66.dp + 36.dp + sysNav) + 24.dp
 
     LazyColumn(
         Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = bottomPad),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = listBottom),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item { ScreenHeader("Einstellungen") }
