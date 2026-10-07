@@ -47,6 +47,21 @@ object SettingsSchema {
         SettingsSection(
             "design", "Design",
             listOf(
+                ChoiceDef(
+                    "color_theme", "Farbthema",
+                    listOf(
+                        Option("custom", "Individuell"),
+                        Option("blue", "Mitternacht-Blau"),
+                        Option("violet", "Royal-Violett"),
+                        Option("aqua", "Aqua-Türkis"),
+                        Option("green", "Smaragd-Grün"),
+                        Option("sunset", "Sonnenuntergang"),
+                        Option("coral", "Koralle"),
+                        Option("graphite", "Graphit-Rot"),
+                    ),
+                    "custom",
+                    "Abgestimmte Farben für Hintergrund und Glasflächen",
+                ),
                 ChoiceDef("accent", "Akzentfarbe", accentNames.mapIndexed { i, n -> Option(i.toString(), n) }, "0"),
                 ChoiceDef("background", "Hintergrund", backgroundNames.mapIndexed { i, n -> Option(i.toString(), n) }, "0"),
                 ChoiceDef(

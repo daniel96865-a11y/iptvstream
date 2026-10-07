@@ -18,6 +18,18 @@ import androidx.compose.ui.graphics.Color
 import de.dgstudios.iptvstream.core.settings.AppSettings
 
 object Palette {
+    data class ColorTheme(val accent: Int, val background: Int)
+
+    val colorThemes = mapOf(
+        "blue" to ColorTheme(accent = 0, background = 0),
+        "violet" to ColorTheme(accent = 1, background = 2),
+        "aqua" to ColorTheme(accent = 2, background = 1),
+        "green" to ColorTheme(accent = 3, background = 2),
+        "sunset" to ColorTheme(accent = 4, background = 3),
+        "coral" to ColorTheme(accent = 5, background = 3),
+        "graphite" to ColorTheme(accent = 5, background = 4),
+    )
+
     val accents = listOf(
         Color(0xFF4C8DFF), Color(0xFF9B7BFF), Color(0xFF22D3C5),
         Color(0xFF34D399), Color(0xFFFFA24C), Color(0xFFFF5C7A),
@@ -72,8 +84,10 @@ fun AppTheme(settings: AppSettings, isTv: Boolean, content: @Composable () -> Un
         "system" -> isSystemInDarkTheme()
         else -> true
     }
-    val accent = Palette.accents[settings.accent.coerceIn(0, Palette.accents.lastIndex)]
-    val bgIndex = settings.background.coerceIn(0, Palette.darkBackgrounds.lastIndex)
+    val preset = Palette.colorThemes[settings.colorTheme]
+    val accentIndex = preset?.accent ?: settings.accent.coerceIn(0, Palette.accents.lastIndex)
+    val bgIndex = preset?.background ?: settings.background.coerceIn(0, Palette.darkBackgrounds.lastIndex)
+    val accent = Palette.accents[accentIndex]
     val bg = if (dark) Palette.darkBackgrounds[bgIndex] else Palette.lightBackgrounds[bgIndex]
     val style = AppStyle(accent, bg, settings.glass.coerceIn(1, 3), settings.animations, dark, isTv)
 
