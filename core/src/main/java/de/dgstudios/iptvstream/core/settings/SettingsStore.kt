@@ -20,6 +20,7 @@ data class AppSettings(val raw: Map<String, String> = emptyMap()) {
     fun int(id: String, def: Int = 0): Int = get(id).toIntOrNull() ?: def
     fun raw(id: String): String? = raw[id]
 
+    val colorTheme: String get() = get("color_theme")
     val accent: Int get() = int("accent")
     val background: Int get() = int("background")
     val glass: Int get() = int("glass", 2)
