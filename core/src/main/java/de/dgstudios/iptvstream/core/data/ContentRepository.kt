@@ -10,6 +10,7 @@ import de.dgstudios.iptvstream.core.data.db.EpgEntity
 import de.dgstudios.iptvstream.core.data.db.FavoriteEntity
 import de.dgstudios.iptvstream.core.data.db.MovieEntity
 import de.dgstudios.iptvstream.core.data.db.ProfileEntity
+import de.dgstudios.iptvstream.core.data.db.ProfileCrypto
 import de.dgstudios.iptvstream.core.data.db.ProfileType
 import de.dgstudios.iptvstream.core.data.db.ProgressEntity
 import de.dgstudios.iptvstream.core.data.db.SeriesEntity
@@ -25,6 +26,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -72,11 +74,12 @@ class ContentRepository(
 
     // ------------------------------------------------------------------ Profile
 
-    fun profiles(): Flow<List<ProfileEntity>> = db.profiles().observeAll()
+    fun profiles(): Flow<List<ProfileEntity>> =
+        db.profiles().observeAll().map { list -> list.map(ProfileCrypto::fromStorage) }
 
-    suspend fun profile(id: Long): ProfileEntity? = db.profiles().get(id)
+    suspend fun profile(id: Long): ProfileEntity? = db.profiles().get(id)?.let(ProfileCrypto::fromStorage)
 
-    suspend fun allProfiles(): List<ProfileEntity> = db.profiles().all()
+    suspend fun allProfiles(): List<ProfileEntity> = db.profiles().all().map(ProfileCrypto::fromStorage)
 
     /** Prüft bei Xtream die Anmeldung. Gibt eine Fehlermeldung zurück oder null bei Erfolg. */
     suspend fun testProfile(p: ProfileEntity): String? {
@@ -110,11 +113,12 @@ class ContentRepository(
             password = p.password,
             epgUrl = p.epgUrl.trim(),
         )
-        return if (clean.id == 0L) {
-            db.profiles().insert(clean)
+        val stored = ProfileCrypto.toStorage(clean)
+        return if (stored.id == 0L) {
+            db.profiles().insert(stored)
         } else {
-            db.profiles().update(clean)
-            clean.id
+            db.profiles().update(stored)
+            stored.id
         }
     }
 
@@ -207,7 +211,7 @@ class ContentRepository(
         val now = System.currentTimeMillis()
         val from = now - channel.archiveDays * 24L * 3_600_000L
         val local = if (channel.epgKey.isBlank()) emptyList() else epg.schedule(profileId, channel.epgKey, from, now)
-        val p = db.profiles().get(profileId)
+        val p = profile(profileId)
         val remote = if (p != null && p.type == ProfileType.XTREAM && channel.directUrl == null) {
             try {
                 xtreamArchive(p, channel, from, now)
@@ -341,7 +345,7 @@ class ContentRepository(
     }
 
     suspend fun movieDetail(profileId: Long, id: String): MovieDetail? {
-        val p = db.profiles().get(profileId) ?: return null
+        val p = profile(profileId) ?: return null
         if (p.type != ProfileType.XTREAM) return null
         return try { xtream.movieDetail(p, id) } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
     }
@@ -349,7 +353,7 @@ class ContentRepository(
     suspend fun seriesDetail(profileId: Long, id: String): SeriesDetail? {
         val key = "$profileId:$id"
         synchronized(seriesCache) { seriesCache[key] }?.let { return it }
-        val p = db.profiles().get(profileId) ?: return null
+        val p = profile(profileId) ?: return null
         val d = if (p.type == ProfileType.XTREAM) {
             try { xtream.seriesDetail(p, id) } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
         } else {
@@ -405,7 +409,7 @@ class ContentRepository(
     /** Beim App-Start: erstes Laden oder Auffrischen im Hintergrund, vorhandene Daten bleiben sichtbar. */
     fun startupRefresh(profileId: Long, epgAuto: Boolean) {
         scope.launch {
-            val p = db.profiles().get(profileId) ?: return@launch
+            val p = profile(profileId) ?: return@launch
             val age = System.currentTimeMillis() - p.lastSync
             if (p.lastSync == 0L || age > 12 * 3_600_000L) sync(profileId)
             if (epgAuto) epg.launchRefreshIfStale(profileId, 6 * 3_600_000L)
@@ -419,7 +423,7 @@ class ContentRepository(
     suspend fun sync(profileId: Long) {
         if (!syncMutex.tryLock()) return
         try {
-            val p = db.profiles().get(profileId) ?: return
+            val p = profile(profileId) ?: return
             _sync.value = SyncState(true, "Anmeldung …", 0.01f)
             val report: (String, Float) -> Unit = { stage, f -> _sync.value = SyncState(true, stage, f) }
             if (p.type == ProfileType.XTREAM) {
@@ -703,7 +707,7 @@ class ContentRepository(
 
         val epgFromHeader = foundEpg
         if (!epgFromHeader.isNullOrBlank() && p.epgUrl.isBlank()) {
-            db.profiles().update(p.copy(epgUrl = epgFromHeader))
+            db.profiles().update(ProfileCrypto.toStorage(p.copy(epgUrl = epgFromHeader)))
         }
     }
 

@@ -14,23 +14,27 @@ field() {
 
 write_one() {
   local apk="$1" json="$2" note="$3"
-  local code name
+  local code name sha256
   code="$(field "$apk" versionCode)"
   name="$(field "$apk" versionName)"
+  sha256="$(sha256sum "$apk" | awk '{print $1}')"
   test -n "$code"
   test -n "$name"
-  ROOT="$ROOT" JSON="$json" CODE="$code" NAME="$name" NOTE="$note" TAG="$TAG" REPO="$REPO" APK_NAME="$(basename "$apk")" python3 - <<'PY'
+  test -n "$sha256"
+  ROOT="$ROOT" JSON="$json" CODE="$code" NAME="$name" SHA256="$sha256" NOTE="$note" TAG="$TAG" REPO="$REPO" APK_NAME="$(basename "$apk")" python3 - <<'PY'
 import json, os
 path = os.path.join(os.environ["ROOT"], os.environ["JSON"])
 code = int(os.environ["CODE"])
 name = os.environ["NAME"]
+sha256 = os.environ["SHA256"]
 apk_name = os.environ["APK_NAME"]
 url = f"https://github.com/{os.environ['REPO']}/releases/download/{os.environ['TAG']}/{apk_name}"
 data = {}
 if os.path.exists(path):
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
-if data.get("versionCode") == code and data.get("apkUrl") == url and data.get("versionName") == name:
+if (data.get("versionCode") == code and data.get("apkUrl") == url and
+        data.get("versionName") == name and data.get("sha256") == sha256):
     print(f"feed aktuell: {path}")
     raise SystemExit(0)
 changelog = data.get("changelog") if data.get("versionCode") == code else os.environ["NOTE"]
@@ -38,6 +42,7 @@ out = {
     "versionCode": code,
     "versionName": name,
     "apkUrl": url,
+    "sha256": sha256,
     "changelog": changelog or f"Version {name}",
 }
 os.makedirs(os.path.dirname(path), exist_ok=True)

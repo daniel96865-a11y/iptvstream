@@ -32,7 +32,7 @@ abstract class AppDatabase : RoomDatabase() {
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, "iptv.db")
                 .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
-                .fallbackToDestructiveMigration()
+                // Niemals lokale Profile, Favoriten oder Fortschritte ungefragt löschen.
                 .build()
 
         private val MIGRATION_1_2 = object : Migration(1, 2) {
