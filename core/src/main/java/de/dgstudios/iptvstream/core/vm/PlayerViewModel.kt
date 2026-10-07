@@ -328,9 +328,14 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         _controller.value?.onForeground()
     }
 
-    override fun onCleared() {
+    /** Gibt den Player bereits vor der Navigationsanimation frei. */
+    fun close() {
         _controller.value?.release()
         _controller.value = null
+    }
+
+    override fun onCleared() {
+        close()
         super.onCleared()
     }
 }
