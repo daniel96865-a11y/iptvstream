@@ -125,6 +125,10 @@ fun PlayerScreen(onBack: () -> Unit) {
     val vm: PlayerViewModel = viewModel()
     val ui by vm.ui.collectAsStateWithLifecycle()
     val controller by vm.controller.collectAsStateWithLifecycle()
+    val leave: () -> Unit = {
+        vm.close()
+        onBack()
+    }
     val view = LocalView.current
     val context = LocalContext.current
     var autoRotate by remember {
@@ -195,7 +199,7 @@ fun PlayerScreen(onBack: () -> Unit) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    LaunchedEffect(ui.noRequest) { if (ui.noRequest) onBack() }
+    LaunchedEffect(ui.noRequest) { if (ui.noRequest) leave() }
 
     val ctrl = controller
     Box(Modifier.fillMaxSize().background(Color.Black)) {
@@ -203,7 +207,7 @@ fun PlayerScreen(onBack: () -> Unit) {
             CircularProgressIndicator(Modifier.align(Alignment.Center), color = Color.White)
         } else {
             PlayerContent(
-                vm, ctrl, ui, onBack,
+                vm, ctrl, ui, leave,
                 showRotate = !autoRotate,
                 landscapeLocked = userLandscape,
                 onToggleOrientation = { userLandscape = !userLandscape },

@@ -76,6 +76,10 @@ fun TvPlayerScreen(onBack: () -> Unit) {
     val vm: PlayerViewModel = viewModel()
     val ui by vm.ui.collectAsStateWithLifecycle()
     val controller by vm.controller.collectAsStateWithLifecycle()
+    val leave: () -> Unit = {
+        vm.close()
+        onBack()
+    }
 
     // Beim Verlassen der App pausieren/freigeben, danach wieder aufnehmen.
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -91,14 +95,14 @@ fun TvPlayerScreen(onBack: () -> Unit) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    LaunchedEffect(ui.noRequest) { if (ui.noRequest) onBack() }
+    LaunchedEffect(ui.noRequest) { if (ui.noRequest) leave() }
 
     val ctrl = controller
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         if (ctrl == null) {
             CircularProgressIndicator(Modifier.align(Alignment.Center), color = Color.White)
         } else {
-            TvPlayerContent(vm, ctrl, ui, onBack)
+            TvPlayerContent(vm, ctrl, ui, leave)
         }
     }
 }
