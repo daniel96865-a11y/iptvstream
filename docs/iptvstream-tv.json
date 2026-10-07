@@ -1,7 +1,7 @@
 {
-  "versionCode": 17,
-  "versionName": "1.0.15",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.15/iptvstream-tv.apk",
-  "sha256": "a2b0a940c5924b2d2000bb1479fdd95cae49de5030169fb87a4f202775fed3ad",
-  "changelog": "Version 1.0.15"
+  "versionCode": 18,
+  "versionName": "1.0.16",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.16/iptvstream-tv.apk",
+  "sha256": "e8e5375805b0cf4f663b3b68c95b4787fd723791862ecf9dd32ca57ee0d2a15b",
+  "changelog": "Version 1.0.16"
 }
