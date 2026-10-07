@@ -1,7 +1,7 @@
 {
-  "versionCode": 15,
-  "versionName": "1.0.13",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.13/iptvstream-mobile.apk",
-  "changelog": "Neu: Favoriten-Widget für den Startbildschirm",
-  "sha256": "3d1ff002a3f844481affb2fd0edb126b9fc3d11964a68890e4b77108892678bf"
+  "versionCode": 16,
+  "versionName": "1.0.14",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.14/iptvstream-mobile.apk",
+  "sha256": "5df6839be8241549a017934736725e595c3fd5efc157ba81cd08a3104bffdb87",
+  "changelog": "Version 1.0.14"
 }
