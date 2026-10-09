@@ -280,14 +280,25 @@ class MoveGate {
     }
 }
 
-/** Hoch/Links selbst auswerten, damit eine lange Liste den Fokus nicht festhält. */
-fun Modifier.tvMove(onUp: (() -> Unit)? = null, onLeft: (() -> Unit)? = null): Modifier =
+/**
+ * Hoch/Runter/Links selbst auswerten, damit eine lange Liste den Fokus nicht festhält und
+ * auch auf alten Geräten (Fire OS 5) Eintrag für Eintrag weitergeht.
+ */
+fun Modifier.tvMove(
+    onUp: (() -> Unit)? = null,
+    onLeft: (() -> Unit)? = null,
+    onDown: (() -> Unit)? = null,
+): Modifier =
     onPreviewKeyEvent { ev ->
         if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
         when (ev.key) {
             Key.DirectionUp -> {
                 onUp?.invoke()
                 onUp != null
+            }
+            Key.DirectionDown -> {
+                onDown?.invoke()
+                onDown != null
             }
             Key.DirectionLeft -> {
                 onLeft?.invoke()
@@ -559,6 +570,17 @@ fun TvField(
 class FirstFocus {
     @Volatile
     var pending = true
+}
+
+/**
+ * Fokus auf den Eintrag [index] einer LazyColumn setzen. Ist er schon (teilweise) zusammengesetzt,
+ * scrollt das Fokussieren ihn selbst ins Bild; sonst vorher so scrollen, dass der Vorgänger oben steht.
+ */
+suspend fun androidx.compose.foundation.lazy.LazyListState.focusItem(registry: FocusRegistry, index: Int): Boolean {
+    if (layoutInfo.visibleItemsInfo.none { it.index == index }) scrollToItem((index - 1).coerceAtLeast(0))
+    if (registry.focus(index)) return true
+    scrollToItem(index)
+    return registry.focus(index)
 }
 
 /** Scrollt zum Index, falls er gerade nicht sichtbar ist (damit er zusammengesetzt und fokussierbar wird). */
