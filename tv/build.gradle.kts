@@ -35,7 +35,7 @@ android {
 
     defaultConfig {
         applicationId = "de.dgstudios.iptvstream.tv"
-        minSdk = 24
+        minSdk = 22
         targetSdk = 35
         versionCode = 18
         versionName = "1.0.16"
@@ -52,7 +52,7 @@ android {
                 storePassword = signingStorePassword
                 keyAlias = signingKeyAlias
                 keyPassword = signingKeyPassword
-                enableV1Signing = false
+                enableV1Signing = true
                 enableV2Signing = true
                 enableV3Signing = true
             }

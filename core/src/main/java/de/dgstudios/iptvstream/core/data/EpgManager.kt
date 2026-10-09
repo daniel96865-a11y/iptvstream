@@ -215,13 +215,13 @@ class EpgManager(
                 val text = p.nextText()
                 if (id != null) {
                     val n = EpgMatcher.normalize(text)
-                    if (n.isNotEmpty()) names.putIfAbsent(n, id)
+                    if (n.isNotEmpty() && !names.containsKey(n)) names[n] = id
                 }
             }
         }
         if (id != null) {
             val n = EpgMatcher.normalize(id)
-            if (n.isNotEmpty()) names.putIfAbsent(n, id)
+            if (n.isNotEmpty() && !names.containsKey(n)) names[n] = id
         }
     }
 
@@ -237,10 +237,10 @@ class EpgManager(
         val byNorm = HashMap<String, String>()
         for (k in have) {
             val n = EpgMatcher.normalize(k)
-            if (n.isNotEmpty()) byNorm.putIfAbsent(n, k)
+            if (n.isNotEmpty() && !byNorm.containsKey(n)) byNorm[n] = k
         }
         for (n in epg.names(profileId)) {
-            if (n.channelKey in have) byNorm.putIfAbsent(n.normName, n.channelKey)
+            if (n.channelKey in have && !byNorm.containsKey(n.normName)) byNorm[n.normName] = n.channelKey
         }
         val channels = content.channelEpgInfo(profileId)
         db.withTransaction {

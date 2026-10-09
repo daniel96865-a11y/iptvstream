@@ -106,10 +106,12 @@ fun TvCategoryList(
     onSelect: (String) -> Unit,
     onEscapeUp: () -> Unit,
     modifier: Modifier = Modifier,
+    onRight: (() -> Unit)? = null,
 ) {
     val s = LocalAppStyle.current
     val state = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    val move = remember { MoveGate() }
     LazyColumn(
         state = state,
         modifier = modifier.width(240.dp).fillMaxHeight(),
@@ -122,16 +124,24 @@ fun TvCategoryList(
                     .fillMaxWidth()
                     .height(46.dp)
                     .registered(registry, index)
-                    .tvMove(onUp = {
-                        scope.launch {
-                            if (index <= 0) {
-                                onEscapeUp()
-                            } else {
-                                state.scrollToItem(index - 1)
-                                if (!registry.focus(index - 1)) onEscapeUp()
+                    .tvMove(
+                        onUp = {
+                            move.launch(scope) {
+                                if (index <= 0) {
+                                    onEscapeUp()
+                                } else {
+                                    state.scrollToItem(index - 1)
+                                    if (!registry.focus(index - 1)) onEscapeUp()
+                                }
                             }
-                        }
-                    })
+                        },
+                        onDown = {
+                            move.launch(scope) {
+                                if (index < items.lastIndex) state.focusItem(registry, index + 1)
+                            }
+                        },
+                        onRight = onRight,
+                    )
                     .tvFocus(onClick = { onSelect(c.id) }, selected = c.id == selected)
                     .padding(horizontal = 14.dp),
                 contentAlignment = Alignment.CenterStart,
@@ -264,6 +274,13 @@ fun TvCategoryDrawer(
                                     .heightIn(min = 56.dp)
                                     .registered(reg, index)
                                     .then(if (index == 0) Modifier.focusProperties { up = search } else Modifier)
+                                    .tvMove(onDown = {
+                                        scope.launch {
+                                            if (index < shown.lastIndex) {
+                                                (if (browsingAll) listState else filterState).focusItem(reg, index + 1)
+                                            }
+                                        }
+                                    })
                                     .tvFocus(onClick = { onSelect(c.id) }, selected = c.id == selected, opaque = true)
                                     .padding(horizontal = 16.dp, vertical = 14.dp),
                                 contentAlignment = Alignment.CenterStart,
@@ -363,6 +380,7 @@ fun TvLiveScreen(
     val itemsRef = rememberUpdatedState(items)
     val selectedRef = rememberUpdatedState(selected)
     var menuFor by remember { mutableStateOf<ChannelEntity?>(null) }
+    var listFocused by remember { mutableStateOf(false) }
     var pendingFrom by remember { mutableStateOf<List<ChannelEntity>?>(null) }
     val catItems = remember(cats) { buildCatItems(cats) }
     val catItemsRef = rememberUpdatedState(catItems)
@@ -459,6 +477,12 @@ fun TvLiveScreen(
         }
     }
 
+    fun stepDown(index: Int) {
+        move.launch(scope) {
+            if (index < itemsRef.value.lastIndex) listState.focusItem(listReg, index + 1)
+        }
+    }
+
     fun chooseCategory(id: String) {
         if (id == selected) {
             enter()
@@ -472,10 +496,20 @@ fun TvLiveScreen(
     // Nicht tief in die Liste springen: das hat den Fokus ohne Weg nach oben gefangen.
     LaunchedEffect(restored) {
         if (!restored) return@LaunchedEffect
+        // Ist der Nutzer schon in der Senderliste (langsame Geräte), Fokus und Position nicht wegreißen.
+        if (listFocused) return@LaunchedEffect
         first.pending = false
         vm.focusIndex = 0
         vm.onScroll(0, 0)
         listState.scrollToItem(0)
+    }
+
+    // Laden fügt Sender vor dem ersten sichtbaren ein; LazyColumn hält sonst die alte Zeile
+    // (z. B. Nr. 1340) oben. Solange der Fokus nicht in der Liste ist, oben bleiben.
+    LaunchedEffect(items.firstOrNull()?.streamId) {
+        if (!listFocused && pendingFrom == null && items.isNotEmpty() && listState.firstVisibleItemIndex != 0) {
+            listState.scrollToItem(0)
+        }
     }
 
     // Nach Kategoriewechsel (OK) in die neue Liste springen, sobald sie da ist.
@@ -505,7 +539,7 @@ fun TvLiveScreen(
         } else {
             LazyColumn(
                 state = listState,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().onFocusChanged { listFocused = it.hasFocus },
                 contentPadding = PaddingValues(vertical = 8.dp, horizontal = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -519,6 +553,7 @@ fun TvLiveScreen(
                         registry = listReg,
                         onFocus = { if (!drawer) railOpen = false },
                         onUp = { stepUp(index) },
+                        onDown = { stepDown(index) },
                         onLeft = if (drawer) null else ::openRail,
                         onClick = {
                             vm.play(ch)
@@ -558,7 +593,7 @@ fun TvLiveScreen(
     } else {
         TvSplitRail(
             open = railOpen,
-            rail = { TvCategoryList(catItems, selected, catReg, ::chooseCategory, onEscapeUp) },
+            rail = { TvCategoryList(catItems, selected, catReg, ::chooseCategory, onEscapeUp, onRight = ::enter) },
             content = { LiveChannels() },
         )
     }
@@ -588,6 +623,7 @@ private fun ChannelRow(
     registry: FocusRegistry,
     onFocus: () -> Unit,
     onUp: () -> Unit,
+    onDown: () -> Unit,
     onLeft: (() -> Unit)?,
     onClick: () -> Unit,
     onMenu: () -> Unit,
@@ -599,7 +635,7 @@ private fun ChannelRow(
             .fillMaxWidth()
             .height(78.dp)
             .registered(registry, index)
-            .tvMove(onUp = onUp, onLeft = onLeft)
+            .tvMove(onUp = onUp, onLeft = onLeft, onDown = onDown)
             .onPreviewKeyEvent { ev ->
                 if (ev.type == KeyEventType.KeyUp && ev.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_MENU) {
                     onMenu()

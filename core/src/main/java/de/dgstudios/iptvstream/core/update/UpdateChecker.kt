@@ -151,6 +151,16 @@ class UpdateChecker(
     }
 
     fun installIntent(file: File): Intent {
+        if (Build.VERSION.SDK_INT < 24) {
+            // Android 5/6 (Fire OS 5): Der Paket-Installer kann keine content://-Adressen lesen.
+            // Die APK liegt dort in einem für ihn lesbaren Ordner und wird per file:// übergeben.
+            @Suppress("SetWorldReadable")
+            file.setReadable(true, false)
+            return Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(Uri.fromFile(file), "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+        }
         val uri = FileProvider.getUriForFile(appContext, "${appContext.packageName}.updates", file)
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, "application/vnd.android.package-archive")
@@ -273,7 +283,21 @@ class UpdateChecker(
         }
     }
 
-    private fun apkFile(): File = File(appContext.cacheDir, "updates/iptvstream-update.apk")
+    private fun apkFile(): File {
+        if (Build.VERSION.SDK_INT < 24) {
+            // App-eigener Ordner im (emulierten) externen Speicher: für den Installer lesbar, ohne Berechtigung.
+            val external = appContext.getExternalFilesDir("updates")
+            if (external != null) return File(external, "iptvstream-update.apk")
+            // Notfall: Cache-Ordner für andere lesbar machen (vor Android 7 erlaubt).
+            val dir = File(appContext.cacheDir, "updates").apply { mkdirs() }
+            @Suppress("SetWorldReadable")
+            appContext.cacheDir.setExecutable(true, false)
+            @Suppress("SetWorldReadable")
+            dir.setExecutable(true, false)
+            return File(dir, "iptvstream-update.apk")
+        }
+        return File(appContext.cacheDir, "updates/iptvstream-update.apk")
+    }
 
     companion object {
         private const val PREFS = "iptvstream_update"

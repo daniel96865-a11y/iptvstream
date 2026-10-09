@@ -2,6 +2,8 @@ package de.dgstudios.iptvstream.core
 
 import android.app.Application
 import android.content.Context
+import android.os.Build
+import android.util.Log
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
@@ -10,6 +12,7 @@ import de.dgstudios.iptvstream.core.data.ContentRepository
 import de.dgstudios.iptvstream.core.data.EpgManager
 import de.dgstudios.iptvstream.core.data.PlaybackSession
 import de.dgstudios.iptvstream.core.data.db.AppDatabase
+import de.dgstudios.iptvstream.core.data.db.ProfileCrypto
 import de.dgstudios.iptvstream.core.data.db.ProfileEntity
 import de.dgstudios.iptvstream.core.data.remote.HttpService
 import de.dgstudios.iptvstream.core.data.remote.Net
@@ -25,6 +28,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
+import java.io.File
 
 /** Das aktuell gewählte Profil; [loaded] ist erst true, wenn Profile und Einstellungen gelesen wurden. */
 data class ActiveProfile(val loaded: Boolean, val profile: ProfileEntity?)
@@ -58,7 +62,25 @@ class IptvApp : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
+        installCrashLog()
+        ProfileCrypto.appContext = applicationContext
         container = AppContainer(this)
+    }
+
+    /** Schreibt den letzten Absturz nach files/last-crash.txt (für Fehlersuche, z. B. per adb). */
+    private fun installCrashLog() {
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+            try {
+                Log.e("IPTVstream", "Absturz in ${thread.name}", error)
+                File(filesDir, "last-crash.txt").writeText(
+                    "${System.currentTimeMillis()} API ${Build.VERSION.SDK_INT} ${thread.name}\n" +
+                        Log.getStackTraceString(error),
+                )
+            } catch (_: Throwable) {
+            }
+            previous?.uncaughtException(thread, error)
+        }
     }
 
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
