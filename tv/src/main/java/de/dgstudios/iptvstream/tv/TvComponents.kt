@@ -276,7 +276,8 @@ class MoveGate {
 
     fun launch(scope: kotlinx.coroutines.CoroutineScope, block: suspend () -> Unit) {
         if (job?.isActive == true) return
-        job = scope.launch { block() }
+        // Zeitlimit: ein hängender Sprung darf die Navigation nie dauerhaft blockieren.
+        job = scope.launch { kotlinx.coroutines.withTimeoutOrNull(1_500) { block() } }
     }
 }
 
@@ -288,6 +289,7 @@ fun Modifier.tvMove(
     onUp: (() -> Unit)? = null,
     onLeft: (() -> Unit)? = null,
     onDown: (() -> Unit)? = null,
+    onRight: (() -> Unit)? = null,
 ): Modifier =
     onPreviewKeyEvent { ev ->
         if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
@@ -299,6 +301,10 @@ fun Modifier.tvMove(
             Key.DirectionDown -> {
                 onDown?.invoke()
                 onDown != null
+            }
+            Key.DirectionRight -> {
+                onRight?.invoke()
+                onRight != null
             }
             Key.DirectionLeft -> {
                 onLeft?.invoke()
@@ -578,6 +584,14 @@ class FirstFocus {
  */
 suspend fun androidx.compose.foundation.lazy.LazyListState.focusItem(registry: FocusRegistry, index: Int): Boolean {
     if (layoutInfo.visibleItemsInfo.none { it.index == index }) scrollToItem((index - 1).coerceAtLeast(0))
+    if (registry.focus(index)) return true
+    scrollToItem(index)
+    return registry.focus(index)
+}
+
+/** Wie [focusItem], für Raster: fehlt das Ziel, wird die aktuelle Zeile [from] nach oben gescrollt. */
+suspend fun androidx.compose.foundation.lazy.grid.LazyGridState.focusItem(registry: FocusRegistry, index: Int, from: Int): Boolean {
+    if (layoutInfo.visibleItemsInfo.none { it.index == index }) scrollToItem(from.coerceAtLeast(0))
     if (registry.focus(index)) return true
     scrollToItem(index)
     return registry.focus(index)

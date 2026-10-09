@@ -106,6 +106,7 @@ fun TvCategoryList(
     onSelect: (String) -> Unit,
     onEscapeUp: () -> Unit,
     modifier: Modifier = Modifier,
+    onRight: (() -> Unit)? = null,
 ) {
     val s = LocalAppStyle.current
     val state = rememberLazyListState()
@@ -139,6 +140,7 @@ fun TvCategoryList(
                                 if (index < items.lastIndex) state.focusItem(registry, index + 1)
                             }
                         },
+                        onRight = onRight,
                     )
                     .tvFocus(onClick = { onSelect(c.id) }, selected = c.id == selected)
                     .padding(horizontal = 14.dp),
@@ -502,6 +504,14 @@ fun TvLiveScreen(
         listState.scrollToItem(0)
     }
 
+    // Laden fügt Sender vor dem ersten sichtbaren ein; LazyColumn hält sonst die alte Zeile
+    // (z. B. Nr. 1340) oben. Solange der Fokus nicht in der Liste ist, oben bleiben.
+    LaunchedEffect(items.firstOrNull()?.streamId) {
+        if (!listFocused && pendingFrom == null && items.isNotEmpty() && listState.firstVisibleItemIndex != 0) {
+            listState.scrollToItem(0)
+        }
+    }
+
     // Nach Kategoriewechsel (OK) in die neue Liste springen, sobald sie da ist.
     LaunchedEffect(items, pendingFrom) {
         val p = pendingFrom ?: return@LaunchedEffect
@@ -583,7 +593,7 @@ fun TvLiveScreen(
     } else {
         TvSplitRail(
             open = railOpen,
-            rail = { TvCategoryList(catItems, selected, catReg, ::chooseCategory, onEscapeUp) },
+            rail = { TvCategoryList(catItems, selected, catReg, ::chooseCategory, onEscapeUp, onRight = ::enter) },
             content = { LiveChannels() },
         )
     }

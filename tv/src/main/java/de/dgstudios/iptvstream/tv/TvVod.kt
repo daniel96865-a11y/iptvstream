@@ -50,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -124,6 +125,7 @@ private fun <T> PosterBrowse(
     val itemsRef = rememberUpdatedState(items)
     val selectedRef = rememberUpdatedState(selected)
     var pendingFrom by remember { mutableStateOf<List<T>?>(null) }
+    var gridFocused by remember { mutableStateOf(false) }
     val catItems = remember(cats) { buildCatItems(cats) }
     val catItemsRef = rememberUpdatedState(catItems)
     val openButton = remember { FocusRequester() }
@@ -218,6 +220,19 @@ private fun <T> PosterBrowse(
         }
     }
 
+    fun stepDown(index: Int) {
+        move.launch(scope) {
+            val list = itemsRef.value
+            val cols = gridColumns(gridState)
+            val row = index / cols
+            val lastRow = list.lastIndex / cols
+            if (row >= lastRow) return@launch
+            // Letzte Zeile kürzer: auf den letzten Eintrag gehen.
+            val below = (index + cols).coerceAtMost(list.lastIndex)
+            gridState.focusItem(gridReg, below, row * cols)
+        }
+    }
+
     fun stepLeft(index: Int) {
         move.launch(scope) {
             val col = gridState.layoutInfo.visibleItemsInfo.find { it.index == index }?.column ?: 0
@@ -254,6 +269,12 @@ private fun <T> PosterBrowse(
         gridState.scrollToItem(0)
     }
 
+    LaunchedEffect(items.firstOrNull()?.let { toItem(it).id }) {
+        if (!gridFocused && pendingFrom == null && items.isNotEmpty() && gridState.firstVisibleItemIndex != 0) {
+            gridState.scrollToItem(0)
+        }
+    }
+
     LaunchedEffect(items, pendingFrom) {
         val p = pendingFrom ?: return@LaunchedEffect
         if (items !== p) {
@@ -281,7 +302,7 @@ private fun <T> PosterBrowse(
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(138.dp),
                 state = gridState,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().onFocusChanged { gridFocused = it.hasFocus },
                 contentPadding = PaddingValues(10.dp),
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -294,6 +315,7 @@ private fun <T> PosterBrowse(
                         registry = gridReg,
                         onFocus = { if (!drawer) railOpen = false },
                         onUp = { stepUp(index) },
+                        onDown = { stepDown(index) },
                         onLeft = if (drawer) null else ({ stepLeft(index) }),
                         onClick = { onOpen(p.id) },
                     )
@@ -329,7 +351,7 @@ private fun <T> PosterBrowse(
     } else {
         TvSplitRail(
             open = railOpen,
-            rail = { TvCategoryList(catItems, selected, catReg, ::chooseCategory, onEscapeUp) },
+            rail = { TvCategoryList(catItems, selected, catReg, ::chooseCategory, onEscapeUp, onRight = ::enter) },
             content = { Posters() },
         )
     }
@@ -342,6 +364,7 @@ private fun PosterCell(
     registry: FocusRegistry,
     onFocus: () -> Unit,
     onUp: () -> Unit,
+    onDown: () -> Unit,
     onLeft: (() -> Unit)?,
     onClick: () -> Unit,
 ) {
@@ -350,7 +373,7 @@ private fun PosterCell(
         Modifier
             .fillMaxWidth()
             .registered(registry, index)
-            .tvMove(onUp = onUp, onLeft = onLeft)
+            .tvMove(onUp = onUp, onLeft = onLeft, onDown = onDown)
             .tvFocus(onClick = onClick, shape = RoundedCornerShape(12.dp), onFocus = { if (it) onFocus() })
             .padding(6.dp),
     ) {
