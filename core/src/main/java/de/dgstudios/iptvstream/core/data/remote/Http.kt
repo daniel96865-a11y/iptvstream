@@ -25,7 +25,7 @@ object Net {
     const val USER_AGENT =
         "Mozilla/5.0 (Linux; Android 11) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
 
-    fun client(): OkHttpClient = OkHttpClient.Builder()
+    fun client(): OkHttpClient = LegacyTrust.apply(OkHttpClient.Builder())
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(45, TimeUnit.SECONDS)
         .writeTimeout(15, TimeUnit.SECONDS)
