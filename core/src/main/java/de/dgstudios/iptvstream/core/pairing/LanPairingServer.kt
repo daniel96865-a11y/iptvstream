@@ -5,11 +5,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.InterruptedIOException
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
-import java.net.SocketTimeoutException
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -47,20 +47,28 @@ class LanPairingServer(
     private val failures = AtomicInteger(0)
     private var offer: LanPairing.Offer? = null
 
-    /** Startet den Server. Null, wenn kein Heimnetz da ist oder kein Port frei ist. */
-    fun start(): LanPairing.Offer? {
+    /**
+     * Startet den Server. [listenHost] ist die IPv4 des WLANs. Daran wird gebunden,
+     * weil eine Wildcard-Adresse auf Android TV oft keine Verbindungen aus dem WLAN annimmt.
+     * Null, wenn kein Heimnetz da ist oder kein Port frei ist.
+     */
+    fun start(listenHost: String? = bindHost): LanPairing.Offer? {
         if (running) return offer
-        val advertise = if (bindHost != null) InetAddress.getByName(bindHost) else LanPairing.lanIpv4()
+        val explicit = listenHost?.let { LanPairing.literalV4(it) }
+        val advertise = explicit ?: LanPairing.lanIpv4()
         if (advertise == null) {
             _phase.value = Phase.Stopped("Kein WLAN. Fernseher und Handy müssen im selben Netzwerk sein.")
             return null
         }
-        val bindAddr = if (bindHost != null) advertise else InetAddress.getByName("0.0.0.0")
         val server = try {
-            openSocket(bindAddr)
+            openSocket(advertise)
         } catch (e: IOException) {
-            _phase.value = Phase.Stopped("Der Fernseher kann gerade keine Verbindung annehmen. Bitte erneut versuchen.")
-            return null
+            try {
+                openSocket(InetAddress.getByAddress(byteArrayOf(0, 0, 0, 0)))
+            } catch (e2: IOException) {
+                _phase.value = Phase.Stopped("Der Fernseher kann gerade keine Verbindung annehmen. Bitte erneut versuchen.")
+                return null
+            }
         }
         val hostText = advertise.hostAddress
         if (hostText.isNullOrEmpty()) {
@@ -118,7 +126,10 @@ class LanPairingServer(
     }
 
     private fun loop(server: ServerSocket, ready: LanPairing.Offer) {
-        server.soTimeout = 1000
+        try {
+            server.soTimeout = 1000
+        } catch (e: IOException) {
+        }
         try {
             while (running && !used.get()) {
                 if (now() >= ready.deadlineEpochMs) {
@@ -131,10 +142,16 @@ class LanPairingServer(
                 }
                 val client = try {
                     server.accept()
-                } catch (e: SocketTimeoutException) {
+                } catch (e: InterruptedIOException) {
                     continue
                 } catch (e: IOException) {
-                    return
+                    if (!running || server.isClosed) return
+                    try {
+                        Thread.sleep(100)
+                    } catch (ie: InterruptedException) {
+                        return
+                    }
+                    continue
                 }
                 try {
                     client.soTimeout = 8_000
@@ -167,6 +184,10 @@ class LanPairingServer(
         }
         val req = readRequest(client) ?: run {
             write(client, 400, "text/plain; charset=UTF-8", "Anfrage ungültig.".toByteArray(Charsets.UTF_8))
+            return
+        }
+        if (req.method == "GET" && req.path == "/who") {
+            write(client, 200, "text/plain; charset=UTF-8", WHO)
             return
         }
         val presented = req.query["token"]
@@ -245,11 +266,11 @@ class LanPairingServer(
             if (b < 0) return null
             header.write(b)
             last = (last shl 8) or b
-            if (last == 0x0d0a0d0a) break
+            if (last == 0x0d0a0d0a || (last and 0xffff) == 0x0a0a) break
         }
-        if (header.size() >= 8 * 1024) return null
-        val text = header.toString(Charsets.ISO_8859_1.name())
-        val lines = text.split("\r\n")
+        if (header.size() >= 8 * 1024 && last != 0x0d0a0d0a && (last and 0xffff) != 0x0a0a) return null
+        val text = header.toString(Charsets.ISO_8859_1.name()).replace("\r\n", "\n").replace('\r', '\n')
+        val lines = text.split('\n')
         if (lines.isEmpty()) return null
         val parts = lines[0].split(' ')
         if (parts.size < 2) return null
@@ -318,5 +339,6 @@ class LanPairingServer(
     private companion object {
         const val MAX_FAILURES = 8
         val PROBE_OK = """{"ok":true}""".toByteArray(Charsets.UTF_8)
+        val WHO = "iptvstream".toByteArray(Charsets.UTF_8)
     }
 }

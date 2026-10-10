@@ -69,8 +69,11 @@ class LanPairingTest {
         val page = LanPairing.htmlPage(offer)
         assertTrue(page.contains("An den Fernseher senden"))
         assertTrue(page.contains("/pair?token=${offer.token}"))
-        assertTrue(page.contains("iptvstream://pair?host=192.168.1.20&port=28765&token=${offer.token}"))
+        assertTrue(page.contains("iptvstream://pair?host=192.168.1.20&amp;port=28765&amp;token=${offer.token}"))
         assertTrue(page.contains("K7H 3P2"))
+        assertTrue(page.contains("192.168.1.20:28765"))
+        assertFalse(page.contains("<script"))
+        assertFalse(page.contains("<iframe"))
         assertFalse(page.contains("https://"))
         assertFalse(page.contains("http://"))
         assertFalse(page.contains("geheim"))
@@ -185,6 +188,65 @@ class LanPairingTest {
             server.stop()
             server.join()
         }
+    }
+
+    @Test
+    fun browserGetReturnsTheForm() {
+        val server = LanPairingServer(submit = { error("darf nicht speichern") }, bindHost = "127.0.0.1", preferredPort = 0)
+        try {
+            val offer = server.start() ?: error("Server startet nicht")
+            val request = buildString {
+                append("GET /?token=${offer.token} HTTP/1.1\r\n")
+                append("Host: 127.0.0.1:${offer.port}\r\n")
+                append("User-Agent: Mozilla/5.0\r\n")
+                append("Accept: text/html,application/xhtml+xml\r\n")
+                append("Accept-Language: de-DE,de;q=0.9\r\n")
+                append("Connection: keep-alive\r\n")
+                append("Upgrade-Insecure-Requests: 1\r\n")
+                append("\r\n")
+            }
+            val page = httpBody(offer.host, offer.port, request)
+            assertTrue(page.contains("200"))
+            assertTrue(page.contains("An den Fernseher senden"))
+            assertTrue(page.contains("name=\"url\""))
+            assertFalse(page.contains("<iframe"))
+            val who = httpBody(offer.host, offer.port, "GET /who HTTP/1.1\nHost: 127.0.0.1\nConnection: close\n\n")
+            assertTrue(who.contains("200"))
+            assertTrue(who.contains("iptvstream"))
+            assertTrue(LanPairingClient.present(offer.host, offer.port, allowLoopback = true))
+            val found = LanPairingClient.findService(
+                listOf(offer.host),
+                offer.code,
+                allowLoopback = true,
+                ports = offer.port..offer.port,
+            )
+            assertEquals(offer.port, found?.port)
+        } finally {
+            server.stop()
+            server.join()
+        }
+    }
+
+    @Test
+    fun subnetAndManualAddress() {
+        val hosts = LanPairing.subnetHosts("192.168.1.57", 24)
+        assertEquals(253, hosts.size)
+        assertTrue(hosts.contains("192.168.1.1"))
+        assertTrue(hosts.contains("192.168.1.254"))
+        assertFalse(hosts.contains("192.168.1.57"))
+        assertFalse(hosts.contains("192.168.1.0"))
+        assertFalse(hosts.contains("192.168.1.255"))
+        assertEquals(hosts, LanPairing.subnetHosts("192.168.1.57", 16))
+        val typed = LanPairing.manualTarget("192.168.1.57:28765")
+        assertEquals("192.168.1.57", typed?.host)
+        assertEquals(28765, typed?.port)
+        val pasted = LanPairing.manualTarget("http://192.168.1.57:28765/?token=abc")
+        assertEquals(28765, pasted?.port)
+        assertNull(LanPairing.manualTarget("example.com"))
+        assertNull(LanPairing.manualTarget("8.8.8.8:80"))
+        val ipOnly = LanPairing.manualTarget("192.168.1.57")
+        assertEquals("192.168.1.57", ipOnly?.host)
+        assertNull(ipOnly?.port)
     }
 
     @Test

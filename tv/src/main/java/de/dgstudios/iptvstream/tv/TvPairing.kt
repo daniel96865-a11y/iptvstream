@@ -58,16 +58,19 @@ fun TvLanTransfer(mainVm: MainViewModel, onCancel: () -> Unit, onDone: () -> Uni
         })
     }
     val advertiser = remember(context) { LanPairingAdvertiser(context) }
+    val hold = remember(context) { TvLanHold(context) }
     val phase by server.phase.collectAsStateWithLifecycle()
     val back = remember { FocusRequester() }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
     DisposableEffect(server) {
-        val offer = server.start()
+        val ip = hold.prepare()
+        val offer = server.start(ip)
         if (offer != null) advertiser.register(offer.port, offer.code)
         onDispose {
             advertiser.unregister()
             server.stop()
+            hold.release()
         }
     }
     LaunchedEffect(phase) {
@@ -114,7 +117,7 @@ fun TvLanTransfer(mainVm: MainViewModel, onCancel: () -> Unit, onDone: () -> Uni
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Mit Handy übertragen", color = s.onSurface, fontSize = 34.sp, fontWeight = FontWeight.Bold)
             Text(
-                "Scanne den QR-Code mit der Handy-Kamera. Oder öffne in der App „An TV senden“ und gib den Code ein. Beides muss im selben WLAN sein.",
+                "Scanne den QR-Code mit der Handy-Kamera und trag die Zugangsdaten im Browser ein. Oder öffne in der App „An TV senden“, wähle ein gespeichertes Profil und gib den Code ein.",
                 color = s.onSurfaceDim,
                 fontSize = 18.sp,
             )
@@ -126,11 +129,18 @@ fun TvLanTransfer(mainVm: MainViewModel, onCancel: () -> Unit, onDone: () -> Uni
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 6.sp,
                 )
+                Text("Adresse", color = s.onSurfaceDim, fontSize = 16.sp)
+                Text(
+                    offer.listenLabel,
+                    color = s.onSurface,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                )
                 val left = (offer.deadlineEpochMs - now).coerceAtLeast(0L)
                 val min = left / 60_000
                 val sec = (left / 1000) % 60
                 Text(
-                    "Gültig noch %d:%02d  ·  %s".format(min, sec, offer.host),
+                    "Gültig noch %d:%02d. Handy und Fernseher im selben WLAN.".format(min, sec),
                     color = s.onSurfaceDim,
                     fontSize = 16.sp,
                 )
