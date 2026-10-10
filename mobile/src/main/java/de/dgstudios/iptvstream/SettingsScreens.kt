@@ -30,6 +30,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -263,6 +264,7 @@ fun ProfilesScreen(mainVm: MainViewModel, onBack: () -> Unit, onEdit: (Long) -> 
     val profiles by mainVm.profiles.collectAsStateWithLifecycle()
     val active by mainVm.active.collectAsStateWithLifecycle()
     var toDelete by remember { mutableStateOf<ProfileEntity?>(null) }
+    var toTv by remember { mutableStateOf<ProfileEntity?>(null) }
 
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
         Row(
@@ -310,12 +312,19 @@ fun ProfilesScreen(mainVm: MainViewModel, onBack: () -> Unit, onEdit: (Long) -> 
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
+                    GlassIconButton(Icons.Rounded.Tv, "An TV senden", { toTv = p })
+                    Spacer(Modifier.width(6.dp))
                     GlassIconButton(Icons.Rounded.Edit, "Bearbeiten", { onEdit(p.id) })
                     Spacer(Modifier.width(6.dp))
                     GlassIconButton(Icons.Rounded.Delete, "Löschen", { toDelete = p }, tint = Color(0xFFFF8A8A))
                 }
             }
         }
+    }
+
+    val tv = toTv
+    if (tv != null) {
+        SendToTvDialog(tv, onDismiss = { toTv = null })
     }
 
     val del = toDelete

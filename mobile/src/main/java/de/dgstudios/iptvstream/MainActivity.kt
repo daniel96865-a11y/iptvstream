@@ -17,13 +17,23 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        if (savedInstanceState == null) handleWidget(intent)
+        if (savedInstanceState == null) {
+            handleWidget(intent)
+            handlePair(intent)
+        }
         setContent { MobileApp() }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
         handleWidget(intent)
+        handlePair(intent)
+    }
+
+    private fun handlePair(intent: Intent?) {
+        val target = TvSendLaunch.fromUri(intent?.data) ?: return
+        TvSendLaunch.offer(target)
     }
 
     private fun handleWidget(intent: Intent?) {

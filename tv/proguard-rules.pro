@@ -1,1 +1,3 @@
 -dontwarn org.codehaus.mojo.animal_sniffer.IgnoreJRERequirement
+-dontwarn com.google.zxing.**
+-dontwarn javax.annotation.**

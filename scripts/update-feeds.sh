@@ -53,5 +53,10 @@ print(f"feed geschrieben: {path}")
 PY
 }
 
-write_one "dist/iptvstream-mobile.apk" "docs/iptvstream-mobile.json" "Version ${TAG#v}"
-write_one "dist/iptvstream-tv.apk" "docs/iptvstream-tv.json" "Version ${TAG#v}"
+if [ "$TAG" = "v1.0.17" ]; then
+  NOTE="Anmeldung am Fernseher per QR-Code oder Code vom Handy. Die Zugangsdaten bleiben im eigenen WLAN."
+else
+  NOTE="Version ${TAG#v}"
+fi
+write_one "dist/iptvstream-mobile.apk" "docs/iptvstream-mobile.json" "$NOTE"
+write_one "dist/iptvstream-tv.apk" "docs/iptvstream-tv.json" "$NOTE"

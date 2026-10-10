@@ -69,17 +69,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Prüft die Zugangsdaten, speichert das Profil, macht es aktiv und lädt die Inhalte. */
     fun saveProfile(p: ProfileEntity, onDone: (String?) -> Unit) {
-        viewModelScope.launch {
-            val error = c.repo.testProfile(p)
-            if (error != null) {
-                onDone(error)
-                return@launch
-            }
-            val id = c.repo.saveProfile(p)
-            c.settings.set(SettingsStore.ACTIVE_PROFILE, id.toString())
-            c.repo.launchSync(id)
-            onDone(null)
-        }
+        viewModelScope.launch { onDone(importProfile(p)) }
+    }
+
+    /** Wie [saveProfile], aber wartend. Für die Übertragung vom Handy an den Fernseher. */
+    suspend fun importProfile(p: ProfileEntity): String? {
+        val error = c.repo.testProfile(p)
+        if (error != null) return error
+        val id = c.repo.saveProfile(p)
+        c.settings.set(SettingsStore.ACTIVE_PROFILE, id.toString())
+        c.repo.launchSync(id)
+        return null
     }
 
     fun deleteProfile(id: Long) {

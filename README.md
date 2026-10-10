@@ -21,7 +21,7 @@ Handy-Oberfläche im Glas-Look (Hintergrund „Mitternacht“, Akzent Blau) mit 
 | Smartphone / Tablet | [iptvstream-mobile.apk](https://github.com/daniel96865-a11y/iptvstream/releases/latest/download/iptvstream-mobile.apk) |
 | Android TV / Fire TV | [iptvstream-tv.apk](https://github.com/daniel96865-a11y/iptvstream/releases/latest/download/iptvstream-tv.apk) |
 
-Aktuelle Version: [Release v1.0.16](https://github.com/daniel96865-a11y/iptvstream/releases/tag/v1.0.16)
+Aktuelle Version: [Release v1.0.17](https://github.com/daniel96865-a11y/iptvstream/releases/tag/v1.0.17)
 
 Installation außerhalb des Play Store: in den Android-Einstellungen „Unbekannte Apps“ für den Browser bzw. Dateimanager erlauben, die APK öffnen und installieren. Auf Fire TV die APK per „Downloader“ oder `adb install` aufspielen.
 
@@ -36,6 +36,7 @@ Zwei Oberflächen in einem Projekt:
 | `:core` | beide | Daten, Repository, EPG, Player, Einstellungen, ViewModels |
 
 - Anmeldung per **Xtream Codes** (Server, Benutzer, Passwort) oder **M3U/M3U8**. Mehrere Profile, bearbeiten und löschen. Nach dem Login werden die Inhalte automatisch geladen.
+- **Vom Handy an den Fernseher:** Auf dem TV „Mit Handy übertragen“. QR-Code scannen oder in der Handy-App bei einem Profil „An TV senden“ und den kurzen Code eintippen. Die Zugangsdaten bleiben im eigenen WLAN.
 - Live-TV, Filme, Serien, Kategorien, Favoriten, Suche, zuletzt gesehen.
 - **Zurückblicken** (Catch-up/Timeshift) bei Sendern mit Archiv: vergangene Sendungen direkt aus dem Player abspielen.
 - **Favoriten-Widget** für den Startbildschirm (Handy): Lieblingssender mit Logo und aktuellem Programm, Tippen startet den Sender.
@@ -57,6 +58,17 @@ Zwei Oberflächen in einem Projekt:
 Felder: `versionCode`, `versionName`, `apkUrl`, `changelog`. `apkUrl` zeigt auf die Release-Dateien `iptvstream-mobile.apk` und `iptvstream-tv.apk`. Tags mit Bindestrich (z. B. `v1.0.15-beta1`) werden als Vorabversion (Pre-release) veröffentlicht und ändern die Feeds nicht. Bei einem normalen Tag `v*` aktualisiert GitHub Actions diese Dateien auf `main`, falls die gebaute Version noch nicht eingetragen ist (`scripts/update-feeds.sh`).
 
 Der Glas-Look auf dem Handy sind halbtransparente, getönte Flächen mit Rand und Verlauf.
+
+## Anmeldung vom Handy auf den Fernseher
+
+Auf dem Fernseher bei der Anmeldung **Mit Handy übertragen** wählen. Es erscheinen ein QR-Code und ein kurzer Code (etwa zehn Minuten gültig, nur einmal).
+
+- **QR-Code:** Mit der Handy-Kamera scannen. Es öffnet sich eine Seite. Dort ein gespeichertes Profil wählen (wenn die App installiert ist) oder Server, Benutzer und Passwort bzw. die M3U-Adresse eintragen, inklusive EPG-Adresse, falls vorhanden. Der Fernseher speichert das Profil und lädt die Sender.
+- **Code:** In der Handy-App beim Profil auf **An TV senden** tippen und den Code vom Fernseher eingeben.
+
+Handy und Fernseher müssen im selben WLAN sein. Es wird kein Cloud-Dienst benutzt. Der Fernseher nimmt die Daten nur aus dem eigenen Netz an und verwirft sie nach der Übertragung oder nach Ablauf der Zeit. Zugangsdaten werden nicht protokolliert.
+
+Technisch startet der Fernseher dafür einen kleinen lokalen Webserver. Der QR-Code enthält `http://<IP-des-Fernsehers>:<Port>/?token=…` mit einem einmaligen Token. Die App findet den Fernseher über den kurzen Code im lokalen Netz (mDNS) oder über die angezeigte IP.
 
 ## TV-Bedienung
 
