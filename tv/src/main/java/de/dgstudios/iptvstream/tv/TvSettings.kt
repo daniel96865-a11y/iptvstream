@@ -297,6 +297,11 @@ fun TvProfileForm(mainVm: MainViewModel, profileId: Long, first: Boolean, onDone
     val initial = profiles.firstOrNull { it.id == profileId }
     val form = remember(initial?.id) { ProfileFormState(initial) }
     val firstField = remember { FocusRequester() }
+    var transfer by remember { mutableStateOf(false) }
+    if (transfer) {
+        TvLanTransfer(mainVm, onCancel = { transfer = false }, onDone = onDone)
+        return
+    }
 
     LaunchedEffect(Unit) {
         repeat(10) {
@@ -335,8 +340,20 @@ fun TvProfileForm(mainVm: MainViewModel, profileId: Long, first: Boolean, onDone
         } else {
             TvTitle(if (form.isEdit) "Profil bearbeiten" else "Neues Profil")
         }
+        if (!form.isEdit) {
+            TvButton(
+                "Mit Handy übertragen",
+                { transfer = true },
+                requester = if (first) firstField else null,
+            )
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TvButton("Xtream Codes", { form.type = ProfileType.XTREAM }, selected = form.type == ProfileType.XTREAM, requester = firstField)
+            TvButton(
+                "Xtream Codes",
+                { form.type = ProfileType.XTREAM },
+                selected = form.type == ProfileType.XTREAM,
+                requester = if (first) null else firstField,
+            )
             TvButton("M3U / M3U8", { form.type = ProfileType.M3U }, selected = form.type == ProfileType.M3U)
         }
         TvField("Profilname (optional)", form.name, { form.name = it })

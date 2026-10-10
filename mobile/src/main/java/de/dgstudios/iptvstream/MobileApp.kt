@@ -143,6 +143,12 @@ fun MobileApp(mainVm: MainViewModel = viewModel()) {
             }
             // Widget: Sender direkt abspielen, Zurück führt zur App-Liste.
             val widgetReq by WidgetLaunch.pending.collectAsStateWithLifecycle()
+            val tvTarget by TvSendLaunch.pending.collectAsStateWithLifecycle()
+            LaunchedEffect(tvTarget) {
+                if (tvTarget != null && route != "send_tv") {
+                    nav.navigate("send_tv") { launchSingleTop = true }
+                }
+            }
             LaunchedEffect(widgetReq) {
                 val (pid, ch) = widgetReq ?: return@LaunchedEffect
                 WidgetLaunch.pending.value = null
@@ -216,6 +222,12 @@ fun MobileApp(mainVm: MainViewModel = viewModel()) {
                 composable("profile_edit/{id}") { entry ->
                     val id = entry.arguments?.getString("id")?.toLongOrNull() ?: 0L
                     ProfileFormScreen(mainVm = mainVm, profileId = id, first = false, onDone = { nav.popBackStack() })
+                }
+                composable("send_tv") {
+                    SendToTvScreen(mainVm = mainVm, onDone = {
+                        TvSendLaunch.pending.value = null
+                        nav.popBackStack()
+                    })
                 }
             }
             // Im Player keine Uhr: sie lag über den Knöpfen der oberen Leiste.
