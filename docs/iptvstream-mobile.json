@@ -1,7 +1,7 @@
 {
-  "versionCode": 20,
-  "versionName": "1.0.18",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.18/iptvstream-mobile.apk",
-  "sha256": "de50353a1207afc2a2e3e6a0baaa3aab6bbda60b249ca18fd91e7d4b0ce154a7",
-  "changelog": "Übertragung ans TV funktioniert im WLAN. Die Adresse steht auf dem Fernseher. QR-Code öffnet die Seite, in der App geht ein gespeichertes Profil."
+  "versionCode": 21,
+  "versionName": "1.0.19",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.19/iptvstream-mobile.apk",
+  "sha256": "01abc9aa65416d7c694c91d8428721172912a69b1e3f1fc85b2a34d46dfb2956",
+  "changelog": "Bei der Adresse zum Fernseher setzt die App die Punkte. Es werden nur die Zahlen eingetippt."
 }
