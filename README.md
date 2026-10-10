@@ -21,7 +21,7 @@ Handy-Oberfläche im Glas-Look (Hintergrund „Mitternacht“, Akzent Blau) mit 
 | Smartphone / Tablet | [iptvstream-mobile.apk](https://github.com/daniel96865-a11y/iptvstream/releases/latest/download/iptvstream-mobile.apk) |
 | Android TV / Fire TV | [iptvstream-tv.apk](https://github.com/daniel96865-a11y/iptvstream/releases/latest/download/iptvstream-tv.apk) |
 
-Aktuelle Version: [Release v1.0.18](https://github.com/daniel96865-a11y/iptvstream/releases/tag/v1.0.18)
+Aktuelle Version: [Release v1.0.19](https://github.com/daniel96865-a11y/iptvstream/releases/tag/v1.0.19)
 
 Installation außerhalb des Play Store: in den Android-Einstellungen „Unbekannte Apps“ für den Browser bzw. Dateimanager erlauben, die APK öffnen und installieren. Auf Fire TV die APK per „Downloader“ oder `adb install` aufspielen.
 
@@ -64,7 +64,7 @@ Der Glas-Look auf dem Handy sind halbtransparente, getönte Flächen mit Rand un
 Auf dem Fernseher bei der Anmeldung **Mit Handy übertragen** wählen. Es erscheinen ein QR-Code und ein kurzer Code (etwa zehn Minuten gültig, nur einmal).
 
 - **QR-Code:** Mit der Handy-Kamera scannen. Es öffnet sich eine Seite im Browser. Dort Server, Benutzer und Passwort bzw. die M3U-Adresse eintragen, inklusive EPG-Adresse, falls vorhanden. Wenn die App installiert ist, kann man von derselben Seite ein gespeichertes Profil senden.
-- **Code:** In der Handy-App beim Profil auf **An TV senden** tippen und den Code vom Fernseher eingeben. Die Suche läuft im eigenen WLAN. Die Adresse unter dem Code kann man eintragen, wenn die Suche nichts findet.
+- **Code:** In der Handy-App beim Profil auf **An TV senden** tippen und den Code vom Fernseher eingeben. Die Suche läuft im eigenen WLAN. Die Adresse unter dem Code kann man eintippen, wenn die Suche nichts findet. Die Punkte zwischen den Zahlen setzt die App.
 
 Handy und Fernseher müssen im selben WLAN sein. Es wird kein Cloud-Dienst benutzt. Der Fernseher nimmt die Daten nur aus dem eigenen Netz an und verwirft sie nach der Übertragung oder nach Ablauf der Zeit. Zugangsdaten werden nicht protokolliert.
 

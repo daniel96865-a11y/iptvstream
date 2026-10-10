@@ -59,6 +59,25 @@ object LanPairing {
     /** Adresse, die der Nutzer vom Fernseher abtippt. Port fehlt, wenn nur die IP da ist. */
     data class ManualTarget(val host: String, val port: Int?)
 
+    /** Vier Zahlenblöcke und ein optionaler Port. Die Punkte setzt die Oberfläche, nicht der Nutzer. */
+    data class AddressFields(val octets: List<String> = listOf("", "", "", ""), val port: String = "") {
+        /** Null, wenn leer. Leerstring, wenn unvollständig. Sonst `192.168.1.57` oder mit Port. */
+        fun wire(): String? {
+            if (octets.all { it.isEmpty() } && port.isEmpty()) return null
+            if (octets.size != 4 || octets.any { it.isEmpty() }) return ""
+            val nums = octets.map { it.toIntOrNull() ?: return "" }
+            if (nums.any { it !in 0..255 }) return ""
+            val host = nums.joinToString(".")
+            if (!isPrivateHost(host)) return ""
+            if (port.isEmpty()) return host
+            val p = port.toIntOrNull() ?: return ""
+            if (p !in 1..65535) return ""
+            return "$host:$p"
+        }
+    }
+
+    data class AddressEdit(val fields: AddressFields, val focus: Int)
+
     data class Endpoint(val host: String, val port: Int)
 
     fun newSecrets(): Secrets {
@@ -127,6 +146,122 @@ object LanPairing {
         }
         if (!isPrivateHost(host)) return null
         return ManualTarget(host, port)
+    }
+
+    /**
+     * Eine Änderung in einem Zahlenblock.
+     * Drei Ziffern oder eine Zahl über 25 füllen den Block, der Fokus geht weiter.
+     * Eine eingefügte Adresse mit Punkten wird auf die Blöcke verteilt.
+     */
+    fun editAddress(fields: AddressFields, index: Int, raw: String): AddressEdit {
+        val trimmed = raw.trim()
+        if (index !in 0..4) return AddressEdit(fields, 0)
+        if (index in 0..3) {
+            val separators = trimmed.count { it == '.' || it == ',' || it == ':' || it == '/' }
+            if (separators > 1 || trimmed.contains('/')) {
+                val parsed = ingestAddress(trimmed)
+                return AddressEdit(parsed, focusAfterIngest(parsed))
+            }
+            val last = trimmed.lastOrNull()
+            if (separators == 1 && (last == '.' || last == ',' || last == ':')) {
+                val digits = trimmed.dropLast(1).filter { it.isDigit() }
+                val placed = placeDigits(fields, index, digits)
+                val next = if (trimmed.endsWith(':')) 4 else (index + 1).coerceAtMost(4)
+                return AddressEdit(placed.fields, next)
+            }
+        }
+        if (index == 4) {
+            return AddressEdit(fields.copy(port = trimmed.filter { it.isDigit() }.take(5)), 4)
+        }
+        return placeDigits(fields, index, trimmed.filter { it.isDigit() })
+    }
+
+    /** Rücktaste in einem leeren Block: eine Ziffer aus dem vorherigen Block löschen. */
+    fun backspaceAddress(fields: AddressFields, index: Int): AddressEdit {
+        if (index <= 0) return AddressEdit(fields, 0)
+        val prev = index - 1
+        if (prev !in 0..3) return AddressEdit(fields, index)
+        val octets = four(fields.octets)
+        if (octets[prev].isNotEmpty()) octets[prev] = octets[prev].dropLast(1)
+        return AddressEdit(AddressFields(octets, fields.port), prev)
+    }
+
+    private fun placeDigits(fields: AddressFields, index: Int, digits: String): AddressEdit {
+        val octets = four(fields.octets)
+        octets[index] = ""
+        var cursor = index
+        var rest = digits
+        var wroteUntil = index
+        var wrote = false
+        while (rest.isNotEmpty() && cursor < 4) {
+            val have = octets[cursor]
+            if (have.length >= 3 || (have.length == 2 && (have.toIntOrNull() ?: 0) > 25)) {
+                cursor++
+                continue
+            }
+            val value = (have + rest.first()).toIntOrNull() ?: break
+            if (value > 255) {
+                cursor++
+                continue
+            }
+            octets[cursor] = value.toString()
+            rest = rest.drop(1)
+            wroteUntil = cursor
+            wrote = true
+        }
+        val focus = when {
+            wrote && wroteUntil > index ->
+                if (octetDone(octets[wroteUntil])) (wroteUntil + 1).coerceAtMost(4) else wroteUntil
+            octetDone(octets[index]) -> (index + 1).coerceAtMost(4)
+            else -> index
+        }
+        return AddressEdit(AddressFields(octets, fields.port), focus)
+    }
+
+    private fun ingestAddress(raw: String): AddressFields {
+        var text = raw.trim()
+        if (text.startsWith("http://", ignoreCase = true)) text = text.substring(7)
+        else if (text.startsWith("https://", ignoreCase = true)) text = text.substring(8)
+        text = text.substringBefore('/').substringBefore('?').trim()
+        val colon = text.lastIndexOf(':')
+        val hostPart: String
+        val portDigits: String
+        if (colon > 0 && text.indexOf(':') == colon) {
+            hostPart = text.substring(0, colon)
+            portDigits = text.substring(colon + 1).filter { it.isDigit() }.take(5)
+        } else {
+            hostPart = text
+            portDigits = ""
+        }
+        val octets = MutableList(4) { "" }
+        var slot = 0
+        for (part in hostPart.split('.', ',', ' ')) {
+            if (slot >= 4) break
+            val digits = part.filter { it.isDigit() }
+            if (digits.isEmpty()) continue
+            val value = digits.take(3).toIntOrNull() ?: continue
+            if (value > 255) continue
+            octets[slot] = value.toString()
+            slot++
+        }
+        return AddressFields(octets, portDigits)
+    }
+
+    private fun focusAfterIngest(fields: AddressFields): Int {
+        val empty = fields.octets.indexOfFirst { it.isEmpty() }
+        if (empty >= 0) return empty
+        return if (fields.port.isEmpty()) 3 else 4
+    }
+
+    private fun octetDone(value: String): Boolean {
+        val n = value.toIntOrNull() ?: return false
+        return value.length >= 3 || (value.length == 2 && n > 25)
+    }
+
+    private fun four(octets: List<String>): MutableList<String> {
+        val out = octets.take(4).toMutableList()
+        while (out.size < 4) out.add("")
+        return out
     }
 
     /**
