@@ -1,7 +1,7 @@
 {
-  "versionCode": 18,
-  "versionName": "1.0.16",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.16/iptvstream-tv.apk",
-  "sha256": "e8e5375805b0cf4f663b3b68c95b4787fd723791862ecf9dd32ca57ee0d2a15b",
-  "changelog": "Version 1.0.16"
+  "versionCode": 19,
+  "versionName": "1.0.17",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.17/iptvstream-tv.apk",
+  "sha256": "51cf47632994a4359cee307b3557c84429e23c79f10f4292e56a079692952a61",
+  "changelog": "Anmeldung am Fernseher per QR-Code oder Code vom Handy. Die Zugangsdaten bleiben im eigenen WLAN."
 }
