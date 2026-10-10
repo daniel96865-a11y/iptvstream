@@ -53,7 +53,9 @@ print(f"feed geschrieben: {path}")
 PY
 }
 
-if [ "$TAG" = "v1.0.18" ]; then
+if [ "$TAG" = "v1.0.19" ]; then
+  NOTE="Bei der Adresse zum Fernseher setzt die App die Punkte. Es werden nur die Zahlen eingetippt."
+elif [ "$TAG" = "v1.0.18" ]; then
   NOTE="Übertragung ans TV funktioniert im WLAN. Die Adresse steht auf dem Fernseher. QR-Code öffnet die Seite, in der App geht ein gespeichertes Profil."
 elif [ "$TAG" = "v1.0.17" ]; then
   NOTE="Anmeldung am Fernseher per QR-Code oder Code vom Handy. Die Zugangsdaten bleiben im eigenen WLAN."

@@ -250,6 +250,49 @@ class LanPairingTest {
     }
 
     @Test
+    fun addressDotsAreInsertedAsNumbersAreTyped() {
+        var fields = LanPairing.AddressFields()
+        val steps = listOf("1", "19", "192")
+        var focus = 0
+        for (typed in steps) {
+            val edit = LanPairing.editAddress(fields, 0, typed)
+            fields = edit.fields
+            focus = edit.focus
+        }
+        assertEquals(listOf("192", "", "", ""), fields.octets)
+        assertEquals(1, focus)
+
+        val second = LanPairing.editAddress(fields, 1, "168")
+        fields = second.fields
+        assertEquals(2, second.focus)
+
+        val third = LanPairing.editAddress(fields, 2, "1")
+        fields = third.fields
+        assertEquals(2, third.focus)
+        assertEquals("1", fields.octets[2])
+
+        val fourth = LanPairing.editAddress(fields, 3, "57")
+        fields = fourth.fields
+        assertEquals(listOf("192", "168", "1", "57"), fields.octets)
+        assertEquals(4, fourth.focus)
+        assertEquals("192.168.1.57", fields.wire())
+
+        val withPort = LanPairing.editAddress(fields, 4, "28765")
+        assertEquals("192.168.1.57:28765", withPort.fields.wire())
+
+        val pasted = LanPairing.editAddress(LanPairing.AddressFields(), 0, "http://192.168.1.57:28765/?token=abc")
+        assertEquals(listOf("192", "168", "1", "57"), pasted.fields.octets)
+        assertEquals("28765", pasted.fields.port)
+        assertEquals("192.168.1.57:28765", pasted.fields.wire())
+
+        val early = LanPairing.editAddress(LanPairing.AddressFields(), 0, "26")
+        assertEquals("26", early.fields.octets[0])
+        assertEquals(1, early.focus)
+        assertNull(LanPairing.AddressFields().wire())
+        assertEquals("", LanPairing.AddressFields(listOf("192", "168", "", ""), "").wire())
+    }
+
+    @Test
     fun clientRefusesPublicHosts() {
         val error = LanPairingClient.send("8.8.8.8", 80, "x", sample())
         assertEquals("Diese Adresse liegt nicht im Heimnetz.", error)
