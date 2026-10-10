@@ -25,8 +25,9 @@ import java.security.SecureRandom
  * - `code`: 6 Zeichen, tippt man in der App ein. Die App findet den Fernseher
  *   per mDNS (`_iptvstream._tcp`, TXT-Attribut `code`) oder über die angezeigte IP.
  *
- * Der Server bindet nur lokal, nimmt nur Clients aus demselben privaten Netz an,
- * schreibt keine Zugangsdaten ins Log und stoppt nach Erfolg, Abbruch oder Timeout.
+ * Der Server bindet an die IPv4 des WLANs, nicht an Localhost und nicht nur an
+ * die Wildcard-Adresse. Er nimmt nur Clients aus dem privaten Netz an, schreibt
+ * keine Zugangsdaten ins Log und stoppt nach Erfolg, Abbruch oder Timeout.
  * Ein Code gilt nur für eine erfolgreiche Übertragung.
  */
 object LanPairing {
@@ -52,7 +53,11 @@ object LanPairing {
     ) {
         val pageUrl: String get() = "http://$host:$port/?token=$token"
         val appLink: String get() = "iptvstream://pair?host=$host&port=$port&token=$token"
+        val listenLabel: String get() = "$host:$port"
     }
+
+    /** Adresse, die der Nutzer vom Fernseher abtippt. Port fehlt, wenn nur die IP da ist. */
+    data class ManualTarget(val host: String, val port: Int?)
 
     data class Endpoint(val host: String, val port: Int)
 
@@ -87,10 +92,62 @@ object LanPairing {
 
     /** Nur literale private IPv4-Adressen. Hostnamen werden nicht aufgelöst. */
     fun isPrivateHost(host: String, allowLoopback: Boolean = false): Boolean {
-        if (!IPV4_LITERAL.matches(host)) return false
-        val addr = parseLiteralV4(host) ?: return false
+        val addr = literalV4(host) ?: return false
         if (addr.isLoopbackAddress) return allowLoopback
         return isPrivateV4(addr)
+    }
+
+    /** Literale IPv4 ohne DNS. Null bei Hostnamen oder ungültiger Schreibweise. */
+    fun literalV4(host: String): Inet4Address? {
+        if (!IPV4_LITERAL.matches(host)) return null
+        return parseLiteralV4(host)
+    }
+
+    /**
+     * IP oder IP:Port vom Fernseher, auch wenn die ganze Seitenadresse eingefügt wurde.
+     * Hostnamen werden abgelehnt.
+     */
+    fun manualTarget(raw: String): ManualTarget? {
+        var text = raw.trim()
+        if (text.isEmpty()) return null
+        if (text.startsWith("http://", ignoreCase = true)) text = text.substring(7)
+        else if (text.startsWith("https://", ignoreCase = true)) text = text.substring(8)
+        text = text.substringBefore('/').substringBefore('?').trim()
+        if (text.isEmpty()) return null
+        val colon = text.lastIndexOf(':')
+        val host: String
+        val port: Int?
+        if (colon > 0 && text.indexOf(':') == colon) {
+            host = text.substring(0, colon)
+            port = text.substring(colon + 1).toIntOrNull() ?: return null
+            if (port !in 1..65535) return null
+        } else {
+            host = text
+            port = null
+        }
+        if (!isPrivateHost(host)) return null
+        return ManualTarget(host, port)
+    }
+
+    /**
+     * Andere Adressen im eigenen Subnetz, ohne die eigene Adresse, Netz- und Broadcast-Adresse.
+     * Größere Netze werden auf das /24 der eigenen Adresse begrenzt.
+     */
+    fun subnetHosts(host: String, prefixLength: Int): List<String> {
+        val addr = literalV4(host) ?: return emptyList()
+        if (!isPrivateV4(addr)) return emptyList()
+        val prefix = if (prefixLength in 24..30) prefixLength else 24
+        val ip = ipv4ToInt(addr)
+        val mask = -1 shl (32 - prefix)
+        val network = ip and mask
+        val size = 1 shl (32 - prefix)
+        val out = ArrayList<String>(size)
+        for (i in 1 until size - 1) {
+            val candidate = network + i
+            if (candidate == ip) continue
+            out.add(formatV4(candidate))
+        }
+        return out
     }
 
     fun isPrivateV4(addr: Inet4Address): Boolean {
@@ -127,15 +184,20 @@ object LanPairing {
         return found.minByOrNull { it.first }?.second
     }
 
-    /** Client darf nur aus dem Loopback (Tests, derselbe Apparat) oder demselben privaten Subnetz kommen. */
+    /**
+     * Client darf nur aus dem Loopback (Tests, derselbe Apparat) oder demselben privaten Subnetz kommen.
+     * Android meldet die Präfixlänge oft als /32. Dann gilt dasselbe /24.
+     */
     fun isAllowedClient(remote: InetAddress?): Boolean {
         if (remote == null) return false
         if (remote.isLoopbackAddress) return true
-        if (remote !is Inet4Address || !isPrivateV4(remote)) return false
+        val v4 = asV4(remote) ?: return false
+        if (!isPrivateV4(v4)) return false
         val nets = localNets()
         if (nets.isEmpty()) return true
-        val ip = ipv4ToInt(remote)
-        return nets.any { it.contains(ip) }
+        val ip = ipv4ToInt(v4)
+        if (nets.any { it.contains(ip) }) return true
+        return nets.any { same24(it.network, ip) }
     }
 
     fun profileFromFields(fields: Map<String, String>): ProfileEntity {
@@ -256,8 +318,7 @@ object LanPairing {
             <main>
             <h1>An den Fernseher senden</h1>
             <p>Handy und Fernseher sind im selben WLAN. Die Zugangsdaten gehen nur an diesen Fernseher ($host) und nicht ins Internet.</p>
-            <p class="card">Code auf dem Fernseher: <strong>$code</strong></p>
-            <p><a href="$app">In der IPTVstream-App öffnen</a></p>
+            <p class="card">Code auf dem Fernseher: <strong>$code</strong><br>Adresse: <strong>$host:${offer.port}</strong></p>
             <form method="post" action="/pair?token=$token" autocomplete="off">
             <label for="name">Profilname (optional)</label>
             <input id="name" name="name" maxlength="80">
@@ -276,15 +337,8 @@ object LanPairing {
             <input id="epgUrl" name="epgUrl" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false">
             <button type="submit">An den Fernseher senden</button>
             </form>
+            <p><a href="$app">Gespeichertes Profil in der IPTVstream-App senden</a></p>
             </main>
-            <script>
-            (function () {
-              var f = document.createElement('iframe');
-              f.style.display = 'none';
-              f.src = '${offer.appLink}';
-              document.body.appendChild(f);
-            })();
-            </script>
             </body>
             </html>
         """.trimIndent()
@@ -399,6 +453,25 @@ object LanPairing {
             ((b[1].toInt() and 0xff) shl 16) or
             ((b[2].toInt() and 0xff) shl 8) or
             (b[3].toInt() and 0xff)
+    }
+
+    private fun formatV4(ip: Int): String =
+        "${(ip ushr 24) and 0xff}.${(ip ushr 16) and 0xff}.${(ip ushr 8) and 0xff}.${ip and 0xff}"
+
+    private fun same24(a: Int, b: Int): Boolean = (a xor b) and 0xffffff00.toInt() == 0
+
+    /** IPv4, auch wenn die Verbindung als IPv4-mapped IPv6 ankommt. */
+    private fun asV4(addr: InetAddress): Inet4Address? {
+        if (addr is Inet4Address) return addr
+        val b = addr.address
+        if (b.size == 16 &&
+            b[0] == 0.toByte() && b[1] == 0.toByte() && b[2] == 0.toByte() && b[3] == 0.toByte() &&
+            b[4] == 0.toByte() && b[5] == 0.toByte() && b[6] == 0.toByte() && b[7] == 0.toByte() &&
+            b[8] == 0.toByte() && b[9] == 0.toByte() && b[10] == 0xff.toByte() && b[11] == 0xff.toByte()
+        ) {
+            return InetAddress.getByAddress(b.copyOfRange(12, 16)) as Inet4Address
+        }
+        return null
     }
 
     private fun parseLiteralV4(host: String): Inet4Address? {

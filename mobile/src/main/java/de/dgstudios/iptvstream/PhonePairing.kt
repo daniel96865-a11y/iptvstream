@@ -2,6 +2,7 @@ package de.dgstudios.iptvstream
 
 import android.content.Context
 import android.net.ConnectivityManager
+import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
@@ -51,6 +52,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
+import java.net.Inet4Address
 import java.net.Proxy
 import java.net.URL
 
@@ -82,7 +84,6 @@ fun SendToTvDialog(profile: ProfileEntity, onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
     var code by remember { mutableStateOf("") }
     var host by remember { mutableStateOf("") }
-    var askHost by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var done by remember { mutableStateOf(false) }
@@ -95,11 +96,9 @@ fun SendToTvDialog(profile: ProfileEntity, onDismiss: () -> Unit) {
                 if (done) {
                     Text("Der Fernseher hat „${profile.name}“ übernommen und lädt die Sender.")
                 } else {
-                    Text("Gib den Code ein, der auf dem Fernseher steht. Beide Geräte müssen im selben WLAN sein.")
-                    GlassTextField(code, { code = it.take(12) }, "Code vom Fernseher", imeAction = ImeAction.Done)
-                    if (askHost) {
-                        GlassTextField(host, { host = it.take(40) }, "IP-Adresse vom Fernseher")
-                    }
+                    Text("Gib den Code ein, der auf dem Fernseher steht. Beide Geräte müssen im selben WLAN sein. Wenn die Suche nicht klappt, trag die Adresse ein, die dort unter dem Code steht.")
+                    GlassTextField(code, { code = it.take(12) }, "Code vom Fernseher", imeAction = ImeAction.Next)
+                    GlassTextField(host, { host = it.take(80) }, "IP:Port vom Fernseher (optional)", imeAction = ImeAction.Done)
                     val err = error
                     if (err != null) Text(err, color = Color(0xFFFF6B6B))
                     if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -117,14 +116,13 @@ fun SendToTvDialog(profile: ProfileEntity, onDismiss: () -> Unit) {
                         error = null
                         scope.launch {
                             val result = withContext(Dispatchers.IO) {
-                                deliver(context, profile, code, host.takeIf { askHost && it.isNotBlank() })
+                                deliver(context, profile, code, host.takeIf { it.isNotBlank() })
                             }
                             busy = false
                             if (result == null) {
                                 done = true
-                            } else if (result == NOT_FOUND && !askHost) {
-                                askHost = true
-                                error = "Kein Fernseher mit diesem Code gefunden. Trag die IP vom Fernseher ein oder scanne den QR-Code."
+                            } else if (result == NOT_FOUND) {
+                                error = "Kein Fernseher mit diesem Code gefunden. Trag die Adresse vom Fernseher ein, zum Beispiel 192.168.1.57:28765."
                             } else {
                                 error = result
                             }
@@ -169,7 +167,7 @@ fun SendToTvScreen(mainVm: MainViewModel, onDone: () -> Unit) {
         error = null
         scope.launch {
             val result = withContext(Dispatchers.IO) {
-                LanPairingClient.send(dest.host, dest.port, dest.token, profile, opener = lanOpener(context))
+                sendProfile(context, dest.host, dest.port, dest.token, profile)
             }
             busy = false
             if (result == null) done = true else error = result
@@ -250,32 +248,97 @@ private const val NOT_FOUND = "not-found"
 private fun deliver(context: Context, profile: ProfileEntity, code: String, manualHost: String?): String? {
     val normalized = LanPairing.normalizeCode(code)
     if (normalized.length != LanPairing.CODE_LENGTH) return "Der Code hat 6 Zeichen."
-    val opener = lanOpener(context)
+    val saved = profile.copy(id = 0)
+    val openers = lanOpeners(context)
+    val manual = manualHost?.let { LanPairing.manualTarget(it) }
+    if (manualHost != null && manual == null) return "Diese Adresse liegt nicht im Heimnetz."
+    val manualPort = manual?.port
+    if (manual != null && manualPort != null) {
+        return sendProfile(openers, manual.host, manualPort, normalized, saved)
+    }
+    if (manual != null) {
+        for (opener in openers) {
+            val found = LanPairingClient.findOnHost(manual.host, normalized, opener = opener) ?: continue
+            return sendProfile(openers, found.host, found.port, normalized, saved)
+        }
+        return "An dieser Adresse antwortet kein Fernseher mit dem Code."
+    }
     val viaNsd = try {
-        LanPairingBrowser(context).find(normalized)
+        LanPairingBrowser(context).find(normalized, timeoutMs = 4_000)
     } catch (e: RuntimeException) {
         null
     }
-    val endpoint = viaNsd ?: manualHost?.trim()?.let { host ->
-        if (!LanPairing.isPrivateHost(host)) return "Diese IP liegt nicht im Heimnetz."
-        LanPairingClient.findOnHost(host, normalized, opener = opener)
+    if (viaNsd != null) {
+        val sent = sendProfile(openers, viaNsd.host, viaNsd.port, normalized, saved)
+        if (sent == null || !LanPairingClient.connectFailure(sent)) return sent
     }
-    if (endpoint == null) return if (manualHost.isNullOrBlank()) NOT_FOUND else "An dieser IP antwortet kein Fernseher mit dem Code."
-    return LanPairingClient.send(endpoint.host, endpoint.port, normalized, profile.copy(id = 0), opener = opener)
+    val local = localLan(context)
+    if (local != null) {
+        val hosts = LanPairing.subnetHosts(local.host, local.prefix)
+        for (opener in openers) {
+            val found = LanPairingClient.findService(hosts, normalized, opener = opener) ?: continue
+            return sendProfile(openers, found.host, found.port, normalized, saved)
+        }
+    }
+    return NOT_FOUND
 }
 
-/** Hält die Übertragung im WLAN, auch wenn ein VPN aktiv ist. */
-private fun lanOpener(context: Context): (URL) -> HttpURLConnection {
-    val cm = context.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+private fun sendProfile(context: Context, host: String, port: Int, secret: String, profile: ProfileEntity): String? =
+    sendProfile(lanOpeners(context), host, port, secret, profile)
+
+private fun sendProfile(
+    openers: List<(URL) -> HttpURLConnection>,
+    host: String,
+    port: Int,
+    secret: String,
+    profile: ProfileEntity,
+): String? {
+    var last: String? = null
+    for (opener in openers) {
+        val result = LanPairingClient.send(host, port, secret, profile, opener = opener)
+        if (result == null || !LanPairingClient.connectFailure(result)) return result
+        last = result
+    }
+    return last
+}
+
+/** WLAN zuerst, danach die normale Verbindung. Beides, weil eines davon am Heimnetz scheitern kann. */
+private fun lanOpeners(context: Context): List<(URL) -> HttpURLConnection> {
+    val network = homeNetwork(context)
+    val openers = ArrayList<(URL) -> HttpURLConnection>(2)
+    if (network != null) {
+        openers.add { url -> network.openConnection(url) as HttpURLConnection }
+    }
+    openers.add { url -> url.openConnection(Proxy.NO_PROXY) as HttpURLConnection }
+    return openers
+}
+
+private fun homeNetwork(context: Context): Network? {
+    val cm = context.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return null
+    val active = cm.activeNetwork
+    if (active != null && isHome(cm, active)) return active
     @Suppress("DEPRECATION")
-    val nets = cm?.allNetworks
-    val network = nets?.firstOrNull { n ->
-        val caps = cm.getNetworkCapabilities(n) ?: return@firstOrNull false
-        !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) &&
-            (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET))
+    return cm.allNetworks.firstOrNull { isHome(cm, it) }
+}
+
+private fun isHome(cm: ConnectivityManager, network: Network): Boolean {
+    val caps = cm.getNetworkCapabilities(network) ?: return false
+    if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return false
+    return caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+        caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+}
+
+private data class LocalLan(val host: String, val prefix: Int)
+
+private fun localLan(context: Context): LocalLan? {
+    val cm = context.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return null
+    val network = homeNetwork(context) ?: return null
+    val links = cm.getLinkProperties(network)?.linkAddresses ?: return null
+    for (link in links) {
+        val addr = link.address as? Inet4Address ?: continue
+        if (!LanPairing.isPrivateV4(addr)) continue
+        val host = addr.hostAddress ?: continue
+        return LocalLan(host, link.prefixLength)
     }
-    return { url ->
-        if (network != null) network.openConnection(url) as HttpURLConnection
-        else url.openConnection(Proxy.NO_PROXY) as HttpURLConnection
-    }
+    return null
 }
