@@ -9,6 +9,12 @@ import de.dgstudios.iptvstream.core.data.db.EpgEntity
 object EpgGuide {
     const val EMPTY_TTL_MS = 60_000L
 
+    /** Wie viele Sender die Liste vorab lädt und wie weit voraus. Ein Wert unter SQLites Grenze von 999 Variablen. */
+    const val WARM_KEYS = 120
+    const val WARM_WINDOW_MS = 12L * 60 * 60 * 1000
+
+    fun hasData(value: NowNext): Boolean = value.now != null || value.next != null
+
     fun fromRows(list: List<EpgEntity>, now: Long): NowNext {
         val cur = list.firstOrNull()?.takeIf { it.start <= now }
         val next = if (cur != null) list.getOrNull(1) else list.firstOrNull()

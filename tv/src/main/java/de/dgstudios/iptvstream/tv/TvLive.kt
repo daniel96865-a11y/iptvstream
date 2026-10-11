@@ -477,7 +477,7 @@ fun TvLiveScreen(
     fun enterFromTab() {
         first.pending = false
         move.launch(scope) {
-            if (!drawer && railOpen) focusCategoryNow() else focusChannelsNow()
+            if (!drawer && (railOpen || itemsRef.value.isEmpty())) focusCategoryNow() else focusChannelsNow()
         }
     }
 

@@ -275,17 +275,22 @@ class EpgManager(
         return value
     }
 
-    /** Lädt fehlende Sender in wenigen Abfragen, damit die Liste beim Scrollen nicht jedes Logo einzeln fragt. */
+    /**
+     * Lädt die ersten fehlenden Sender in einer Abfrage, damit die sichtbare Liste nicht jedes Logo einzeln fragt.
+     * Nur die nächsten Stunden und nur wenige Sender, sonst landen bei „Alle“ hunderttausende Zeilen im Speicher.
+     * Sender ohne Treffer bleiben ungespeichert und werden beim Anzeigen genau nachgefragt.
+     */
     suspend fun warm(profileId: Long, keys: Collection<String>) = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         val missing = keys.asSequence()
             .filter { it.isNotBlank() && peek(profileId, it, now) == null }
             .distinct()
+            .take(EpgGuide.WARM_KEYS)
             .toList()
         if (missing.isEmpty()) return@withContext
-        for (chunk in missing.chunked(160)) {
-            val grouped = EpgGuide.group(db.epg().upcomingForKeys(profileId, chunk, now), chunk, now)
-            for ((key, value) in grouped) store(profileId, key, value, now)
+        val rows = db.epg().upcomingForKeys(profileId, missing, now, now + EpgGuide.WARM_WINDOW_MS)
+        for ((key, value) in EpgGuide.group(rows, missing, now)) {
+            if (EpgGuide.hasData(value)) store(profileId, key, value, now)
         }
     }
 

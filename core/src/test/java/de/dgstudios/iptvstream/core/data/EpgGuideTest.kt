@@ -30,6 +30,13 @@ class EpgGuideTest {
         assertEquals(1_000L + EpgGuide.EMPTY_TTL_MS, EpgGuide.freshUntil(NowNext(null, null), now = 1_000))
     }
 
+    @Test
+    fun emptyGuideCountsAsNoData() {
+        assertEquals(false, EpgGuide.hasData(NowNext(null, null)))
+        assertEquals(true, EpgGuide.hasData(NowNext(null, row("a", 10, 20, "danach"))))
+        assertEquals(true, EpgGuide.hasData(NowNext(row("a", 0, 20, "jetzt"), null)))
+    }
+
     private fun row(key: String, start: Long, stop: Long, title: String) =
         EpgEntity(profileId = 1, channelKey = key, start = start, stop = stop, title = title, description = null)
 }
