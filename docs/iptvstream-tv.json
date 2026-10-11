@@ -1,7 +1,7 @@
 {
-  "versionCode": 24,
-  "versionName": "1.0.22",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.22/iptvstream-tv.apk",
-  "sha256": "838519a4ba895ed88e03e5698a4d851c41767ece740eaf19db3aa454e9af5092",
-  "changelog": "Filme zeigen die echte Laufzeit. Die Tonspur wechselt man in den Player-Einstellungen."
+  "versionCode": 25,
+  "versionName": "1.0.23",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.23/iptvstream-tv.apk",
+  "sha256": "6b098fa91321cb7ac6ef9a93eb861ca0009d83f249990641a9afffef0c8212ab",
+  "changelog": "Listen laufen flüssiger. Animationen für Fokus, Filmdetails und Spulen, abschaltbar in den Einstellungen."
 }
