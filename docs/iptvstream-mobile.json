@@ -1,7 +1,7 @@
 {
-  "versionCode": 31,
-  "versionName": "1.0.29",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.29/iptvstream-mobile.apk",
-  "sha256": "a52b1b1834bef16dcdaf3965d17e88a08ca6aff03c77c6022818a3217391cb1f",
-  "changelog": "Das Programm läuft für deutsche Sender richtiger: Sender werden nur noch Einträgen des gleichen Landes zugeordnet, und ein deutscher Programmführer aus dem Netz springt als Ersatz ein (Einstellungen, Live-TV)."
+  "versionCode": 32,
+  "versionName": "1.0.30",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.30/iptvstream-mobile.apk",
+  "sha256": "a30f7175adac3ca40f0be49ec8d09bcdb12a637e10ec4407689298088ae27152",
+  "changelog": "Leise Sender lassen sich im Player unter „Ton lauter“ anheben. Die Stufe gilt nur für diesen Sender und bleibt gespeichert."
 }
