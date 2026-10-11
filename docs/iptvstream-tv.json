@@ -1,7 +1,7 @@
 {
-  "versionCode": 28,
-  "versionName": "1.0.26",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.26/iptvstream-tv.apk",
-  "sha256": "3c22ceea514aa859273f637e8ea827884085cce723d6742f42b2af12b59668bf",
-  "changelog": "Die Kategorien links auf dem Fernseher lassen sich wieder ansteuern, ohne dass die App hängen bleibt."
+  "versionCode": 29,
+  "versionName": "1.0.27",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.27/iptvstream-tv.apk",
+  "sha256": "ef4d863662dbc01b111aa039ea40a6d5f2210cfbb16562dc02961a2465457d8c",
+  "changelog": "Lange Kategorienamen laufen auf dem Fernseher durch, sobald die Zeile den Fokus hat. Die anderen bleiben stehen."
 }
