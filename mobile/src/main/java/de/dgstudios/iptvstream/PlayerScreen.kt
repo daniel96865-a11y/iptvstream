@@ -348,6 +348,16 @@ private fun PlayerContent(
                                     if (!sub.isNullOrBlank()) {
                                         Text(sub, color = Color(0xCCFFFFFF), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     }
+                                    val signal = listOfNotNull(st.signalVideo, st.signalAudio)
+                                    if (signal.isNotEmpty()) {
+                                        Text(
+                                            signal.joinToString("  ·  "),
+                                            color = Color(0xE6FFFFFF),
+                                            fontSize = 12.sp,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
                                 }
                                 if (isLive) {
                                     GlassIconButton(

@@ -63,6 +63,10 @@ data class PlayerState(
     val textEnabled: Boolean = false,
     val videoWidth: Int = 0,
     val videoHeight: Int = 0,
+    /** Auflösung und Bildformat, nur aus dem laufenden Stream. Null, solange nichts gemeldet wurde. */
+    val signalVideo: String? = null,
+    /** Tonformat, nur aus der gerade laufenden Audiospur. */
+    val signalAudio: String? = null,
     val resize: String = "fit",
     val ended: Boolean = false,
 )
@@ -222,6 +226,7 @@ class PlayerController(
             it.copy(
                 loading = true, playing = false, error = null, notice = null, ended = false,
                 audioTracks = emptyList(), textTracks = emptyList(), positionMs = 0, durationMs = 0,
+                videoWidth = 0, videoHeight = 0, signalVideo = null, signalAudio = null,
                 isLive = liveEdge(item),
             )
         }
@@ -425,7 +430,7 @@ class PlayerController(
         }
 
         override fun onVideoSizeChanged(videoSize: VideoSize) {
-            _state.update { it.copy(videoWidth = videoSize.width, videoHeight = videoSize.height) }
+            refreshSignal()
         }
 
         override fun onTracksChanged(tracks: Tracks) {
@@ -471,6 +476,7 @@ class PlayerController(
                 initialTextDone = true
             }
             _state.update { it.copy(audioTracks = audioOptions, textTracks = textOptions, textEnabled = textSelected) }
+            refreshSignal()
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -584,6 +590,7 @@ class PlayerController(
                         bufferedMs = if (live) 0 else player.bufferedPosition,
                     )
                 }
+                refreshSignal()
                 val now = System.currentTimeMillis()
                 if (player.isPlaying) {
                     if (playingSince == 0L) playingSince = now
@@ -607,6 +614,21 @@ class PlayerController(
 
     /** Live-Rand. Archiv einer vergangenen Sendung bleibt spulbar. */
     private fun liveEdge(item: PlayItem?): Boolean = item != null && item.kind == PlayKind.LIVE && !item.catchup
+
+    /** Liest Auflösung, Bild- und Tonformat von der Spur, die gerade decodiert wird. */
+    private fun refreshSignal() {
+        if (released) return
+        val size = player.videoSize
+        val video = StreamSignal.videoLine(player.videoFormat, size.width, size.height)
+        val audio = StreamSignal.audioLine(player.audioFormat)
+        _state.update { cur ->
+            if (cur.videoWidth == size.width && cur.videoHeight == size.height && cur.signalVideo == video && cur.signalAudio == audio) {
+                cur
+            } else {
+                cur.copy(videoWidth = size.width, videoHeight = size.height, signalVideo = video, signalAudio = audio)
+            }
+        }
+    }
 
     private companion object {
         const val MAX_RECONNECTS = 5
