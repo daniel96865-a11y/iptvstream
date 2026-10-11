@@ -599,16 +599,14 @@ private fun SettingsPanel(
         if (isLive) {
             add(PanelEntry.Option(if (ui.isFavorite) "★ Aus Favoriten entfernen" else "☆ Zu Favoriten hinzufügen", ui.isFavorite) { vm.toggleFavorite() })
         }
+        add(PanelEntry.Header("Tonspur"))
+        if (audio.isEmpty()) add(PanelEntry.Info("Keine Tonspuren gefunden"))
+        for (t in audio) {
+            add(PanelEntry.Option(t.label, t.selected) { ctrl.selectAudio(t.id) })
+        }
         add(PanelEntry.Header("Bildmodus"))
         for ((id, label) in listOf("fit" to "Anpassen", "fill" to "Füllen", "stretch" to "Strecken", "original" to "Original")) {
             add(PanelEntry.Option(label, resize == id) { vm.setResize(id) })
-        }
-        add(PanelEntry.Header("Audio"))
-        if (audio.isEmpty()) add(PanelEntry.Info("Keine Audiospuren gefunden"))
-        for (t in audio) {
-            add(PanelEntry.Option(t.label + if (!t.supported) " (nicht unterstützt)" else "", t.selected) {
-                if (t.supported) ctrl.selectAudio(t.id)
-            })
         }
         add(PanelEntry.Header("Untertitel"))
         add(PanelEntry.Option("Aus", !textEnabled) { ctrl.selectText(null) })

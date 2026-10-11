@@ -61,6 +61,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import de.dgstudios.iptvstream.core.data.Cat
 import de.dgstudios.iptvstream.core.data.EpisodeInfo
+import de.dgstudios.iptvstream.core.data.VodDuration
 import de.dgstudios.iptvstream.core.data.WatchPos
 import de.dgstudios.iptvstream.core.settings.AppSettings
 import de.dgstudios.iptvstream.core.ui.LocalAppStyle
@@ -427,7 +428,7 @@ fun TvMovieDetail(onPlay: () -> Unit) {
                 val meta = metaLine(
                     listOf(
                         d?.year ?: m.year,
-                        d?.durationMin?.takeIf { it > 0 }?.let { "$it Min." },
+                        VodDuration.shown(d?.durationMin ?: 0, progress?.durationMs ?: 0L),
                         formatRating(d?.rating?.takeIf { it > 0 } ?: m.rating),
                         d?.genre,
                     ),

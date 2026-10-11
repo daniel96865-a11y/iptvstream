@@ -29,6 +29,13 @@ class VodDurationTest {
     }
 
     @Test
+    fun aOneMinuteCatalogValueIsMeasuredFromTheFile() {
+        assertEquals(1, VodDuration.minutes("93", "00:01:33"))
+        assertEquals(true, VodDuration.needsFileDuration(1))
+        assertEquals(false, VodDuration.needsFileDuration(93))
+    }
+
+    @Test
     fun runtimeReadsAsHoursAndMinutes() {
         assertEquals("1 Std. 33 Min.", VodDuration.formatRuntime(93))
         assertEquals("2 Std.", VodDuration.formatRuntime(120))

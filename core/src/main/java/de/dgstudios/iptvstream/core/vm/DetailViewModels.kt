@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import de.dgstudios.iptvstream.core.container
 import de.dgstudios.iptvstream.core.data.EpisodeInfo
 import de.dgstudios.iptvstream.core.data.MovieDetail
+import de.dgstudios.iptvstream.core.data.VodDuration
+import de.dgstudios.iptvstream.core.data.remote.MediaDuration
 import de.dgstudios.iptvstream.core.data.PlayKind
 import de.dgstudios.iptvstream.core.data.SeriesDetail
 import de.dgstudios.iptvstream.core.data.VodRequest
@@ -59,7 +61,16 @@ class MovieDetailViewModel(app: Application, handle: SavedStateHandle) : Android
                 return@launch
             }
             movie.value = m
-            detail.value = c.repo.movieDetail(p.id, id)
+            val api = c.repo.movieDetail(p.id, id)
+            val catalog = api?.durationMin ?: 0
+            val shown = if (VodDuration.needsFileDuration(catalog)) 0 else catalog
+            detail.value = api?.copy(durationMin = shown)
+            if (shown > 0) return@launch
+            val ms = MediaDuration.probe(c.okHttp, c.repo.movieItem(p, m).url) ?: return@launch
+            val minutes = (ms / 60_000L).toInt()
+            if (minutes < 1) return@launch
+            val base = detail.value ?: MovieDetail(null, null, null, 0, 0.0, null, null, null)
+            detail.value = base.copy(durationMin = minutes)
         }
     }
 
