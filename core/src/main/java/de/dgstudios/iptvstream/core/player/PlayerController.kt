@@ -1,1 +1,1 @@
-file:///workspace/push_pc_only.json
+@file:/tmp/iptvstream/core/src/main/java/de/dgstudios/iptvstream/core/player/PlayerController.kt
