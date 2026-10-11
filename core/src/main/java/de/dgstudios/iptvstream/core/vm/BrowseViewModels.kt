@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import de.dgstudios.iptvstream.core.container
 import de.dgstudios.iptvstream.core.data.Cat
+import de.dgstudios.iptvstream.core.data.EpgGuide
 import de.dgstudios.iptvstream.core.data.LiveRequest
 import de.dgstudios.iptvstream.core.data.NowNext
 import de.dgstudios.iptvstream.core.data.db.CatType
@@ -176,7 +177,7 @@ class LiveViewModel(app: Application) :
     init {
         viewModelScope.launch {
             combine(profileId.filterNotNull(), items) { pid, list ->
-                pid to list.map { it.epgKey }
+                pid to list.asSequence().take(EpgGuide.WARM_KEYS).map { it.epgKey }.toList()
             }.distinctUntilChanged().collectLatest { (pid, keys) ->
                 repo.warmGuide(pid, keys)
             }

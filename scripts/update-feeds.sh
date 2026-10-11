@@ -53,7 +53,9 @@ print(f"feed geschrieben: {path}")
 PY
 }
 
-if [ "$TAG" = "v1.0.27" ]; then
+if [ "$TAG" = "v1.0.28" ]; then
+  NOTE="Große Senderlisten laden das Programm schonender. Am Fernseher kommt man in Filmen und Serien auch in die letzte Reihe und bei leerer Liste zurück zu den Kategorien."
+elif [ "$TAG" = "v1.0.27" ]; then
   NOTE="Lange Kategorienamen laufen auf dem Fernseher durch, sobald die Zeile den Fokus hat. Die anderen bleiben stehen."
 elif [ "$TAG" = "v1.0.26" ]; then
   NOTE="Die Kategorien links auf dem Fernseher lassen sich wieder ansteuern, ohne dass die App hängen bleibt."

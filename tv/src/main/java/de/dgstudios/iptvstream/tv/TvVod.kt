@@ -227,7 +227,7 @@ private fun <T> PosterBrowse(
     fun enterFromTab() {
         first.pending = false
         move.launch(scope) {
-            if (!drawer && railOpen) focusCategoryNow() else focusGridNow()
+            if (!drawer && (railOpen || itemsRef.value.isEmpty())) focusCategoryNow() else focusGridNow()
         }
     }
 
@@ -243,7 +243,9 @@ private fun <T> PosterBrowse(
     fun stepVertical(index: Int, deltaRows: Int) {
         move.launch(scope) {
             val cols = gridColumns(gridState)
-            val target = index + deltaRows * cols
+            val last = itemsRef.value.lastIndex
+            var target = index + deltaRows * cols
+            if (deltaRows > 0 && target > last && index / cols < last / cols) target = last
             if (target < 0) {
                 if (drawer) {
                     try {
@@ -256,7 +258,7 @@ private fun <T> PosterBrowse(
                 }
                 return@launch
             }
-            if (target > itemsRef.value.lastIndex) return@launch
+            if (target > last) return@launch
             if (!focusGridIndex(target) && deltaRows < 0) onEscapeUp()
         }
     }
