@@ -1,7 +1,7 @@
 {
-  "versionCode": 23,
-  "versionName": "1.0.21",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.21/iptvstream-tv.apk",
-  "sha256": "d525886a0049d3bafa0609e9087c3d68509400411c66fde39d8d4fd3d759b66f",
-  "changelog": "4K-Filme und 4K-Live laufen über den Hardware-Decoder. Fehlt ein Live-Format, wird das andere probiert."
+  "versionCode": 24,
+  "versionName": "1.0.22",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.22/iptvstream-tv.apk",
+  "sha256": "838519a4ba895ed88e03e5698a4d851c41767ece740eaf19db3aa454e9af5092",
+  "changelog": "Filme zeigen die echte Laufzeit. Die Tonspur wechselt man in den Player-Einstellungen."
 }
