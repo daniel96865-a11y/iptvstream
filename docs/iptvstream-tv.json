@@ -1,7 +1,7 @@
 {
-  "versionCode": 29,
-  "versionName": "1.0.27",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.27/iptvstream-tv.apk",
-  "sha256": "ef4d863662dbc01b111aa039ea40a6d5f2210cfbb16562dc02961a2465457d8c",
-  "changelog": "Lange Kategorienamen laufen auf dem Fernseher durch, sobald die Zeile den Fokus hat. Die anderen bleiben stehen."
+  "versionCode": 30,
+  "versionName": "1.0.28",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.28/iptvstream-tv.apk",
+  "sha256": "f8fe268b3fd84f26805b1cd533e147046de7b4d5b8ac79d14fd6e3e8993e6b46",
+  "changelog": "Große Senderlisten laden das Programm schonender. Am Fernseher kommt man in Filmen und Serien auch in die letzte Reihe und bei leerer Liste zurück zu den Kategorien."
 }
