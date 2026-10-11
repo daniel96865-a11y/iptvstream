@@ -55,6 +55,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import de.dgstudios.iptvstream.core.data.PlayKind
 import de.dgstudios.iptvstream.core.data.db.EpgEntity
+import de.dgstudios.iptvstream.core.player.AudioBoost
 import de.dgstudios.iptvstream.core.player.PlayerController
 import de.dgstudios.iptvstream.core.ui.LocalAppStyle
 import de.dgstudios.iptvstream.core.ui.NumberOverlay
@@ -598,6 +599,12 @@ private fun SettingsPanel(
         if (ui.catchingUp) add(PanelEntry.Option("Zum Live-TV", false, onLive))
         if (isLive) {
             add(PanelEntry.Option(if (ui.isFavorite) "★ Aus Favoriten entfernen" else "☆ Zu Favoriten hinzufügen", ui.isFavorite) { vm.toggleFavorite() })
+        }
+        add(PanelEntry.Header("Ton lauter"))
+        add(PanelEntry.Info("Wird für diesen Sender gemerkt."))
+        if (ui.settings.passthrough) add(PanelEntry.Info("Bei Audio-Passthrough ohne Wirkung."))
+        for ((id, label) in AudioBoost.choices) {
+            add(PanelEntry.Option(label, ui.audioBoost == id) { vm.setAudioBoost(id) })
         }
         add(PanelEntry.Header("Tonspur"))
         if (audio.isEmpty()) add(PanelEntry.Info("Keine Tonspuren gefunden"))
