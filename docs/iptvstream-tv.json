@@ -1,7 +1,7 @@
 {
-  "versionCode": 25,
-  "versionName": "1.0.23",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.23/iptvstream-tv.apk",
-  "sha256": "6b098fa91321cb7ac6ef9a93eb861ca0009d83f249990641a9afffef0c8212ab",
-  "changelog": "Listen laufen flüssiger. Animationen für Fokus, Filmdetails und Spulen, abschaltbar in den Einstellungen."
+  "versionCode": 26,
+  "versionName": "1.0.24",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.24/iptvstream-tv.apk",
+  "sha256": "a03ba75e6eb3604dde2e92aeca8fcf0487cc013fd3875b34413bdfd5c173a12b",
+  "changelog": "Die untere Leiste liegt unter den Einstellungen und verdeckt sie nicht mehr."
 }
