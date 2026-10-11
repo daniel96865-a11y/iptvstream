@@ -1,7 +1,7 @@
 {
-  "versionCode": 27,
-  "versionName": "1.0.25",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.25/iptvstream-mobile.apk",
-  "sha256": "745756d127d1ce6d74363865c79b1d77c699746b14b6e6511a1e20d9f3d24594",
-  "changelog": "Der Rahmen um den gewählten Bereich unten folgt der runden Ecke und schneidet sie nicht mehr."
+  "versionCode": 28,
+  "versionName": "1.0.26",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.26/iptvstream-mobile.apk",
+  "sha256": "053f0a48696aa74d0c4dd7dfbc52714ca4e5d5911543bd9eacd4ba116c671a69",
+  "changelog": "Die Kategorien links auf dem Fernseher lassen sich wieder ansteuern, ohne dass die App hängen bleibt."
 }
