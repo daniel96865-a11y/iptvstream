@@ -19,12 +19,22 @@ object StreamSignal {
         return listOfNotNull(size, codec, fps, rate).joinToString(" · ").ifEmpty { null }
     }
 
-    fun audioLine(format: Format?): String? {
-        if (format == null) return null
-        val codec = audioCodec(format.sampleMimeType, format.codecs)
-        val layout = channelLabel(format.channelCount)
-        val rate = sampleRateLabel(format.sampleRate)
-        return listOfNotNull(codec, layout, rate).joinToString(" · ").ifEmpty { null }
+    fun audioLine(format: Format?, language: String? = null): String? {
+        if (format == null && language.isNullOrBlank()) return null
+        val lang = languageName(language ?: format?.language)
+        val codec = format?.let { audioCodec(it.sampleMimeType, it.codecs) }
+        val layout = format?.let { channelLabel(it.channelCount) }
+        val rate = format?.let { sampleRateLabel(it.sampleRate) }
+        return listOfNotNull(lang, codec, layout, rate).joinToString(" · ").ifEmpty { null }
+    }
+
+    fun languageName(code: String?): String? {
+        val raw = code?.trim()?.takeIf { it.isNotEmpty() && !it.equals("und", true) && !it.equals("unknown", true) }
+            ?: return null
+        NAMES[raw.lowercase(Locale.US)]?.let { return it }
+        val locale = if (raw.length == 2 || raw.contains('-')) Locale.forLanguageTag(raw) else Locale(raw)
+        val name = locale.getDisplayLanguage(Locale.GERMAN)
+        return name.takeIf { it.isNotBlank() && !it.equals(raw, true) }
     }
 
     private fun sizeLabel(width: Int, height: Int): String? {
@@ -72,8 +82,24 @@ object StreamSignal {
         Format.NO_VALUE, 0 -> null
         1 -> "Mono"
         2 -> "Stereo"
+        6 -> "5.1"
+        8 -> "7.1"
         else -> "$channels Kanäle"
     }
+
+    private val NAMES = mapOf(
+        "de" to "Deutsch", "deu" to "Deutsch", "ger" to "Deutsch",
+        "en" to "Englisch", "eng" to "Englisch",
+        "pl" to "Polnisch", "pol" to "Polnisch",
+        "fr" to "Französisch", "fra" to "Französisch", "fre" to "Französisch",
+        "es" to "Spanisch", "spa" to "Spanisch",
+        "it" to "Italienisch", "ita" to "Italienisch",
+        "tr" to "Türkisch", "tur" to "Türkisch",
+        "ru" to "Russisch", "rus" to "Russisch",
+        "nl" to "Niederländisch", "nld" to "Niederländisch", "dut" to "Niederländisch",
+        "pt" to "Portugiesisch", "por" to "Portugiesisch",
+        "ar" to "Arabisch", "ara" to "Arabisch",
+    )
 
     private fun sampleRateLabel(rate: Int): String? {
         if (rate <= 0 || rate == Format.NO_VALUE) return null
