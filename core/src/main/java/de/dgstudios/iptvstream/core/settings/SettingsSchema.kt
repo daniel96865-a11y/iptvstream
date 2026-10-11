@@ -143,6 +143,17 @@ object SettingsSchema {
                 ),
                 ChoiceDef("show_numbers", "Sendernummern anzeigen", onOff, "on"),
                 ChoiceDef("epg_auto", "EPG automatisch aktualisieren", onOff, "on"),
+                ChoiceDef(
+                    "epg_de",
+                    "Deutscher Programmführer aus dem Netz",
+                    listOf(
+                        Option("fallback", "Als Ersatz"),
+                        Option("prefer", "Bevorzugt"),
+                        Option("off", "Aus"),
+                    ),
+                    "fallback",
+                    "Für deutsche Sender; wirkt nach der nächsten EPG-Aktualisierung",
+                ),
                 ActionDef("epg_refresh", "EPG jetzt aktualisieren"),
             ),
         ),

@@ -87,16 +87,98 @@ object EpgMatcher {
         return nonAlnum.replace(s, "")
     }
 
+    /** Ländercode aus Vorsatz (`[DE]`, `DE:`, `|DE|`) oder Endung (`.de`), sonst null. */
+    fun countryOf(raw: String): String? {
+        val s = raw.lowercase().trim()
+        prefixRegex.find(s)?.let { m ->
+            val code = m.value.filter { it.isLetter() }
+            if (code.isNotEmpty()) return code
+        }
+        return suffixRegex.find(s)?.value?.removePrefix(".")
+    }
+
+    /**
+     * Wählt aus mehreren Schlüsseln mit gleichem Namen den zum Land passenden.
+     * Ist das Land des Senders bekannt, kommt nie ein Schlüssel eines anderen Landes in Frage.
+     */
+    fun choose(keys: List<String>?, country: String?): String? {
+        if (keys.isNullOrEmpty()) return null
+        if (country != null) {
+            return keys.firstOrNull { countryOf(it) == country } ?: keys.firstOrNull { countryOf(it) == null }
+        }
+        return keys.firstOrNull { countryOf(it) == null } ?: keys.first()
+    }
+
     /**
      * Sucht zu einem Sender den passenden EPG-Schlüssel.
      * [byNorm] bildet normalisierte IDs/Namen auf vorhandene EPG-Schlüssel ab.
      */
-    fun match(epgKey: String, channelName: String, byNorm: Map<String, String>): String? {
-        val candidates = ArrayList<String>(3)
+    fun match(epgKey: String, channelName: String, byNorm: Map<String, List<String>>): String? {
+        val country = countryOf(channelName) ?: countryOf(epgKey)
+        val candidates = ArrayList<String>(2)
         if (epgKey.isNotBlank()) candidates.add(normalize(epgKey))
         candidates.add(normalize(channelName))
         for (c in candidates) {
-            if (c.isNotEmpty()) byNorm[c]?.let { return it }
+            if (c.isEmpty()) continue
+            choose(byNorm[c], country)?.let { return it }
+        }
+        return null
+    }
+}
+
+/** Kostenloser deutscher Programmführer als Ersatz bzw. Ergänzung zur EPG des Anbieters. */
+object GermanGuide {
+    const val URL = "https://epgshare01.online/epgshare01/epg_ripper_DE1.xml.gz"
+    const val PREFIX = "ger:"
+
+    const val OFF = "off"
+    const val FALLBACK = "fallback"
+    const val PREFER = "prefer"
+
+    private val dach = setOf("de", "at", "ch")
+
+    /** Abweichende Schreibweisen der Anbieter, jeweils normalisiert. */
+    private val aliases = mapOf(
+        "fixandfox" to "fixandfoxi",
+        "rtl2" to "rtlzwei",
+        "kabel1" to "kabeleins",
+        "kabel1doku" to "kabeleinsdoku",
+        "weltdoku" to "n24doku",
+        "swr" to "swrsr",
+        "swrfernsehen" to "swrsr",
+        "swrbw" to "swrsr",
+        "swrrp" to "swrsr",
+        "sr" to "swrsr",
+        "ard" to "daserste",
+        "servustv" to "servustvosterreich",
+        "servustvaustria" to "servustvosterreich",
+        "nickjunior" to "nickjr",
+    )
+
+    fun isKey(key: String): Boolean = key.startsWith(PREFIX)
+
+    fun nameKey(norm: String): String = PREFIX + norm
+
+    fun isNameKey(norm: String): Boolean = norm.startsWith(PREFIX)
+
+    fun forProgramme(channelId: String): String = PREFIX + channelId
+
+    /** Ob ein Sender mit diesem Land vom deutschen Führer bedient werden darf. */
+    fun eligible(country: String?, mode: String): Boolean = when (mode) {
+        PREFER -> country != null && country in dach
+        FALLBACK -> country == null || country in dach
+        else -> false
+    }
+
+    /** [byNorm]: normalisierter Name (ohne Vorsatz) auf Schlüssel mit [PREFIX]. */
+    fun match(epgKey: String, channelName: String, byNorm: Map<String, String>): String? {
+        val candidates = ArrayList<String>(2)
+        candidates.add(EpgMatcher.normalize(channelName))
+        if (epgKey.isNotBlank() && !isKey(epgKey)) candidates.add(EpgMatcher.normalize(epgKey))
+        for (c in candidates) {
+            if (c.isEmpty()) continue
+            byNorm[c]?.let { return it }
+            aliases[c]?.let { a -> byNorm[a]?.let { return it } }
         }
         return null
     }
