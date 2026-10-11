@@ -123,6 +123,7 @@ private fun <T> PosterBrowse(
     val restored by vm.restored.collectAsStateWithLifecycle()
 
     val gridState = rememberLazyGridState()
+    val catListState = rememberLazyListState()
     val gridReg = remember { FocusRegistry() }
     val catReg = remember { FocusRegistry() }
     val scope = rememberCoroutineScope()
@@ -136,6 +137,7 @@ private fun <T> PosterBrowse(
     val drawerListState = rememberLazyListState(vm.drawerIndex, vm.drawerOffset)
     val drawerBottom = drawerSystemBottom()
     var railOpen by remember { mutableStateOf(true) }
+    var railHold by remember { mutableStateOf(false) }
     val move = remember { MoveGate() }
     val escapeRef = rememberUpdatedState(onEscapeUp)
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -163,45 +165,86 @@ private fun <T> PosterBrowse(
             .collect { (i, o) -> vm.onDrawerScroll(i, o) }
     }
 
-    fun enter() {
-        first.pending = false
-        move.launch(scope) {
-            val list = itemsRef.value
-            if (list.isNotEmpty()) {
-                if (!drawer) railOpen = false
-                val idx = gridState.firstVisibleItemIndex.coerceIn(0, list.lastIndex)
-                gridState.scrollToItem(idx)
-                if (!gridReg.focus(idx)) {
-                    gridState.scrollToItem(0)
-                    if (!gridReg.focus(0)) onEscapeUp()
-                }
-            } else if (drawer) {
+    suspend fun focusCategoryNow() {
+        val catsNow = catItemsRef.value
+        if (catsNow.isEmpty()) {
+            onEscapeUp()
+            return
+        }
+        railHold = true
+        railOpen = true
+        try {
+            val ci = catsNow.indexOfFirst { it.id == selectedRef.value }.coerceAtLeast(0)
+            withFrameNanos { }
+            withFrameNanos { }
+            catListState.ensureVisible(ci)
+            val landed = catReg.focus(ci, tries = 40) || run {
+                catListState.scrollToItem(ci)
+                catReg.focus(ci, tries = 40)
+            }
+            if (!landed) onEscapeUp()
+        } finally {
+            railHold = false
+        }
+    }
+
+    suspend fun focusGridNow() {
+        val list = itemsRef.value
+        if (list.isEmpty()) {
+            if (drawer) {
                 try {
                     openButton.requestFocus()
                 } catch (_: IllegalStateException) {
                 }
-            } else {
-                railOpen = true
-                val ci = catItemsRef.value.indexOfFirst { it.id == selectedRef.value }.coerceAtLeast(0)
-                if (!catReg.focus(ci)) onEscapeUp()
             }
+            return
         }
+        val idx = gridState.firstVisibleItemIndex.coerceIn(0, list.lastIndex)
+        if (gridState.layoutInfo.visibleItemsInfo.none { it.index == idx }) {
+            gridState.scrollToItem(idx)
+        }
+        val landed = gridReg.focus(idx) || run {
+            gridState.scrollToItem(0)
+            gridReg.focus(0)
+        }
+        if (!landed) {
+            onEscapeUp()
+            return
+        }
+        withFrameNanos { }
+        if (!drawer && !railHold) railOpen = false
     }
 
-    fun openRail() {
-        railOpen = true
+    fun focusCategory() {
+        move.launch(scope) { focusCategoryNow() }
+    }
+
+    fun focusGrid() {
+        first.pending = false
+        move.launch(scope) { focusGridNow() }
+    }
+
+    fun enterFromTab() {
+        first.pending = false
         move.launch(scope) {
-            delay(240)
-            val ci = catItemsRef.value.indexOfFirst { it.id == selectedRef.value }.coerceAtLeast(0)
-            if (!catReg.focus(ci)) onEscapeUp()
+            if (!drawer && railOpen) focusCategoryNow() else focusGridNow()
         }
     }
 
-    fun stepUp(index: Int) {
+    suspend fun focusGridIndex(target: Int): Boolean {
+        if (gridState.layoutInfo.visibleItemsInfo.none { it.index == target }) {
+            gridState.scrollToItem(target)
+        }
+        if (gridReg.focus(target)) return true
+        gridState.scrollToItem(target)
+        return gridReg.focus(target)
+    }
+
+    fun stepVertical(index: Int, deltaRows: Int) {
         move.launch(scope) {
             val cols = gridColumns(gridState)
-            val above = index - cols
-            if (above < 0) {
+            val target = index + deltaRows * cols
+            if (target < 0) {
                 if (drawer) {
                     try {
                         openButton.requestFocus()
@@ -211,45 +254,64 @@ private fun <T> PosterBrowse(
                 } else {
                     onEscapeUp()
                 }
-            } else {
-                if (gridState.layoutInfo.visibleItemsInfo.none { it.index == above }) {
-                    gridState.scrollToItem(above)
-                }
-                if (!gridReg.focus(above)) {
-                    gridState.scrollToItem(above)
-                    if (!gridReg.focus(above)) onEscapeUp()
-                }
+                return@launch
             }
+            if (target > itemsRef.value.lastIndex) return@launch
+            if (!focusGridIndex(target) && deltaRows < 0) onEscapeUp()
         }
     }
 
     fun stepLeft(index: Int) {
+        val col = gridState.layoutInfo.visibleItemsInfo.find { it.index == index }?.column ?: 0
+        if (col <= 0) {
+            if (!drawer) focusCategory()
+            return
+        }
         move.launch(scope) {
-            val col = gridState.layoutInfo.visibleItemsInfo.find { it.index == index }?.column ?: 0
-            if (col > 0) {
-                val left = index - 1
-                if (gridState.layoutInfo.visibleItemsInfo.none { it.index == left }) {
-                    gridState.scrollToItem(left)
+            val left = index - 1
+            if (left >= 0) focusGridIndex(left)
+        }
+    }
+
+    fun stepRight(index: Int) {
+        val info = gridState.layoutInfo.visibleItemsInfo.find { it.index == index }
+        val next = gridState.layoutInfo.visibleItemsInfo.find { it.index == index + 1 }
+        if (info != null && next != null && next.row != info.row) return
+        if (next == null && info != null && info.column >= gridColumns(gridState) - 1) return
+        val right = index + 1
+        if (right > itemsRef.value.lastIndex) return
+        move.launch(scope) { focusGridIndex(right) }
+    }
+
+    fun moveCategory(index: Int, delta: Int) {
+        move.launch(scope) {
+            val target = index + delta
+            if (target !in catItemsRef.value.indices) {
+                if (delta < 0) onEscapeUp()
+                return@launch
+            }
+            railHold = true
+            try {
+                catListState.ensureVisible(target)
+                if (!catReg.focus(target)) {
+                    catListState.scrollToItem(target)
+                    if (!catReg.focus(target)) onEscapeUp()
                 }
-                if (!gridReg.focus(left)) onEscapeUp()
-            } else {
-                railOpen = true
-                delay(240)
-                val ci = catItemsRef.value.indexOfFirst { it.id == selectedRef.value }.coerceAtLeast(0)
-                if (!catReg.focus(ci)) onEscapeUp()
+            } finally {
+                railHold = false
             }
         }
     }
 
     fun chooseCategory(id: String) {
         if (id == selected) {
-            enter()
+            focusGrid()
         } else {
             pendingFrom = items
             vm.selectCategory(id)
         }
     }
-    RegisterEntry(entry) { enter() }
+    RegisterEntry(entry) { enterFromTab() }
 
     LaunchedEffect(restored) {
         if (!restored) return@LaunchedEffect
@@ -264,7 +326,10 @@ private fun <T> PosterBrowse(
         if (items !== p) {
             pendingFrom = null
             gridState.scrollToItem(0)
-            if (items.isNotEmpty()) gridReg.focus(0)
+            if (items.isNotEmpty() && gridReg.focus(0)) {
+                withFrameNanos { }
+                if (!drawer && !railHold) railOpen = false
+            }
         }
     }
     LaunchedEffect(pendingFrom) {
@@ -297,9 +362,10 @@ private fun <T> PosterBrowse(
                         p = p,
                         index = index,
                         registry = gridReg,
-                        onFocus = { if (!drawer) railOpen = false },
-                        onUp = { stepUp(index) },
-                        onLeft = if (drawer) null else ({ stepLeft(index) }),
+                        onUp = { stepVertical(index, -1) },
+                        onDown = { stepVertical(index, 1) },
+                        onLeft = { stepLeft(index) },
+                        onRight = { stepRight(index) },
                         onClick = { onOpen(p.id) },
                     )
                 }
@@ -334,7 +400,18 @@ private fun <T> PosterBrowse(
     } else {
         TvSplitRail(
             open = railOpen,
-            rail = { TvCategoryList(catItems, selected, catReg, ::chooseCategory, onEscapeUp) },
+            rail = {
+                TvCategoryList(
+                    items = catItems,
+                    selected = selected,
+                    registry = catReg,
+                    listState = catListState,
+                    onSelect = ::chooseCategory,
+                    onUp = { moveCategory(it, -1) },
+                    onDown = { moveCategory(it, 1) },
+                    onRight = ::focusGrid,
+                )
+            },
             content = { Posters() },
         )
     }
@@ -345,9 +422,10 @@ private fun PosterCell(
     p: PosterItem,
     index: Int,
     registry: FocusRegistry,
-    onFocus: () -> Unit,
     onUp: () -> Unit,
-    onLeft: (() -> Unit)?,
+    onDown: () -> Unit,
+    onLeft: () -> Unit,
+    onRight: () -> Unit,
     onClick: () -> Unit,
 ) {
     val s = LocalAppStyle.current
@@ -355,8 +433,8 @@ private fun PosterCell(
         Modifier
             .fillMaxWidth()
             .registered(registry, index)
-            .tvMove(onUp = onUp, onLeft = onLeft)
-            .tvFocus(onClick = onClick, shape = RoundedCornerShape(12.dp), onFocus = { if (it) onFocus() })
+            .tvMove(onUp = onUp, onDown = onDown, onLeft = onLeft, onRight = onRight)
+            .tvFocus(onClick = onClick, shape = RoundedCornerShape(12.dp), lockDirections = true)
             .padding(6.dp),
     ) {
         Poster(p.poster, Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp)), frame = PosterFrame.Poster)

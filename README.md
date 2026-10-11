@@ -21,7 +21,7 @@ Handy-Oberfläche im Glas-Look (Hintergrund „Mitternacht“, Akzent Blau) mit 
 | Smartphone / Tablet | [iptvstream-mobile.apk](https://github.com/daniel96865-a11y/iptvstream/releases/latest/download/iptvstream-mobile.apk) |
 | Android TV / Fire TV | [iptvstream-tv.apk](https://github.com/daniel96865-a11y/iptvstream/releases/latest/download/iptvstream-tv.apk) |
 
-Aktuelle Version: [Release v1.0.25](https://github.com/daniel96865-a11y/iptvstream/releases/tag/v1.0.25)
+Aktuelle Version: [Release v1.0.26](https://github.com/daniel96865-a11y/iptvstream/releases/tag/v1.0.26)
 
 Installation außerhalb des Play Store: in den Android-Einstellungen „Unbekannte Apps“ für den Browser bzw. Dateimanager erlauben, die APK öffnen und installieren. Auf Fire TV die APK per „Downloader“ oder `adb install` aufspielen.
 
@@ -72,7 +72,7 @@ Technisch startet der Fernseher dafür einen kleinen lokalen Webserver und binde
 
 ## TV-Bedienung
 
-- **Oben:** Tab-Leiste. Fokus wählt den Tab, ↓ springt in den Inhalt, Zurück springt zur Tab-Leiste.
+- **Oben:** Tab-Leiste. Fokus wählt den Tab. ↓ springt in die offene Kategorienliste links; ist sie zu, in die Sender oder Filme. → öffnet die Inhalte der Kategorie, ← kehrt aus der Liste zu den Kategorien zurück. Zurück springt zur Tab-Leiste.
 - **Live-Liste:** OK spielt ab. Lange OK oder die Menü-Taste setzt einen Favoriten oder den Startsender. Zifferntasten geben die Sendernummer ein, OK bestätigt sofort.
 - **Player Live:** ▲/▼ oder Kanal-Tasten wechseln den Sender. ► oder Menü öffnet die Einstellungen (Audio, Untertitel, Bildmodus, Favorit). OK zeigt die Info. Zifferntasten springen direkt zum Sender.
 - **Player Film/Serie:** ◄/► spult ±10 Sekunden (gehalten schneller). OK pausiert. ▼ oder Menü öffnet die Einstellungen. Zurück beendet die Wiedergabe.

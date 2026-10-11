@@ -65,7 +65,7 @@ import kotlinx.coroutines.launch
  * Akzentfüllung und leichte Vergrößerung bei Fokus. OK/Enter löst [onClick] aus,
  * langes OK [onLongClick].
  */
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun Modifier.tvFocus(
     onClick: () -> Unit,
@@ -75,6 +75,7 @@ fun Modifier.tvFocus(
     requester: FocusRequester? = null,
     selected: Boolean = false,
     opaque: Boolean = false,
+    lockDirections: Boolean = false,
 ): Modifier {
     val s = LocalAppStyle.current
     var focused by remember { mutableStateOf(false) }
@@ -114,6 +115,19 @@ fun Modifier.tvFocus(
                 focused -> Modifier.border(3.dp, Color.White, shape)
                 selected -> Modifier.border(2.dp, s.accent, shape)
                 else -> Modifier
+            },
+        )
+        .then(
+            if (lockDirections) {
+                // Die Plattform sucht sonst in langen Listen weiter und blockiert den Fernseher.
+                Modifier.focusProperties {
+                    up = FocusRequester.Cancel
+                    down = FocusRequester.Cancel
+                    left = FocusRequester.Cancel
+                    right = FocusRequester.Cancel
+                }
+            } else {
+                Modifier
             },
         )
         .combinedClickable(onClick = onClick, onLongClick = onLongClick)
@@ -281,22 +295,25 @@ class MoveGate {
     }
 }
 
-/** Hoch/Links selbst auswerten, damit eine lange Liste den Fokus nicht festhält. */
-fun Modifier.tvMove(onUp: (() -> Unit)? = null, onLeft: (() -> Unit)? = null): Modifier =
-    onPreviewKeyEvent { ev ->
-        if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-        when (ev.key) {
-            Key.DirectionUp -> {
-                onUp?.invoke()
-                onUp != null
-            }
-            Key.DirectionLeft -> {
-                onLeft?.invoke()
-                onLeft != null
-            }
-            else -> false
-        }
-    }
+/** Richtungstasten selbst auswerten, damit eine lange Liste den Fokus nicht festhält. */
+fun Modifier.tvMove(
+    onUp: (() -> Unit)? = null,
+    onDown: (() -> Unit)? = null,
+    onLeft: (() -> Unit)? = null,
+    onRight: (() -> Unit)? = null,
+): Modifier = onPreviewKeyEvent { ev ->
+    if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+    val code = ev.nativeKeyEvent.keyCode
+    val action = when {
+        ev.key == Key.DirectionUp || code == android.view.KeyEvent.KEYCODE_DPAD_UP -> onUp
+        ev.key == Key.DirectionDown || code == android.view.KeyEvent.KEYCODE_DPAD_DOWN -> onDown
+        ev.key == Key.DirectionLeft || code == android.view.KeyEvent.KEYCODE_DPAD_LEFT -> onLeft
+        ev.key == Key.DirectionRight || code == android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> onRight
+        else -> null
+    } ?: return@onPreviewKeyEvent false
+    action()
+    true
+}
 
 /** Einstiegspunkt für Fokus von der Tab-Leiste in den Inhalt (vom aktuellen Bildschirm gesetzt). */
 class EntryHandle {
