@@ -25,6 +25,9 @@ object VodDuration {
         return if (raw >= 20 * 60) fromSeconds.coerceAtLeast(1) else raw
     }
 
+    /** Unter fünf Minuten stammt die Angabe oft aus einem Platzhalter („1 Min.“). Dann zählt die Datei. */
+    fun needsFileDuration(minutes: Int): Boolean = minutes < 5
+
     fun shown(catalogMin: Int, playedMs: Long): String? {
         val playedMin = if (playedMs >= 60_000L) (playedMs / 60_000L).toInt() else 0
         return formatRuntime(maxOf(catalogMin, playedMin)).ifBlank { null }

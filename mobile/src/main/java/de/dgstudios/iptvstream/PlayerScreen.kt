@@ -554,19 +554,17 @@ private fun PlayerContent(
                     .padding(horizontal = 20.dp)
                     .padding(bottom = 28.dp),
             ) {
+                SheetTitle("Tonspur")
+                if (st.audioTracks.isEmpty()) {
+                    Text("Keine Tonspuren gefunden", color = s.onSurfaceDim, fontSize = 14.sp)
+                }
+                for (t in st.audioTracks) {
+                    TrackRow(t.label, t.selected) { ctrl.selectAudio(t.id) }
+                }
                 SheetTitle("Bildmodus")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     for ((id, label) in listOf("fit" to "Anpassen", "fill" to "Füllen", "stretch" to "Strecken", "original" to "Original")) {
                         GlassChip(label, st.resize == id) { vm.setResize(id) }
-                    }
-                }
-                SheetTitle("Audio")
-                if (st.audioTracks.isEmpty()) {
-                    Text("Keine Audiospuren gefunden", color = s.onSurfaceDim, fontSize = 14.sp)
-                }
-                for (t in st.audioTracks) {
-                    TrackRow(t.label + if (!t.supported) " (nicht unterstützt)" else "", t.selected) {
-                        if (t.supported) ctrl.selectAudio(t.id)
                     }
                 }
                 SheetTitle("Untertitel")
