@@ -30,12 +30,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
@@ -72,7 +70,6 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -278,37 +275,36 @@ private fun HomeScreen(
         }
     }
 
-    val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val bottomPad: Dp = BAR_HEIGHT + 36.dp + navBottom
+    val bottomPad = 16.dp
 
-    Box(
+    Column(
         Modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top))
             .nestedScroll(connection),
     ) {
-        Column(Modifier.fillMaxSize()) {
-            SyncBanner(sync, epg, onRetry = { mainVm.reloadContent() })
-            Box(Modifier.weight(1f)) {
-                Crossfade(
-                    targetState = tab,
-                    animationSpec = tween(if (s.animations) 220 else 0),
-                    label = "tab",
-                ) { t ->
-                    when (t) {
-                        Tab.LIVE -> LiveScreen(liveVm, mainVm, s, bottomPad, onPlay)
-                        Tab.MOVIES -> MoviesScreen(moviesVm, s, bottomPad, onMovie)
-                        Tab.SERIES -> SeriesScreen(seriesVm, s, bottomPad, onSeries)
-                        Tab.SEARCH -> SearchScreen(searchVm, s, bottomPad, onPlay, onMovie, onSeries)
-                        Tab.SETTINGS -> SettingsScreen(mainVm, s, bottomPad, onProfiles)
-                    }
+        SyncBanner(sync, epg, onRetry = { mainVm.reloadContent() })
+        Box(
+            Modifier
+                .weight(1f)
+                .then(if (barVisible.value) Modifier else Modifier.navigationBarsPadding()),
+        ) {
+            Crossfade(
+                targetState = tab,
+                animationSpec = tween(if (s.animations) 220 else 0),
+                label = "tab",
+            ) { t ->
+                when (t) {
+                    Tab.LIVE -> LiveScreen(liveVm, mainVm, s, bottomPad, onPlay)
+                    Tab.MOVIES -> MoviesScreen(moviesVm, s, bottomPad, onMovie)
+                    Tab.SERIES -> SeriesScreen(seriesVm, s, bottomPad, onSeries)
+                    Tab.SEARCH -> SearchScreen(searchVm, s, bottomPad, onPlay, onMovie, onSeries)
+                    Tab.SETTINGS -> SettingsScreen(mainVm, s, bottomPad, onProfiles)
                 }
             }
         }
-
         AnimatedVisibility(
             visible = barVisible.value,
-            modifier = Modifier.align(Alignment.BottomCenter),
             enter = if (s.animations) slideInVertically(spring(dampingRatio = 0.8f, stiffness = 300f)) { it } + fadeIn() else EnterTransition.None,
             exit = if (s.animations) slideOutVertically(tween(220)) { it } + fadeOut(tween(180)) else ExitTransition.None,
         ) {
@@ -320,7 +316,7 @@ private fun HomeScreen(
     }
 }
 
-/** Untere Navigation, deckend, damit die Liste nicht durchscheint. */
+/** Untere Navigation. Liegt unter dem Inhalt, nicht darüber. */
 @Composable
 internal fun BottomBar(selected: Tab, onSelect: (Tab) -> Unit) {
     val s = LocalAppStyle.current
