@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -49,6 +50,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -100,21 +102,22 @@ fun buildCatItems(cats: List<CategoryEntity>, withRecent: Boolean = true): List<
         cats.forEach { add(CatItem(it.id, it.name)) }
     }
 
-/** Kategorieliste links (Auswahl per OK). Hoch vom ersten Eintrag verlässt die Leiste. */
+/** Kategorieliste links (Auswahl per OK). Hoch, Runter und Rechts steuert der Bildschirm. */
 @Composable
 fun TvCategoryList(
     items: List<CatItem>,
     selected: String,
     registry: FocusRegistry,
+    listState: LazyListState,
     onSelect: (String) -> Unit,
-    onEscapeUp: () -> Unit,
+    onUp: (Int) -> Unit,
+    onDown: (Int) -> Unit,
+    onRight: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val s = LocalAppStyle.current
-    val state = rememberLazyListState()
-    val scope = rememberCoroutineScope()
     LazyColumn(
-        state = state,
+        state = listState,
         modifier = modifier.width(240.dp).fillMaxHeight(),
         contentPadding = PaddingValues(vertical = 8.dp, horizontal = 6.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -125,17 +128,17 @@ fun TvCategoryList(
                     .fillMaxWidth()
                     .height(46.dp)
                     .registered(registry, index)
-                    .tvMove(onUp = {
-                        scope.launch {
-                            if (index <= 0) {
-                                onEscapeUp()
-                            } else {
-                                state.scrollToItem(index - 1)
-                                if (!registry.focus(index - 1)) onEscapeUp()
-                            }
-                        }
-                    })
-                    .tvFocus(onClick = { onSelect(c.id) }, selected = c.id == selected)
+                    .tvMove(
+                        onUp = { onUp(index) },
+                        onDown = { onDown(index) },
+                        onLeft = {},
+                        onRight = onRight,
+                    )
+                    .tvFocus(
+                        onClick = { onSelect(c.id) },
+                        selected = c.id == selected,
+                        lockDirections = true,
+                    )
                     .padding(horizontal = 14.dp),
                 contentAlignment = Alignment.CenterStart,
             ) {
@@ -152,7 +155,7 @@ fun TvCategoryList(
     }
 }
 
-/** Seitenleiste fährt zu, sobald der Fokus in der Inhaltsliste ist. */
+/** Seitenleiste. Die Einträge behalten ihre Breite, auch wenn die Leiste zugeklappt ist, damit der Fokus nicht in einer leeren Fläche hängen bleibt. */
 @Composable
 fun TvSplitRail(
     open: Boolean,
@@ -173,7 +176,8 @@ fun TvSplitRail(
                 .clipToBounds()
                 .focusProperties { canFocus = open },
         ) {
-            Row(Modifier.width(256.dp).fillMaxHeight()) {
+            // Volle Breite auch während des Einfahrens, sonst ist die Zeile 0 dp breit und der Fokus sucht endlos.
+            Row(Modifier.requiredWidth(256.dp).fillMaxHeight()) {
                 rail()
                 Spacer(Modifier.width(16.dp))
             }
@@ -360,6 +364,7 @@ fun TvLiveScreen(
     val tick by rememberClockTick(10_000)
 
     val listState = rememberLazyListState()
+    val catListState = rememberLazyListState()
     val listReg = remember { FocusRegistry() }
     val catReg = remember { FocusRegistry() }
     val scope = rememberCoroutineScope()
@@ -375,6 +380,7 @@ fun TvLiveScreen(
     val drawerListState = rememberLazyListState(vm.drawerIndex, vm.drawerOffset)
     val drawerBottom = drawerSystemBottom()
     var railOpen by remember { mutableStateOf(true) }
+    var railHold by remember { mutableStateOf(false) }
     val move = remember { MoveGate() }
     val escapeRef = rememberUpdatedState(onEscapeUp)
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -403,74 +409,129 @@ fun TvLiveScreen(
             .collect { (i, o) -> vm.onDrawerScroll(i, o) }
     }
 
-    fun enter() {
-        first.pending = false
-        move.launch(scope) {
-            val list = itemsRef.value
-            if (list.isNotEmpty()) {
-                if (!drawer) railOpen = false
-                val idx = listState.firstVisibleItemIndex.coerceIn(0, list.lastIndex)
-                listState.scrollToItem(idx)
-                if (!listReg.focus(idx)) {
-                    listState.scrollToItem(0)
-                    if (!listReg.focus(0)) onEscapeUp()
-                }
-            } else if (drawer) {
+    suspend fun focusCategoryNow() {
+        val catsNow = catItemsRef.value
+        if (catsNow.isEmpty()) {
+            onEscapeUp()
+            return
+        }
+        railHold = true
+        railOpen = true
+        try {
+            val ci = catsNow.indexOfFirst { it.id == selectedRef.value }.coerceAtLeast(0)
+            withFrameNanos { }
+            withFrameNanos { }
+            catListState.ensureVisible(ci)
+            val landed = catReg.focus(ci, tries = 40) || run {
+                catListState.scrollToItem(ci)
+                catReg.focus(ci, tries = 40)
+            }
+            if (!landed) onEscapeUp()
+        } finally {
+            railHold = false
+        }
+    }
+
+    suspend fun focusChannelsNow() {
+        val list = itemsRef.value
+        if (list.isEmpty()) {
+            if (drawer) {
                 try {
                     openButton.requestFocus()
                 } catch (_: IllegalStateException) {
                 }
-            } else {
-                railOpen = true
-                val ci = catItemsRef.value.indexOfFirst { it.id == selectedRef.value }.coerceAtLeast(0)
-                if (!catReg.focus(ci)) onEscapeUp()
+            }
+            return
+        }
+        val idx = listState.firstVisibleItemIndex.coerceIn(0, list.lastIndex)
+        if (listState.layoutInfo.visibleItemsInfo.none { it.index == idx }) {
+            listState.scrollToItem(idx)
+        }
+        val landed = listReg.focus(idx) || run {
+            listState.scrollToItem(0)
+            listReg.focus(0)
+        }
+        if (!landed) {
+            onEscapeUp()
+            return
+        }
+        // Erst fokussieren, danach zuklappen. Sonst sucht der Fokus durch alle Sender.
+        withFrameNanos { }
+        if (!drawer && !railHold) railOpen = false
+    }
+
+    fun focusCategory() {
+        move.launch(scope) { focusCategoryNow() }
+    }
+
+    fun focusChannels() {
+        first.pending = false
+        move.launch(scope) { focusChannelsNow() }
+    }
+
+    fun enterFromTab() {
+        first.pending = false
+        move.launch(scope) {
+            if (!drawer && railOpen) focusCategoryNow() else focusChannelsNow()
+        }
+    }
+
+    fun stepChannel(index: Int, delta: Int) {
+        move.launch(scope) {
+            val target = index + delta
+            if (target !in itemsRef.value.indices) {
+                if (delta < 0) {
+                    if (drawer) {
+                        try {
+                            openButton.requestFocus()
+                        } catch (_: IllegalStateException) {
+                            onEscapeUp()
+                        }
+                    } else {
+                        onEscapeUp()
+                    }
+                }
+                return@launch
+            }
+            if (listState.layoutInfo.visibleItemsInfo.none { it.index == target }) {
+                listState.scrollToItem(target)
+            }
+            if (!listReg.focus(target)) {
+                listState.scrollToItem(target)
+                if (!listReg.focus(target) && delta < 0) onEscapeUp()
             }
         }
     }
 
-    fun openRail() {
-        railOpen = true
+    fun moveCategory(index: Int, delta: Int) {
         move.launch(scope) {
-            delay(240)
-            val ci = catItemsRef.value.indexOfFirst { it.id == selectedRef.value }.coerceAtLeast(0)
-            if (!catReg.focus(ci)) onEscapeUp()
-        }
-    }
-
-    fun stepUp(index: Int) {
-        move.launch(scope) {
-            if (index <= 0) {
-                if (drawer) {
-                    try {
-                        openButton.requestFocus()
-                    } catch (_: IllegalStateException) {
-                        onEscapeUp()
-                    }
-                } else {
-                    onEscapeUp()
+            val target = index + delta
+            if (target !in catItemsRef.value.indices) {
+                if (delta < 0) onEscapeUp()
+                return@launch
+            }
+            railHold = true
+            try {
+                catListState.ensureVisible(target)
+                if (!catReg.focus(target)) {
+                    catListState.scrollToItem(target)
+                    if (!catReg.focus(target)) onEscapeUp()
                 }
-            } else {
-                val above = index - 1
-                if (listState.layoutInfo.visibleItemsInfo.none { it.index == above }) {
-                    listState.scrollToItem(above)
-                }
-                if (!listReg.focus(above)) {
-                    listState.scrollToItem(above)
-                    if (!listReg.focus(above)) onEscapeUp()
-                }
+            } finally {
+                railHold = false
             }
         }
     }
 
     fun chooseCategory(id: String) {
         if (id == selected) {
-            enter()
+            focusChannels()
         } else {
             pendingFrom = items
             vm.selectCategory(id)
         }
     }
-    RegisterEntry(entry) { enter() }
+    RegisterEntry(entry) { enterFromTab() }
 
     // Nicht tief in die Liste springen: das hat den Fokus ohne Weg nach oben gefangen.
     LaunchedEffect(restored) {
@@ -487,7 +548,10 @@ fun TvLiveScreen(
         if (items !== p) {
             pendingFrom = null
             listState.scrollToItem(0)
-            if (items.isNotEmpty()) listReg.focus(0)
+            if (items.isNotEmpty() && listReg.focus(0)) {
+                withFrameNanos { }
+                if (!drawer && !railHold) railOpen = false
+            }
         }
     }
     LaunchedEffect(pendingFrom) {
@@ -520,9 +584,10 @@ fun TvLiveScreen(
                         isFav = ch.streamId in favs,
                         tick = tick,
                         registry = listReg,
-                        onFocus = { if (!drawer) railOpen = false },
-                        onUp = { stepUp(index) },
-                        onLeft = if (drawer) null else ::openRail,
+                        onUp = { stepChannel(index, -1) },
+                        onDown = { stepChannel(index, 1) },
+                        onLeft = if (drawer) null else ::focusCategory,
+                        onRight = {},
                         onClick = {
                             vm.play(ch)
                             onPlay()
@@ -561,7 +626,18 @@ fun TvLiveScreen(
     } else {
         TvSplitRail(
             open = railOpen,
-            rail = { TvCategoryList(catItems, selected, catReg, ::chooseCategory, onEscapeUp) },
+            rail = {
+                TvCategoryList(
+                    items = catItems,
+                    selected = selected,
+                    registry = catReg,
+                    listState = catListState,
+                    onSelect = ::chooseCategory,
+                    onUp = { moveCategory(it, -1) },
+                    onDown = { moveCategory(it, 1) },
+                    onRight = ::focusChannels,
+                )
+            },
             content = { LiveChannels() },
         )
     }
@@ -589,9 +665,10 @@ private fun ChannelRow(
     isFav: Boolean,
     tick: Long,
     registry: FocusRegistry,
-    onFocus: () -> Unit,
     onUp: () -> Unit,
+    onDown: () -> Unit,
     onLeft: (() -> Unit)?,
+    onRight: () -> Unit,
     onClick: () -> Unit,
     onMenu: () -> Unit,
 ) {
@@ -602,7 +679,7 @@ private fun ChannelRow(
             .fillMaxWidth()
             .height(78.dp)
             .registered(registry, index)
-            .tvMove(onUp = onUp, onLeft = onLeft)
+            .tvMove(onUp = onUp, onDown = onDown, onLeft = onLeft, onRight = onRight)
             .onPreviewKeyEvent { ev ->
                 if (ev.type == KeyEventType.KeyUp && ev.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_MENU) {
                     onMenu()
@@ -611,7 +688,7 @@ private fun ChannelRow(
                     false
                 }
             }
-            .tvFocus(onClick = onClick, onLongClick = onMenu, onFocus = { if (it) onFocus() })
+            .tvFocus(onClick = onClick, onLongClick = onMenu, lockDirections = true)
             .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
