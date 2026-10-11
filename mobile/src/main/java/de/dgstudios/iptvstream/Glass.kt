@@ -41,23 +41,28 @@ import androidx.compose.ui.unit.sp
 import de.dgstudios.iptvstream.core.data.EpgState
 import de.dgstudios.iptvstream.core.data.SyncState
 import de.dgstudios.iptvstream.core.ui.LocalAppStyle
+import de.dgstudios.iptvstream.core.ui.popIn
 
 /** Glas-Optik: halbtransparente Fläche mit hellem Rand und Verlauf. */
 @Composable
 fun Modifier.glass(shape: Shape = RoundedCornerShape(22.dp), strong: Boolean = false): Modifier {
     val s = LocalAppStyle.current
     val a = s.glassAlpha * (if (strong) 1.7f else 1f)
-    val fill = if (s.dark) {
-        Brush.verticalGradient(listOf(Color.White.copy(alpha = a + 0.05f), Color.White.copy(alpha = a * 0.6f)))
-    } else {
-        Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.78f), Color.White.copy(alpha = 0.52f)))
+    val fill = remember(s.dark, a) {
+        if (s.dark) {
+            Brush.verticalGradient(listOf(Color.White.copy(alpha = a + 0.05f), Color.White.copy(alpha = a * 0.6f)))
+        } else {
+            Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.78f), Color.White.copy(alpha = 0.52f)))
+        }
     }
-    val border = Brush.linearGradient(
-        listOf(
-            Color.White.copy(alpha = if (s.dark) 0.45f else 0.95f),
-            Color.White.copy(alpha = if (s.dark) 0.06f else 0.3f),
-        ),
-    )
+    val border = remember(s.dark) {
+        Brush.linearGradient(
+            listOf(
+                Color.White.copy(alpha = if (s.dark) 0.45f else 0.95f),
+                Color.White.copy(alpha = if (s.dark) 0.06f else 0.3f),
+            ),
+        )
+    }
     return this.clip(shape).background(fill, shape).border(1.dp, border, shape)
 }
 
@@ -215,7 +220,7 @@ fun StarBadge(modifier: Modifier = Modifier) {
             Icons.Rounded.Star,
             contentDescription = "Favorit",
             tint = Color(0xFFFFC857),
-            modifier = Modifier.width(14.dp).height(14.dp),
+            modifier = Modifier.width(14.dp).height(14.dp).popIn(),
         )
     }
 }

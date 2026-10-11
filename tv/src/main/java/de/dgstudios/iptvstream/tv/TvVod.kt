@@ -1,5 +1,7 @@
 package de.dgstudios.iptvstream.tv
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.layout.Arrangement
@@ -66,6 +68,8 @@ import de.dgstudios.iptvstream.core.data.WatchPos
 import de.dgstudios.iptvstream.core.settings.AppSettings
 import de.dgstudios.iptvstream.core.ui.LocalAppStyle
 import de.dgstudios.iptvstream.core.ui.Poster
+import de.dgstudios.iptvstream.core.ui.PosterFrame
+import de.dgstudios.iptvstream.core.ui.RiseIn
 import de.dgstudios.iptvstream.core.ui.formatDuration
 import de.dgstudios.iptvstream.core.ui.formatRating
 import de.dgstudios.iptvstream.core.vm.BrowseViewModel
@@ -287,7 +291,7 @@ private fun <T> PosterBrowse(
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                itemsIndexed(items, key = { _, it -> toItem(it).id }) { index, raw ->
+                itemsIndexed(items, key = { _, it -> toItem(it).id }, contentType = { _, _ -> "poster" }) { index, raw ->
                     val p = toItem(raw)
                     PosterCell(
                         p = p,
@@ -355,7 +359,7 @@ private fun PosterCell(
             .tvFocus(onClick = onClick, shape = RoundedCornerShape(12.dp), onFocus = { if (it) onFocus() })
             .padding(6.dp),
     ) {
-        Poster(p.poster, Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp)))
+        Poster(p.poster, Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp)), frame = PosterFrame.Poster)
         Spacer(Modifier.height(6.dp))
         Text(p.name, color = s.onSurface, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, minLines = 2)
         formatRating(p.rating)?.let { Text(it, color = s.onSurfaceDim, fontSize = 13.sp) }
@@ -367,8 +371,13 @@ private fun PosterCell(
 @Composable
 private fun Backdrop(url: String?) {
     val s = LocalAppStyle.current
+    val enabled = s.animations
+    val alpha = remember(url) { Animatable(if (enabled) 0f else 0.30f) }
+    LaunchedEffect(url) {
+        if (enabled) alpha.animateTo(0.30f, tween(700))
+    }
     Box(Modifier.fillMaxSize()) {
-        Poster(url, Modifier.fillMaxSize().graphicsLayer { alpha = 0.30f })
+        Poster(url, Modifier.fillMaxSize().graphicsLayer { this.alpha = alpha.value }, frame = PosterFrame.Backdrop)
         Box(
             Modifier
                 .fillMaxSize()
@@ -419,6 +428,7 @@ fun TvMovieDetail(onPlay: () -> Unit) {
         }
         val d = detail
         val resume = progress?.positionMs ?: 0L
+        RiseIn {
         Row(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 40.dp)) {
             Poster(m.poster, Modifier.width(240.dp).height(360.dp).clip(RoundedCornerShape(16.dp)))
             Spacer(Modifier.width(32.dp))
@@ -472,6 +482,7 @@ fun TvMovieDetail(onPlay: () -> Unit) {
                     Text("Regie: $director", color = s.onSurfaceDim, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
+        }
         }
     }
 }

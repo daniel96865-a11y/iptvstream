@@ -80,6 +80,9 @@ import de.dgstudios.iptvstream.core.data.db.ChannelEntity
 import de.dgstudios.iptvstream.core.settings.AppSettings
 import de.dgstudios.iptvstream.core.ui.LocalAppStyle
 import de.dgstudios.iptvstream.core.ui.Poster
+import de.dgstudios.iptvstream.core.ui.PosterFrame
+import de.dgstudios.iptvstream.core.ui.animatedProgress
+import de.dgstudios.iptvstream.core.ui.popIn
 import de.dgstudios.iptvstream.core.ui.rememberClockTick
 import de.dgstudios.iptvstream.core.ui.rememberNowNext
 import de.dgstudios.iptvstream.core.vm.LiveViewModel
@@ -354,7 +357,7 @@ fun TvLiveScreen(
     val items by vm.items.collectAsStateWithLifecycle()
     val favs by vm.favoriteIds.collectAsStateWithLifecycle()
     val restored by vm.restored.collectAsStateWithLifecycle()
-    val tick by rememberClockTick(30_000)
+    val tick by rememberClockTick(10_000)
 
     val listState = rememberLazyListState()
     val listReg = remember { FocusRegistry() }
@@ -509,7 +512,7 @@ fun TvLiveScreen(
                 contentPadding = PaddingValues(vertical = 8.dp, horizontal = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                itemsIndexed(items, key = { _, c -> c.streamId }) { index, ch ->
+                itemsIndexed(items, key = { _, c -> c.streamId }, contentType = { _, _ -> "channel" }) { index, ch ->
                     ChannelRow(
                         ch = ch,
                         index = index,
@@ -625,6 +628,7 @@ private fun ChannelRow(
             ch.logo,
             Modifier.size(58.dp).clip(RoundedCornerShape(10.dp)).background(Color(0x1AFFFFFF)).padding(4.dp),
             ContentScale.Fit,
+            PosterFrame.Logo,
         )
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
@@ -632,8 +636,9 @@ private fun ChannelRow(
             val now = nn?.now
             if (now != null) {
                 Text(now.title, color = s.onSurfaceDim, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val fraction = animatedProgress(nn?.progress(tick) ?: 0f)
                 LinearProgressIndicator(
-                    progress = { nn?.progress(tick) ?: 0f },
+                    progress = { fraction },
                     modifier = Modifier.fillMaxWidth().padding(top = 4.dp).height(3.dp),
                     color = s.accent,
                     trackColor = Color.White.copy(alpha = 0.15f),
@@ -642,7 +647,7 @@ private fun ChannelRow(
         }
         if (isFav) {
             Spacer(Modifier.width(10.dp))
-            Text("★", color = Color(0xFFFFC857), fontSize = 22.sp)
+            Text("★", color = Color(0xFFFFC857), fontSize = 22.sp, modifier = Modifier.popIn())
         }
     }
 }

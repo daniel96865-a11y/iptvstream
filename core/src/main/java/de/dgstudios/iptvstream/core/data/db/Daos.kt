@@ -230,6 +230,9 @@ interface EpgDao {
     @Query("SELECT * FROM epg WHERE profileId = :p AND channelKey = :k AND stop > :now ORDER BY start LIMIT :n")
     suspend fun upcoming(p: Long, k: String, now: Long, n: Int): List<EpgEntity>
 
+    @Query("SELECT * FROM epg WHERE profileId = :p AND channelKey IN (:keys) AND stop > :now ORDER BY channelKey, start")
+    suspend fun upcomingForKeys(p: Long, keys: List<String>, now: Long): List<EpgEntity>
+
     @Query("SELECT * FROM epg WHERE profileId = :p AND channelKey = :k AND stop > :from AND start < :to ORDER BY start")
     suspend fun range(p: Long, k: String, from: Long, to: Long): List<EpgEntity>
 

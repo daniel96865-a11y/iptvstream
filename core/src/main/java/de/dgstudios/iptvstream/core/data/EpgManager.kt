@@ -24,6 +24,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import org.xmlpull.v1.XmlPullParser
+import java.util.concurrent.ConcurrentHashMap
 import java.io.BufferedInputStream
 import java.io.FilterInputStream
 import java.io.InputStream
@@ -42,6 +43,10 @@ class EpgManager(
     val state: StateFlow<EpgState> = _state
 
     private val mutex = Mutex()
+    private val guide = ConcurrentHashMap<GuideKey, GuideEntry>()
+
+    private data class GuideKey(val profileId: Long, val epgKey: String)
+    private data class GuideEntry(val value: NowNext, val until: Long)
 
     fun epgUrlFor(p: ProfileEntity): String? = when {
         p.epgUrl.isNotBlank() -> p.epgUrl
@@ -78,6 +83,7 @@ class EpgManager(
             db.profiles().setEpgSync(p.id, System.currentTimeMillis())
             _state.value = EpgState(running = true, fraction = 1f, message = "Sender werden zugeordnet …")
             rematch(p.id)
+            dropGuide(p.id)
             _state.value = EpgState(running = false, fraction = 1f, message = "EPG ist aktuell")
         } catch (e: CancellationException) {
             _state.value = EpgState()
@@ -252,12 +258,43 @@ class EpgManager(
         }
     }
 
+    /** Treffer aus dem Speicher, solange die laufende Sendung noch nicht vorbei ist. */
+    fun peek(profileId: Long, epgKey: String?, now: Long = System.currentTimeMillis()): NowNext? {
+        if (epgKey.isNullOrBlank()) return NowNext(null, null)
+        val hit = guide[GuideKey(profileId, epgKey)] ?: return null
+        if (now >= hit.until) return null
+        return hit.value
+    }
+
     suspend fun nowNext(profileId: Long, epgKey: String?, now: Long): NowNext {
         if (epgKey.isNullOrBlank()) return NowNext(null, null)
+        peek(profileId, epgKey, now)?.let { return it }
         val list = db.epg().upcoming(profileId, epgKey, now, 2)
-        val cur = list.firstOrNull()?.takeIf { it.start <= now }
-        val next = if (cur != null) list.getOrNull(1) else list.firstOrNull()
-        return NowNext(cur, next)
+        val value = EpgGuide.fromRows(list, now)
+        store(profileId, epgKey, value, now)
+        return value
+    }
+
+    /** Lädt fehlende Sender in wenigen Abfragen, damit die Liste beim Scrollen nicht jedes Logo einzeln fragt. */
+    suspend fun warm(profileId: Long, keys: Collection<String>) = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        val missing = keys.asSequence()
+            .filter { it.isNotBlank() && peek(profileId, it, now) == null }
+            .distinct()
+            .toList()
+        if (missing.isEmpty()) return@withContext
+        for (chunk in missing.chunked(160)) {
+            val grouped = EpgGuide.group(db.epg().upcomingForKeys(profileId, chunk, now), chunk, now)
+            for ((key, value) in grouped) store(profileId, key, value, now)
+        }
+    }
+
+    private fun store(profileId: Long, epgKey: String, value: NowNext, now: Long) {
+        guide[GuideKey(profileId, epgKey)] = GuideEntry(value, EpgGuide.freshUntil(value, now))
+    }
+
+    private fun dropGuide(profileId: Long) {
+        guide.keys.removeAll { it.profileId == profileId }
     }
 
     suspend fun schedule(profileId: Long, epgKey: String?, from: Long, to: Long): List<EpgEntity> {

@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -170,6 +171,16 @@ class LiveViewModel(app: Application) :
     suspend fun channelByNumber(n: Int): ChannelEntity? {
         val pid = profileId.value ?: return null
         return repo.channelByNumber(pid, n)
+    }
+
+    init {
+        viewModelScope.launch {
+            combine(profileId.filterNotNull(), items) { pid, list ->
+                pid to list.map { it.epgKey }
+            }.distinctUntilChanged().collectLatest { (pid, keys) ->
+                repo.warmGuide(pid, keys)
+            }
+        }
     }
 }
 

@@ -1,5 +1,18 @@
 package de.dgstudios.iptvstream.core.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -12,6 +25,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,8 +36,11 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.painter.ColorPainter
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.type
@@ -34,10 +51,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
+import coil.size.Size
 import androidx.media3.common.Player
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
-import coil.compose.AsyncImage
 import de.dgstudios.iptvstream.core.container
 import de.dgstudios.iptvstream.core.player.UhdPlayback
 import de.dgstudios.iptvstream.core.data.NowNext
@@ -92,8 +111,49 @@ fun formatRating(r: Double): String? = if (r > 0.0) "★ %.1f".format(Locale.GER
 @Composable
 fun rememberNowNext(profileId: Long, epgKey: String?, tick: Long): State<NowNext?> {
     val repo = LocalContext.current.container.repo
-    return produceState<NowNext?>(null, profileId, epgKey, tick / 30_000) {
+    val initial = repo.peekNowNext(profileId, epgKey)
+    return produceState(initial, profileId, epgKey, tick / 30_000) {
         value = repo.nowNext(profileId, epgKey)
+    }
+}
+
+/** Fortschrittsbalken gleitet, statt zu springen. Bei ausgeschalteten Animationen bleibt er sofort. */
+@Composable
+fun animatedProgress(target: Float): Float {
+    val enabled = LocalAppStyle.current.animations
+    val value by animateFloatAsState(
+        targetValue = target.coerceIn(0f, 1f),
+        animationSpec = if (enabled) tween(600, easing = FastOutSlowInEasing) else tween(0),
+        label = "progress",
+    )
+    return value
+}
+
+/** Kurzes Aufpoppen, wenn ein Element neu in die Fläche kommt (zum Beispiel ein Favoriten-Stern). */
+@Composable
+fun Modifier.popIn(): Modifier {
+    val enabled = LocalAppStyle.current.animations
+    val scale = remember { Animatable(if (enabled) 0.55f else 1f) }
+    LaunchedEffect(enabled) {
+        if (enabled) scale.animateTo(1f, spring(dampingRatio = 0.42f, stiffness = 460f))
+    }
+    return graphicsLayer {
+        scaleX = scale.value
+        scaleY = scale.value
+    }
+}
+
+/** Inhalt fährt beim Öffnen leicht nach oben. */
+@Composable
+fun RiseIn(content: @Composable () -> Unit) {
+    val enabled = LocalAppStyle.current.animations
+    var visible by remember { mutableStateOf(!enabled) }
+    LaunchedEffect(Unit) { visible = true }
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(tween(280)) + slideInVertically(tween(420, easing = FastOutSlowInEasing)) { it / 6 },
+    ) {
+        content()
     }
 }
 
@@ -131,24 +191,67 @@ fun ClockOverlay(settings: AppSettings, modifier: Modifier = Modifier) {
 
 // ---------------------------------------------------------------------- Bilder
 
+enum class PosterFrame(val width: Int, val height: Int) {
+    Logo(192, 192),
+    Poster(540, 810),
+    Backdrop(1280, 720),
+}
+
 @Composable
 fun Poster(
     url: String?,
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
+    frame: PosterFrame = PosterFrame.Poster,
 ) {
-    val placeholder = ColorPainter(Color(0x22FFFFFF))
     if (url.isNullOrBlank()) {
         Box(modifier.background(Color(0x22FFFFFF)))
         return
     }
-    AsyncImage(
-        model = url,
+    val context = LocalContext.current
+    val fade = LocalAppStyle.current.animations
+    val model = remember(url, frame, fade) {
+        ImageRequest.Builder(context)
+            .data(url)
+            .size(Size(frame.width, frame.height))
+            .crossfade(if (fade) 220 else 0)
+            .build()
+    }
+    SubcomposeAsyncImage(
+        model = model,
         contentDescription = null,
         modifier = modifier,
         contentScale = contentScale,
-        placeholder = placeholder,
-        error = placeholder,
+        loading = { ShimmerBox(Modifier.fillMaxSize()) },
+        error = { Box(Modifier.fillMaxSize().background(Color(0x22FFFFFF))) },
+    )
+}
+
+@Composable
+private fun ShimmerBox(modifier: Modifier = Modifier) {
+    val style = LocalAppStyle.current
+    if (!style.animations) {
+        Box(modifier.background(Color(0x18FFFFFF)))
+        return
+    }
+    val shift by rememberInfiniteTransition(label = "shimmer").animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1100, easing = LinearEasing), RepeatMode.Restart),
+        label = "shift",
+    )
+    Box(
+        modifier.background(Color(0x18FFFFFF)).drawBehind {
+            val band = size.width * 0.55f
+            val start = -band + (size.width + band * 2) * shift
+            drawRect(
+                brush = Brush.linearGradient(
+                    listOf(Color(0x10FFFFFF), Color(0x55FFFFFF), Color(0x10FFFFFF)),
+                    start = Offset(start, 0f),
+                    end = Offset(start + band, size.height),
+                ),
+            )
+        },
     )
 }
 
