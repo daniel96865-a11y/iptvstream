@@ -1,5 +1,7 @@
 package de.dgstudios.iptvstream.tv
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -30,12 +33,16 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -51,6 +58,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -58,6 +66,8 @@ import androidx.compose.ui.window.DialogProperties
 import de.dgstudios.iptvstream.core.data.EpgState
 import de.dgstudios.iptvstream.core.data.SyncState
 import de.dgstudios.iptvstream.core.ui.LocalAppStyle
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
@@ -163,6 +173,73 @@ fun TvButton(
             Spacer(Modifier.width(10.dp))
         }
         Text(text, color = s.onSurface, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+    }
+}
+
+/**
+ * Einzeiliger Text. Ist er länger als die Zeile, läuft er nur durch, solange [focused] ist.
+ * Kurze Texte und Zeilen ohne Fokus bleiben stehen.
+ */
+@Composable
+fun TvMarqueeText(
+    text: String,
+    color: Color,
+    fontSize: TextUnit,
+    fontWeight: FontWeight,
+    focused: Boolean,
+    modifier: Modifier = Modifier,
+    lineHeight: TextUnit = TextUnit.Unspecified,
+) {
+    val animations = LocalAppStyle.current.animations
+    val pxPerSec = with(LocalDensity.current) { 30.dp.toPx() }
+    var fullWidth by remember(text, fontSize, fontWeight) { mutableIntStateOf(0) }
+    var boxWidth by remember { mutableIntStateOf(0) }
+    val overflow = fullWidth > boxWidth + 1 && boxWidth > 0
+    val move = focused && animations && overflow
+    val offset = remember { Animatable(0f) }
+    LaunchedEffect(move, fullWidth, boxWidth) {
+        if (!move) {
+            offset.snapTo(0f)
+            return@LaunchedEffect
+        }
+        val travel = (fullWidth - boxWidth).toFloat()
+        val across = ((travel / pxPerSec) * 1000f).toInt().coerceIn(1200, 14000)
+        while (isActive) {
+            delay(500)
+            offset.animateTo(-travel, tween(across, easing = LinearEasing))
+            delay(700)
+            offset.animateTo(0f, tween((across * 0.7f).toInt().coerceAtLeast(800), easing = LinearEasing))
+        }
+    }
+    Box(modifier.fillMaxWidth().clipToBounds().onSizeChanged { boxWidth = it.width }) {
+        if (move || (focused && animations)) {
+            Text(
+                text,
+                color = color,
+                fontSize = fontSize,
+                fontWeight = fontWeight,
+                lineHeight = lineHeight,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Clip,
+                modifier = Modifier
+                    .wrapContentWidth(unbounded = true, align = Alignment.Start)
+                    .onSizeChanged { fullWidth = it.width }
+                    .graphicsLayer { translationX = offset.value },
+            )
+        } else {
+            Text(
+                text,
+                color = color,
+                fontSize = fontSize,
+                fontWeight = fontWeight,
+                lineHeight = lineHeight,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
 }
 
