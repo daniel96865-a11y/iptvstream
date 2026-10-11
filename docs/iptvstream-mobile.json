@@ -1,7 +1,7 @@
 {
-  "versionCode": 26,
-  "versionName": "1.0.24",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.24/iptvstream-mobile.apk",
-  "sha256": "3bda0fbf493bbc7b7947e92398bcdcdef1a0fe87f45c9638a6646405a6c54dc2",
-  "changelog": "Die untere Leiste liegt unter den Einstellungen und verdeckt sie nicht mehr."
+  "versionCode": 27,
+  "versionName": "1.0.25",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.25/iptvstream-mobile.apk",
+  "sha256": "745756d127d1ce6d74363865c79b1d77c699746b14b6e6511a1e20d9f3d24594",
+  "changelog": "Der Rahmen um den gewählten Bereich unten folgt der runden Ecke und schneidet sie nicht mehr."
 }
