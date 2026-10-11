@@ -1,6 +1,7 @@
 package de.dgstudios.iptvstream.tv
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -78,8 +79,8 @@ fun Modifier.tvFocus(
     val s = LocalAppStyle.current
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
-        targetValue = if (focused && s.animations) 1.035f else 1f,
-        animationSpec = tween(120),
+        targetValue = if (focused && s.animations) 1.045f else 1f,
+        animationSpec = if (s.animations) spring(dampingRatio = 0.58f, stiffness = 380f) else tween(0),
         label = "focusScale",
     )
     val card = s.backgroundColors[2]

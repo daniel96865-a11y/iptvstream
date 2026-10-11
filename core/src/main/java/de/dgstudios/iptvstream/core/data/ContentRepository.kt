@@ -195,8 +195,12 @@ class ContentRepository(
 
     // ------------------------------------------------------------------ EPG
 
+    fun peekNowNext(profileId: Long, epgKey: String?): NowNext? = epg.peek(profileId, epgKey)
+
     suspend fun nowNext(profileId: Long, epgKey: String?): NowNext =
         epg.nowNext(profileId, epgKey, System.currentTimeMillis())
+
+    suspend fun warmGuide(profileId: Long, epgKeys: Collection<String>) = epg.warm(profileId, epgKeys)
 
     suspend fun schedule(profileId: Long, epgKey: String?, hours: Int = 24) =
         epg.schedule(profileId, epgKey, System.currentTimeMillis() - 3_600_000L, System.currentTimeMillis() + hours * 3_600_000L)

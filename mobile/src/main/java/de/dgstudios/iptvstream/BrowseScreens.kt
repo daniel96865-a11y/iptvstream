@@ -79,6 +79,9 @@ import de.dgstudios.iptvstream.core.data.db.ChannelEntity
 import de.dgstudios.iptvstream.core.settings.AppSettings
 import de.dgstudios.iptvstream.core.ui.LocalAppStyle
 import de.dgstudios.iptvstream.core.ui.Poster
+import de.dgstudios.iptvstream.core.ui.PosterFrame
+import de.dgstudios.iptvstream.core.ui.animatedProgress
+import de.dgstudios.iptvstream.core.ui.popIn
 import de.dgstudios.iptvstream.core.ui.formatRating
 import de.dgstudios.iptvstream.core.ui.rememberClockTick
 import de.dgstudios.iptvstream.core.ui.rememberNowNext
@@ -358,7 +361,7 @@ fun LiveScreen(
     val favs by vm.favoriteIds.collectAsStateWithLifecycle()
     val restored by vm.restored.collectAsStateWithLifecycle()
     val sync by mainVm.sync.collectAsStateWithLifecycle()
-    val tick by rememberClockTick()
+    val tick by rememberClockTick(10_000)
 
     Column(Modifier.fillMaxSize()) {
         ScreenHeader("Live TV", if (items.isNotEmpty()) "${items.size} Sender" else null)
@@ -455,6 +458,7 @@ private fun ChannelRow(
                 ch.logo,
                 Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(Color(0x1AFFFFFF)).padding(5.dp),
                 ContentScale.Fit,
+                PosterFrame.Logo,
             )
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
@@ -469,8 +473,9 @@ private fun ChannelRow(
                 if (cur != null) {
                     Text(cur.title, color = s.onSurface.copy(alpha = 0.85f), fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Spacer(Modifier.height(4.dp))
+                    val fraction = animatedProgress(nn?.progress(tick) ?: 0f)
                     LinearProgressIndicator(
-                        progress = { nn?.progress(tick) ?: 0f },
+                        progress = { fraction },
                         modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)),
                         color = s.accent,
                         trackColor = Color.White.copy(alpha = 0.14f),
@@ -494,6 +499,7 @@ private fun ChannelRow(
                     if (fav) Icons.Rounded.Star else Icons.Rounded.StarBorder,
                     contentDescription = "Favorit",
                     tint = if (fav) Color(0xFFFFC857) else s.onSurfaceDim,
+                    modifier = if (fav) Modifier.popIn() else Modifier,
                 )
             }
         }

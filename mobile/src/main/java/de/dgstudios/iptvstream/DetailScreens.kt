@@ -33,8 +33,12 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,6 +56,8 @@ import de.dgstudios.iptvstream.core.data.EpisodeInfo
 import de.dgstudios.iptvstream.core.data.WatchPos
 import de.dgstudios.iptvstream.core.ui.LocalAppStyle
 import de.dgstudios.iptvstream.core.ui.Poster
+import de.dgstudios.iptvstream.core.ui.PosterFrame
+import de.dgstudios.iptvstream.core.ui.RiseIn
 import de.dgstudios.iptvstream.core.data.VodDuration
 import de.dgstudios.iptvstream.core.ui.formatDuration
 import de.dgstudios.iptvstream.core.ui.formatRating
@@ -104,8 +110,13 @@ fun SecondaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modi
 @Composable
 private fun Backdrop(url: String?) {
     val s = LocalAppStyle.current
+    val enabled = s.animations
+    val alpha = remember(url) { Animatable(if (enabled) 0f else 0.32f) }
+    LaunchedEffect(url) {
+        if (enabled) alpha.animateTo(0.32f, tween(700))
+    }
     Box(Modifier.fillMaxSize()) {
-        Poster(url, Modifier.fillMaxSize().graphicsLayer { alpha = 0.32f })
+        Poster(url, Modifier.fillMaxSize().graphicsLayer { this.alpha = alpha.value }, frame = PosterFrame.Backdrop)
         Box(
             Modifier
                 .fillMaxSize()
@@ -141,6 +152,7 @@ fun MovieDetailScreen(onBack: () -> Unit, onPlay: () -> Unit) {
         } else {
             val d = detail
             val resume = progress?.positionMs ?: 0L
+            RiseIn {
             Column(
                 Modifier
                     .fillMaxSize()
@@ -216,6 +228,7 @@ fun MovieDetailScreen(onBack: () -> Unit, onPlay: () -> Unit) {
                     Text(director, color = s.onSurface.copy(alpha = 0.85f), fontSize = 13.sp)
                 }
                 Spacer(Modifier.height(24.dp))
+            }
             }
         }
     }

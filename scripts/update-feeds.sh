@@ -53,7 +53,9 @@ print(f"feed geschrieben: {path}")
 PY
 }
 
-if [ "$TAG" = "v1.0.22" ]; then
+if [ "$TAG" = "v1.0.23" ]; then
+  NOTE="Listen laufen flüssiger. Animationen für Fokus, Filmdetails und Spulen, abschaltbar in den Einstellungen."
+elif [ "$TAG" = "v1.0.22" ]; then
   NOTE="Filme zeigen die echte Laufzeit. Die Tonspur wechselt man in den Player-Einstellungen."
 elif [ "$TAG" = "v1.0.21" ]; then
   NOTE="4K-Filme und 4K-Live laufen über den Hardware-Decoder. Fehlt ein Live-Format, wird das andere probiert."

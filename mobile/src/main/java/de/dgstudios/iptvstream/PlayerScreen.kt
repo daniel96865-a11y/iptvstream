@@ -11,8 +11,12 @@ import android.provider.Settings
 import android.view.OrientationEventListener
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -234,6 +238,9 @@ private fun PlayerContent(
     var sheet by remember { mutableStateOf(false) }
     var archiveOpen by remember { mutableStateOf(false) }
     var interaction by remember { mutableIntStateOf(0) }
+    var seekForward by remember { mutableStateOf(true) }
+    var seekVisible by remember { mutableStateOf(false) }
+    var seekNonce by remember { mutableIntStateOf(0) }
     val item = ui.item
     val isLive = item?.kind == PlayKind.LIVE
     val liveEdge = isLive && !ui.catchingUp
@@ -273,7 +280,11 @@ private fun PlayerContent(
                         onTap = { showControls = !showControls },
                         onDoubleTap = { offset ->
                             if (!stateRef.value.isLive) {
-                                ctrl.seekBy(if (offset.x < size.width / 2) -10_000L else 10_000L)
+                                val forward = offset.x >= size.width / 2
+                                ctrl.seekBy(if (forward) 10_000L else -10_000L)
+                                seekForward = forward
+                                seekVisible = true
+                                seekNonce++
                                 interaction++
                             }
                         },
@@ -302,10 +313,38 @@ private fun PlayerContent(
             )
         }
 
+        LaunchedEffect(seekNonce) {
+            if (seekVisible) {
+                delay(700)
+                seekVisible = false
+            }
+        }
+        AnimatedVisibility(
+            visible = seekVisible,
+            enter = if (s.animations) {
+                fadeIn(tween(120)) + scaleIn(initialScale = 0.86f, animationSpec = spring(dampingRatio = 0.55f, stiffness = 420f))
+            } else {
+                fadeIn(tween(0))
+            },
+            exit = fadeOut(if (s.animations) tween(280) else tween(0)),
+            modifier = Modifier.align(if (seekForward) Alignment.CenterEnd else Alignment.CenterStart),
+        ) {
+            Text(
+                if (seekForward) "+10 Sek." else "−10 Sek.",
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .padding(horizontal = 28.dp)
+                    .glass(RoundedCornerShape(50), strong = true)
+                    .padding(horizontal = 18.dp, vertical = 10.dp),
+            )
+        }
+
         AnimatedVisibility(
             visible = showControls || st.error != null,
-            enter = fadeIn(),
-            exit = fadeOut(),
+            enter = if (s.animations) fadeIn(tween(180)) + slideInVertically(tween(240)) { it / 8 } else fadeIn(tween(0)),
+            exit = if (s.animations) fadeOut(tween(160)) else fadeOut(tween(0)),
         ) {
             Box(Modifier.fillMaxSize()) {
                 Box(
