@@ -221,11 +221,20 @@ interface EpgDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(list: List<EpgEntity>)
 
-    @Query("DELETE FROM epg WHERE profileId = :p AND sync < :s")
+    @Query("DELETE FROM epg WHERE profileId = :p AND channelKey NOT LIKE 'ger:%' AND sync < :s")
     suspend fun pruneBySync(p: Long, s: Long)
+
+    @Query("DELETE FROM epg WHERE profileId = :p AND channelKey LIKE 'ger:%' AND sync < :s")
+    suspend fun pruneGermanBySync(p: Long, s: Long)
 
     @Query("DELETE FROM epg WHERE profileId = :p")
     suspend fun clear(p: Long)
+
+    @Query("DELETE FROM epg WHERE profileId = :p AND channelKey NOT LIKE 'ger:%'")
+    suspend fun clearProvider(p: Long)
+
+    @Query("DELETE FROM epg WHERE profileId = :p AND channelKey LIKE 'ger:%'")
+    suspend fun clearGerman(p: Long)
 
     @Query("SELECT * FROM epg WHERE profileId = :p AND channelKey = :k AND stop > :now ORDER BY start LIMIT :n")
     suspend fun upcoming(p: Long, k: String, now: Long, n: Int): List<EpgEntity>
@@ -250,4 +259,10 @@ interface EpgDao {
 
     @Query("DELETE FROM epg_names WHERE profileId = :p")
     suspend fun clearNames(p: Long)
+
+    @Query("DELETE FROM epg_names WHERE profileId = :p AND normName NOT LIKE 'ger:%'")
+    suspend fun clearProviderNames(p: Long)
+
+    @Query("DELETE FROM epg_names WHERE profileId = :p AND normName LIKE 'ger:%'")
+    suspend fun clearGermanNames(p: Long)
 }

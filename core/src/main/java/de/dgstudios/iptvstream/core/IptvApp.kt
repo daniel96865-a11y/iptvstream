@@ -41,7 +41,7 @@ class AppContainer(context: Context) {
         .create(HttpService::class.java)
     val settings = SettingsStore(context.applicationContext)
     val xtream = XtreamApi(http)
-    val epg = EpgManager(db, http, appScope)
+    val epg = EpgManager(db, http, appScope) { settings.current().epgGerman }
     val repo = ContentRepository(db, http, xtream, epg, appScope)
     val session = PlaybackSession()
     val updates = UpdateChecker(context.applicationContext, okHttp, appScope)

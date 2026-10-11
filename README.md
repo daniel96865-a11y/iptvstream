@@ -21,7 +21,7 @@ Handy-Oberfläche im Glas-Look (Hintergrund „Mitternacht“, Akzent Blau) mit 
 | Smartphone / Tablet | [iptvstream-mobile.apk](https://github.com/daniel96865-a11y/iptvstream/releases/latest/download/iptvstream-mobile.apk) |
 | Android TV / Fire TV | [iptvstream-tv.apk](https://github.com/daniel96865-a11y/iptvstream/releases/latest/download/iptvstream-tv.apk) |
 
-Aktuelle Version: [Release v1.0.28](https://github.com/daniel96865-a11y/iptvstream/releases/tag/v1.0.28)
+Aktuelle Version: [Release v1.0.29](https://github.com/daniel96865-a11y/iptvstream/releases/tag/v1.0.29)
 
 Installation außerhalb des Play Store: in den Android-Einstellungen „Unbekannte Apps“ für den Browser bzw. Dateimanager erlauben, die APK öffnen und installieren. Auf Fire TV die APK per „Downloader“ oder `adb install` aufspielen.
 
@@ -40,7 +40,7 @@ Zwei Oberflächen in einem Projekt:
 - Live-TV, Filme, Serien, Kategorien, Favoriten, Suche, zuletzt gesehen.
 - **Zurückblicken** (Catch-up/Timeshift) bei Sendern mit Archiv: vergangene Sendungen direkt aus dem Player abspielen.
 - **Favoriten-Widget** für den Startbildschirm (Handy): Lieblingssender mit Logo und aktuellem Programm, Tippen startet den Sender.
-- **EPG** (Xtream/XMLTV): lokal zwischengespeichert, sofort sichtbar, Aktualisierung im Hintergrund, manuell mit Fortschritt, Zuordnung auch bei HD/FHD/4K-Namen.
+- **EPG** (Xtream/XMLTV): lokal zwischengespeichert, sofort sichtbar, Aktualisierung im Hintergrund, manuell mit Fortschritt, Zuordnung auch bei HD/FHD/4K-Namen, das Land des Senders muss zum EPG-Eintrag passen. Für deutsche Sender gibt es zusätzlich einen kostenlosen deutschen Programmführer aus dem Netz (Einstellungen, Live-TV: „Als Ersatz“, „Bevorzugt“ oder „Aus“).
 - Live-TV: Sendernummer, Logo, Jetzt/Danach mit Fortschritt, letzter Sender, gemerkte Listenposition (auch nach Neustart). Die Programminfo der sichtbaren Sender kommt aus dem Speicher (vorab geladen für die ersten Sender und die nächsten zwölf Stunden, der Rest beim Anzeigen), Logos und Poster werden in der Anzeigegröße geladen.
 - Filme und Serien: Details, Fortsetzen, Fortschritt, nächste Episode. Die Filmlänge steht in Stunden und Minuten. Steht im Katalog nur „1 Min.“, liest die App die Länge aus der Datei.
 - Player (Media3/ExoPlayer): HLS, TS, MP4, MKV, Audio- und Untertitelspuren, automatische Audiospur (Deutsch, Polnisch oder automatisch) mit Fallback, Decoder-Fallback, Passthrough (standardmäßig aus), Stereo-Fallback, Bildmodi, automatisches Wiederverbinden. In der Infoleiste stehen Auflösung, Bildformat und Tonformat so, wie der laufende Stream sie meldet. Sechs Audiokanäle sind Surround (5.1), keine Sprachen. Die Sprache der Tonspur wählt man in den Player-Einstellungen. AC3, E-AC3, MP2 und DTS werden bei Bedarf per FFmpeg dekodiert; das Bild bleibt beim Hardware-Decoder, auch bei 4K. Fehlt ein Live-Sender als MPEG-TS, wird einmal HLS probiert, und umgekehrt. Die Puffergrößen sind unverändert.
