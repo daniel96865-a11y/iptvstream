@@ -322,7 +322,7 @@ private fun TvPlayerContent(vm: PlayerViewModel, ctrl: PlayerController, ui: Pla
             enter = fadeIn(),
             exit = fadeOut(),
         ) {
-            ControlsBar(ui, st.playing, st.positionMs, st.durationMs, tick, isLive)
+            ControlsBar(ui, st.playing, st.positionMs, st.durationMs, tick, isLive, st.signalVideo, st.signalAudio)
         }
 
         AnimatedVisibility(
@@ -401,7 +401,16 @@ private fun TvPlayerContent(vm: PlayerViewModel, ctrl: PlayerController, ui: Pla
 }
 
 @Composable
-private fun ControlsBar(ui: PlayerUi, playing: Boolean, positionMs: Long, durationMs: Long, tick: Long, isLive: Boolean) {
+private fun ControlsBar(
+    ui: PlayerUi,
+    playing: Boolean,
+    positionMs: Long,
+    durationMs: Long,
+    tick: Long,
+    isLive: Boolean,
+    signalVideo: String?,
+    signalAudio: String?,
+) {
     val s = LocalAppStyle.current
     val item = ui.item
     Box(
@@ -420,6 +429,7 @@ private fun ControlsBar(ui: PlayerUi, playing: Boolean, positionMs: Long, durati
                     }
                     Text(item?.title.orEmpty(), color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
+                SignalLine(signalVideo, signalAudio)
                 val nn = ui.nowNext
                 val now = nn?.now
                 if (now != null) {
@@ -451,6 +461,7 @@ private fun ControlsBar(ui: PlayerUi, playing: Boolean, positionMs: Long, durati
                 )
             } else if (ui.catchingUp) {
                 Text(item?.title.orEmpty(), color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                SignalLine(signalVideo, signalAudio)
                 val sub = item?.subtitle
                 if (!sub.isNullOrBlank()) Text(sub, color = Color(0xCCFFFFFF), fontSize = 19.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(10.dp))
@@ -470,6 +481,7 @@ private fun ControlsBar(ui: PlayerUi, playing: Boolean, positionMs: Long, durati
                 Text("◄ ► Spulen   ·   ▲▼ Sender   ·   Menü: Zurückblicken oder Live", color = Color(0x99FFFFFF), fontSize = 15.sp)
             } else {
                 Text(item?.title.orEmpty(), color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                SignalLine(signalVideo, signalAudio)
                 val sub = item?.subtitle
                 if (!sub.isNullOrBlank()) Text(sub, color = Color(0xCCFFFFFF), fontSize = 19.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(10.dp))
@@ -490,6 +502,14 @@ private fun ControlsBar(ui: PlayerUi, playing: Boolean, positionMs: Long, durati
             }
         }
     }
+}
+
+@Composable
+private fun SignalLine(video: String?, audio: String?) {
+    val text = listOfNotNull(video, audio).joinToString("   ·   ")
+    if (text.isEmpty()) return
+    Spacer(Modifier.height(6.dp))
+    Text(text, color = Color(0xCCFFFFFF), fontSize = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
 }
 
 @Composable
