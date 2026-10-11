@@ -60,4 +60,25 @@ object Urls {
         val l = url.lowercase()
         return l.substringBefore('?').endsWith(".m3u8") || l.contains(".m3u8?")
     }
+
+    /**
+     * Xtream-Live-URL mit numerischer Stream-ID: `.ts` und `.m3u8` tauschen.
+     * Andere Dateien (Filme, Archivnamen) bleiben unverändert.
+     */
+    fun alternateLiveContainer(url: String): String? {
+        val q = url.indexOf('?')
+        val path = if (q >= 0) url.substring(0, q) else url
+        val query = if (q >= 0) url.substring(q) else ""
+        val slash = path.lastIndexOf('/')
+        val file = if (slash >= 0) path.substring(slash + 1) else path
+        val stem = when {
+            file.endsWith(".ts", ignoreCase = true) -> file.dropLast(3)
+            file.endsWith(".m3u8", ignoreCase = true) -> file.dropLast(5)
+            else -> return null
+        }
+        if (stem.isEmpty() || stem.any { !it.isDigit() }) return null
+        val altExt = if (file.endsWith(".m3u8", ignoreCase = true)) ".ts" else ".m3u8"
+        val prefix = if (slash >= 0) path.substring(0, slash + 1) else ""
+        return prefix + stem + altExt + query
+    }
 }

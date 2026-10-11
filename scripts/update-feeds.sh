@@ -53,7 +53,9 @@ print(f"feed geschrieben: {path}")
 PY
 }
 
-if [ "$TAG" = "v1.0.20" ]; then
+if [ "$TAG" = "v1.0.21" ]; then
+  NOTE="4K-Filme und 4K-Live laufen über den Hardware-Decoder. Fehlt ein Live-Format, wird das andere probiert."
+elif [ "$TAG" = "v1.0.20" ]; then
   NOTE="Der Player zeigt Auflösung, Bildformat und Tonformat aus dem laufenden Stream."
 elif [ "$TAG" = "v1.0.19" ]; then
   NOTE="Bei der Adresse zum Fernseher setzt die App die Punkte. Es werden nur die Zahlen eingetippt."

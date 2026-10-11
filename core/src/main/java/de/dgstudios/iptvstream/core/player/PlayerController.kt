@@ -1,6 +1,7 @@
 package de.dgstudios.iptvstream.core.player
 
 import android.content.Context
+import android.os.Handler
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.Format
@@ -12,12 +13,16 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.decoder.ffmpeg.FfmpegAudioRenderer
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlaybackException
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.Renderer
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
+import androidx.media3.exoplayer.video.VideoRendererEventListener
 import androidx.media3.exoplayer.audio.AudioCapabilities
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
@@ -26,6 +31,7 @@ import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
+import androidx.media3.extractor.ts.TsExtractor
 import de.dgstudios.iptvstream.core.data.PlayItem
 import de.dgstudios.iptvstream.core.data.PlayKind
 import de.dgstudios.iptvstream.core.data.remote.Net
@@ -40,6 +46,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
+import java.util.ArrayList
 import java.util.Locale
 
 data class TrackOption(
@@ -101,6 +108,30 @@ class AppRenderersFactory(context: Context, private val passthrough: Boolean) : 
             .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
             .build()
     }
+
+    override fun buildVideoRenderers(
+        context: Context,
+        extensionRendererMode: Int,
+        mediaCodecSelector: MediaCodecSelector,
+        enableDecoderFallback: Boolean,
+        eventHandler: Handler,
+        eventListener: VideoRendererEventListener,
+        allowedVideoJoiningTimeMs: Long,
+        out: ArrayList<Renderer>,
+    ) {
+        out.add(
+            UhdVideoRenderer(
+                context,
+                codecAdapterFactory,
+                mediaCodecSelector,
+                allowedVideoJoiningTimeMs,
+                enableDecoderFallback,
+                eventHandler,
+                eventListener,
+                MAX_DROPPED_VIDEO_FRAME_COUNT_TO_NOTIFY,
+            ),
+        )
+    }
 }
 
 /**
@@ -131,6 +162,8 @@ class PlayerController(
     private var selectedAudioId: String? = null
 
     private var reconnectAttempts = 0
+    /** Einmal .ts gegen .m3u8 tauschen, wenn der Live-Stream so nicht existiert. */
+    private var triedOtherLiveContainer = false
     private var reconnectJob: Job? = null
     private var noticeJob: Job? = null
     private var pollJob: Job? = null
@@ -143,10 +176,14 @@ class PlayerController(
             context,
             OkHttpDataSource.Factory(okHttp).setUserAgent(Net.USER_AGENT),
         )
-        val extractors = DefaultExtractorsFactory().setTsExtractorFlags(
-            DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS or
-                DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES,
-        )
+        val extractors = DefaultExtractorsFactory()
+            .setTsExtractorMode(TsExtractor.MODE_SINGLE_PMT)
+            .setTsExtractorTimestampSearchBytes(TsExtractor.TS_PACKET_SIZE * 5_000)
+            .setTsExtractorFlags(
+                DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS or
+                    DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES or
+                    DefaultTsPayloadReaderFactory.FLAG_IGNORE_SPLICE_INFO_STREAM,
+            )
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSource, extractors)
             .setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(6))
 
@@ -190,6 +227,11 @@ class PlayerController(
     // ------------------------------------------------------------------ Steuerung
 
     fun load(item: PlayItem, startMs: Long = 0L) {
+        triedOtherLiveContainer = false
+        open(item, startMs)
+    }
+
+    private fun open(item: PlayItem, startMs: Long) {
         if (released) return
         current?.let { saveProgress(it, force = true) }
         reconnectJob?.cancel()
@@ -510,13 +552,35 @@ class PlayerController(
             return
         }
 
-        val networkRelated = code in 2000..2004
+        val status = httpStatus(error)
+        val missing = status == 404 || status == 410 || code == PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND
         val parseRelated = isLive && code in 3001..3004
+        if (isLive && !triedOtherLiveContainer && (missing || parseRelated)) {
+            val alt = current?.url?.let(Urls::alternateLiveContainer)
+            if (alt != null && current != null) {
+                triedOtherLiveContainer = true
+                reconnectAttempts = 0
+                notice("Live-Format wird gewechselt …")
+                open(current!!.copy(url = alt), 0L)
+                return
+            }
+        }
+
+        val networkRelated = code in 2000..2004
         if ((networkRelated || parseRelated) && tryReconnect()) return
 
         _state.update {
             it.copy(loading = false, playing = false, error = friendlyError(code))
         }
+    }
+
+    private fun httpStatus(error: PlaybackException): Int? {
+        var cause: Throwable? = error
+        while (cause != null) {
+            if (cause is HttpDataSource.InvalidResponseCodeException) return cause.responseCode
+            cause = cause.cause
+        }
+        return null
     }
 
     private fun tryReconnect(): Boolean {
