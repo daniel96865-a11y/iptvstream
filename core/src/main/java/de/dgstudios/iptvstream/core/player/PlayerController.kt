@@ -169,6 +169,7 @@ class PlayerController(
     private var playingSince = 0L
     private var lastSaveAt = 0L
     private var released = false
+    private val gain = StreamGain()
 
     init {
         val dataSource = DefaultDataSource.Factory(
@@ -331,6 +332,19 @@ class PlayerController(
         _state.update { it.copy(resize = mode) }
     }
 
+    /**
+     * Hebt den Ton dieses Streams an. [warnPassthrough] nur bei einer Auswahl durch den Nutzer,
+     * nicht beim Wiederherstellen der gemerkten Stufe.
+     */
+    fun setAudioBoost(level: String, warnPassthrough: Boolean = false) {
+        if (released) return
+        val mb = AudioBoost.millibels(level)
+        gain.setMillibels(mb)
+        if (warnPassthrough && settings.passthrough && mb > 0) {
+            notice("Ton lauter gilt nicht, solange Audio-Passthrough an ist.", 6_000)
+        }
+    }
+
     fun selectAudio(id: String) {
         val cand = audioCandidates().firstOrNull { it.id == id } ?: return
         if (audioDisabledByUs) {
@@ -364,6 +378,7 @@ class PlayerController(
         reconnectJob?.cancel()
         noticeJob?.cancel()
         pollJob?.cancel()
+        gain.release()
         player.removeListener(listener)
         player.release()
     }
@@ -474,6 +489,10 @@ class PlayerController(
             refreshSignal()
         }
 
+        override fun onAudioSessionIdChanged(audioSessionId: Int) {
+            if (!released) gain.setSession(audioSessionId)
+        }
+
         override fun onTracksChanged(tracks: Tracks) {
             lastTracks = tracks
             val candidates = audioCandidates()
@@ -527,6 +546,7 @@ class PlayerController(
 
     init {
         player.addListener(listener)
+        gain.setSession(player.audioSessionId)
         startPolling()
     }
 

@@ -13,6 +13,7 @@ import de.dgstudios.iptvstream.core.data.VodRequest
 import de.dgstudios.iptvstream.core.data.db.ChannelEntity
 import de.dgstudios.iptvstream.core.data.db.EpgEntity
 import de.dgstudios.iptvstream.core.data.db.ProfileEntity
+import de.dgstudios.iptvstream.core.player.AudioBoost
 import de.dgstudios.iptvstream.core.player.PlayerController
 import de.dgstudios.iptvstream.core.settings.AppSettings
 import de.dgstudios.iptvstream.core.settings.SettingsStore
@@ -46,6 +47,8 @@ data class PlayerUi(
     val archive: Boolean = false,
     /** Gerade läuft eine vergangene Sendung, nicht der Live-Rand. */
     val catchingUp: Boolean = false,
+    /** Gemerkte Tonverstärkung für den laufenden Sender, Film oder die Serie. */
+    val audioBoost: String = AudioBoost.OFF,
 )
 
 /**
@@ -169,6 +172,9 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             if (pr != null && pr.positionMs > 10_000) startMs = (pr.positionMs - 2_000).coerceAtLeast(0)
         }
         coroutineContext.ensureActive()
+        val boost = savedBoost(item)
+        coroutineContext.ensureActive()
+        ctrl.setAudioBoost(boost)
         ctrl.load(item, startMs)
         coroutineContext.ensureActive()
         _ui.update {
@@ -183,6 +189,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                 isFavorite = item.id in favIds,
                 archive = archive,
                 catchingUp = false,
+                audioBoost = boost,
             )
         }
         if (item.kind == PlayKind.LIVE) {
@@ -251,6 +258,8 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             return false
         }
         launchPlay {
+            val boost = savedBoost(item)
+            ctrl.setAudioBoost(boost)
             ctrl.load(item, 0)
             _ui.update {
                 it.copy(
@@ -263,6 +272,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                     isFavorite = item.id in favIds,
                     archive = true,
                     catchingUp = true,
+                    audioBoost = boost,
                 )
             }
         }
@@ -284,6 +294,22 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun setResize(mode: String) {
         _controller.value?.setResize(mode)
         viewModelScope.launch { c.settings.set("resize", mode) }
+    }
+
+    /** Merkt die Tonverstärkung für diesen Sender, Film oder diese Serie. */
+    fun setAudioBoost(level: String) {
+        if (AudioBoost.choices.none { it.first == level }) return
+        val item = _ui.value.item ?: return
+        val p = profile ?: return
+        _controller.value?.setAudioBoost(level, warnPassthrough = true)
+        _ui.update { it.copy(audioBoost = level) }
+        viewModelScope.launch { c.settings.set(AudioBoost.key(p.id, item), level) }
+    }
+
+    private suspend fun savedBoost(item: PlayItem): String {
+        val p = profile ?: return AudioBoost.OFF
+        val saved = c.settings.getRaw(AudioBoost.key(p.id, item)) ?: return AudioBoost.OFF
+        return if (AudioBoost.choices.any { it.first == saved }) saved else AudioBoost.OFF
     }
 
     fun cancelNextOffer() {

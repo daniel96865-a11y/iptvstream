@@ -105,6 +105,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import de.dgstudios.iptvstream.core.data.PlayKind
 import de.dgstudios.iptvstream.core.data.db.EpgEntity
+import de.dgstudios.iptvstream.core.player.AudioBoost
 import de.dgstudios.iptvstream.core.player.PlayerController
 import de.dgstudios.iptvstream.core.ui.LocalAppStyle
 import de.dgstudios.iptvstream.core.ui.VideoSurface
@@ -593,6 +594,19 @@ private fun PlayerContent(
                     .padding(horizontal = 20.dp)
                     .padding(bottom = 28.dp),
             ) {
+                SheetTitle("Ton lauter")
+                Text(
+                    if (ui.settings.passthrough) {
+                        "Wird für diesen Sender gemerkt. Bei Audio-Passthrough ohne Wirkung."
+                    } else {
+                        "Wird für diesen Sender gemerkt. Laute Sender können dann verzerren."
+                    },
+                    color = s.onSurfaceDim,
+                    fontSize = 13.sp,
+                )
+                for ((id, label) in AudioBoost.choices) {
+                    TrackRow(label, ui.audioBoost == id) { vm.setAudioBoost(id) }
+                }
                 SheetTitle("Tonspur")
                 if (st.audioTracks.isEmpty()) {
                     Text("Keine Tonspuren gefunden", color = s.onSurfaceDim, fontSize = 14.sp)
