@@ -4,6 +4,7 @@ import de.dgstudios.iptvstream.core.data.EpisodeInfo
 import de.dgstudios.iptvstream.core.data.MovieDetail
 import de.dgstudios.iptvstream.core.data.Season
 import de.dgstudios.iptvstream.core.data.SeriesDetail
+import de.dgstudios.iptvstream.core.data.VodDuration
 import de.dgstudios.iptvstream.core.data.db.ProfileEntity
 import de.dgstudios.iptvstream.core.util.Urls
 import kotlinx.coroutines.Dispatchers
@@ -69,8 +70,7 @@ class XtreamApi(private val http: HttpService) {
             .use { it.string() }
         val root = try { JSONObject(text) } catch (e: JSONException) { return@withContext null }
         val info = root.optJSONObject("info") ?: return@withContext null
-        val secs = info.str("duration_secs")?.toIntOrNull()
-        val minutes = secs?.div(60) ?: info.str("duration")?.let { parseDurationMinutes(it) } ?: 0
+        val minutes = VodDuration.minutes(info.str("duration_secs"), info.str("duration"))
         val year = info.str("releasedate")?.take(4) ?: info.str("releaseDate")?.take(4) ?: info.str("year")
         val backdrop = info.optJSONArray("backdrop_path")?.optString(0)?.takeIf { it.isNotBlank() }
         MovieDetail(
@@ -98,7 +98,10 @@ class XtreamApi(private val http: HttpService) {
             val ei = o.optJSONObject("info")
             val season = o.str("season")?.toIntOrNull() ?: seasonHint
             val number = o.str("episode_num")?.toIntOrNull() ?: 0
-            val dur = ei?.str("duration_secs")?.toIntOrNull() ?: 0
+            val dur = VodDuration.minutes(
+                ei?.str("duration_secs"),
+                ei?.str("duration") ?: o.str("duration"),
+            ) * 60
             bySeason.getOrPut(season) { ArrayList() }.add(
                 EpisodeInfo(
                     id = id,
@@ -150,13 +153,4 @@ class XtreamApi(private val http: HttpService) {
         )
     }
 
-    private fun parseDurationMinutes(s: String): Int {
-        val parts = s.split(":").mapNotNull { it.trim().toIntOrNull() }
-        return when (parts.size) {
-            3 -> parts[0] * 60 + parts[1]
-            2 -> parts[0]
-            1 -> parts[0]
-            else -> 0
-        }
-    }
 }
