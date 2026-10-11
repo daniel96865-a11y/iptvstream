@@ -52,6 +52,7 @@ import de.dgstudios.iptvstream.core.data.EpisodeInfo
 import de.dgstudios.iptvstream.core.data.WatchPos
 import de.dgstudios.iptvstream.core.ui.LocalAppStyle
 import de.dgstudios.iptvstream.core.ui.Poster
+import de.dgstudios.iptvstream.core.data.VodDuration
 import de.dgstudios.iptvstream.core.ui.formatDuration
 import de.dgstudios.iptvstream.core.ui.formatRating
 import de.dgstudios.iptvstream.core.vm.MovieDetailViewModel
@@ -169,7 +170,7 @@ fun MovieDetailScreen(onBack: () -> Unit, onPlay: () -> Unit) {
                         MetaLine(
                             listOf(
                                 d?.year ?: m.year,
-                                d?.durationMin?.takeIf { it > 0 }?.let { "$it Min." },
+                                VodDuration.shown(d?.durationMin ?: 0, progress?.durationMs ?: 0L),
                                 formatRating(d?.rating?.takeIf { it > 0 } ?: m.rating),
                             ),
                         )
@@ -338,8 +339,9 @@ private fun EpisodeRow(ep: EpisodeInfo, pos: Pair<Long, Long>?, hasProgress: Boo
         )
         Column(Modifier.weight(1f)) {
             Text(ep.title, color = s.onSurface, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (ep.durationSec > 0) {
-                Text("${ep.durationSec / 60} Min.", color = s.onSurfaceDim, fontSize = 12.sp)
+            val runtime = VodDuration.shown(ep.durationSec / 60, pos?.second ?: 0L)
+            if (runtime != null) {
+                Text(runtime, color = s.onSurfaceDim, fontSize = 12.sp)
             }
             if (fraction > 0f) {
                 LinearProgressIndicator(
@@ -355,3 +357,4 @@ private fun EpisodeRow(ep: EpisodeInfo, pos: Pair<Long, Long>?, hasProgress: Boo
         }
     }
 }
+
