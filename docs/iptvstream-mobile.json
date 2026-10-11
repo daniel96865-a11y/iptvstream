@@ -1,7 +1,7 @@
 {
-  "versionCode": 30,
-  "versionName": "1.0.28",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.28/iptvstream-mobile.apk",
-  "sha256": "ad1999d1a4b1496eaed37d4f59eb8d1f153fdcef259b3e4804a3e4667918fd07",
-  "changelog": "Große Senderlisten laden das Programm schonender. Am Fernseher kommt man in Filmen und Serien auch in die letzte Reihe und bei leerer Liste zurück zu den Kategorien."
+  "versionCode": 31,
+  "versionName": "1.0.29",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.29/iptvstream-mobile.apk",
+  "sha256": "a52b1b1834bef16dcdaf3965d17e88a08ca6aff03c77c6022818a3217391cb1f",
+  "changelog": "Das Programm läuft für deutsche Sender richtiger: Sender werden nur noch Einträgen des gleichen Landes zugeordnet, und ein deutscher Programmführer aus dem Netz springt als Ersatz ein (Einstellungen, Live-TV)."
 }
