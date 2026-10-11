@@ -30,10 +30,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
@@ -70,6 +72,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -275,36 +278,37 @@ private fun HomeScreen(
         }
     }
 
-    val bottomPad = 16.dp
+    val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val bottomPad: Dp = BAR_HEIGHT + 36.dp + navBottom
 
-    Column(
+    Box(
         Modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top))
             .nestedScroll(connection),
     ) {
-        SyncBanner(sync, epg, onRetry = { mainVm.reloadContent() })
-        Box(
-            Modifier
-                .weight(1f)
-                .then(if (barVisible.value) Modifier else Modifier.navigationBarsPadding()),
-        ) {
-            Crossfade(
-                targetState = tab,
-                animationSpec = tween(if (s.animations) 220 else 0),
-                label = "tab",
-            ) { t ->
-                when (t) {
-                    Tab.LIVE -> LiveScreen(liveVm, mainVm, s, bottomPad, onPlay)
-                    Tab.MOVIES -> MoviesScreen(moviesVm, s, bottomPad, onMovie)
-                    Tab.SERIES -> SeriesScreen(seriesVm, s, bottomPad, onSeries)
-                    Tab.SEARCH -> SearchScreen(searchVm, s, bottomPad, onPlay, onMovie, onSeries)
-                    Tab.SETTINGS -> SettingsScreen(mainVm, s, bottomPad, onProfiles)
+        Column(Modifier.fillMaxSize()) {
+            SyncBanner(sync, epg, onRetry = { mainVm.reloadContent() })
+            Box(Modifier.weight(1f)) {
+                Crossfade(
+                    targetState = tab,
+                    animationSpec = tween(if (s.animations) 220 else 0),
+                    label = "tab",
+                ) { t ->
+                    when (t) {
+                        Tab.LIVE -> LiveScreen(liveVm, mainVm, s, bottomPad, onPlay)
+                        Tab.MOVIES -> MoviesScreen(moviesVm, s, bottomPad, onMovie)
+                        Tab.SERIES -> SeriesScreen(seriesVm, s, bottomPad, onSeries)
+                        Tab.SEARCH -> SearchScreen(searchVm, s, bottomPad, onPlay, onMovie, onSeries)
+                        Tab.SETTINGS -> SettingsScreen(mainVm, s, bottomPad, onProfiles)
+                    }
                 }
             }
         }
+
         AnimatedVisibility(
             visible = barVisible.value,
+            modifier = Modifier.align(Alignment.BottomCenter),
             enter = if (s.animations) slideInVertically(spring(dampingRatio = 0.8f, stiffness = 300f)) { it } + fadeIn() else EnterTransition.None,
             exit = if (s.animations) slideOutVertically(tween(220)) { it } + fadeOut(tween(180)) else ExitTransition.None,
         ) {
@@ -316,7 +320,7 @@ private fun HomeScreen(
     }
 }
 
-/** Untere Navigation. Liegt unter dem Inhalt, nicht darüber. */
+/** Untere Navigation, deckend, damit die Liste nicht durchscheint. */
 @Composable
 internal fun BottomBar(selected: Tab, onSelect: (Tab) -> Unit) {
     val s = LocalAppStyle.current
@@ -334,10 +338,21 @@ internal fun BottomBar(selected: Tab, onSelect: (Tab) -> Unit) {
     ) {
         val itemW = maxWidth / tabs.size
         val target = hover ?: selected.ordinal
-        val offset by animateDpAsState(
-            targetValue = itemW * target,
-            animationSpec = if (s.animations) spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow) else tween(0),
-            label = "tabOffset",
+        val motion = if (s.animations) spring<Dp>(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow) else tween(0)
+        val offset by animateDpAsState(targetValue = itemW * target, animationSpec = motion, label = "tabOffset")
+        // Die Leiste ist an den Enden rund. Der Rahmen der äußeren Tabs bleibt in dieser Rundung,
+        // sonst schneidet er unten rechts (Einstellungen) und unten links durch die Ecke.
+        val cap = 30.dp
+        val inset = 7.dp
+        val padStart by animateDpAsState(if (target == 0) inset else 5.dp, motion, label = "padStart")
+        val padEnd by animateDpAsState(if (target == tabs.lastIndex) inset else 5.dp, motion, label = "padEnd")
+        val radiusStart by animateDpAsState(if (target == 0) cap - inset else 18.dp, motion, label = "radiusStart")
+        val radiusEnd by animateDpAsState(if (target == tabs.lastIndex) cap - inset else 18.dp, motion, label = "radiusEnd")
+        val indicator = RoundedCornerShape(
+            topStart = radiusStart,
+            bottomStart = radiusStart,
+            topEnd = radiusEnd,
+            bottomEnd = radiusEnd,
         )
         Box(
             Modifier
@@ -372,10 +387,10 @@ internal fun BottomBar(selected: Tab, onSelect: (Tab) -> Unit) {
                     .offset(x = offset)
                     .width(itemW)
                     .fillMaxHeight()
-                    .padding(5.dp)
-                    .clip(RoundedCornerShape(26.dp))
+                    .padding(start = padStart, end = padEnd, top = inset, bottom = inset)
+                    .clip(indicator)
                     .background(s.accent.copy(alpha = 0.30f))
-                    .border(1.dp, s.accent.copy(alpha = 0.65f), RoundedCornerShape(26.dp)),
+                    .border(1.dp, s.accent.copy(alpha = 0.65f), indicator),
             )
             Row(Modifier.fillMaxSize()) {
                 for (t in tabs) {

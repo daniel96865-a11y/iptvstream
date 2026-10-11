@@ -53,7 +53,9 @@ print(f"feed geschrieben: {path}")
 PY
 }
 
-if [ "$TAG" = "v1.0.24" ]; then
+if [ "$TAG" = "v1.0.25" ]; then
+  NOTE="Der Rahmen um den gewählten Bereich unten folgt der runden Ecke und schneidet sie nicht mehr."
+elif [ "$TAG" = "v1.0.24" ]; then
   NOTE="Die untere Leiste liegt unter den Einstellungen und verdeckt sie nicht mehr."
 elif [ "$TAG" = "v1.0.23" ]; then
   NOTE="Listen laufen flüssiger. Animationen für Fokus, Filmdetails und Spulen, abschaltbar in den Einstellungen."
