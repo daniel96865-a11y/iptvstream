@@ -21,7 +21,7 @@ Handy-Oberfläche im Glas-Look (Hintergrund „Mitternacht“, Akzent Blau) mit 
 | Smartphone / Tablet | [iptvstream-mobile.apk](https://github.com/daniel96865-a11y/iptvstream/releases/latest/download/iptvstream-mobile.apk) |
 | Android TV / Fire TV | [iptvstream-tv.apk](https://github.com/daniel96865-a11y/iptvstream/releases/latest/download/iptvstream-tv.apk) |
 
-Aktuelle Version: [Release v1.0.20](https://github.com/daniel96865-a11y/iptvstream/releases/tag/v1.0.20)
+Aktuelle Version: [Release v1.0.21](https://github.com/daniel96865-a11y/iptvstream/releases/tag/v1.0.21)
 
 Installation außerhalb des Play Store: in den Android-Einstellungen „Unbekannte Apps“ für den Browser bzw. Dateimanager erlauben, die APK öffnen und installieren. Auf Fire TV die APK per „Downloader“ oder `adb install` aufspielen.
 
@@ -43,7 +43,7 @@ Zwei Oberflächen in einem Projekt:
 - **EPG** (Xtream/XMLTV): lokal zwischengespeichert, sofort sichtbar, Aktualisierung im Hintergrund, manuell mit Fortschritt, Zuordnung auch bei HD/FHD/4K-Namen.
 - Live-TV: Sendernummer, Logo, Jetzt/Danach mit Fortschritt, letzter Sender, gemerkte Listenposition (auch nach Neustart).
 - Filme und Serien: Details, Fortsetzen, Fortschritt, nächste Episode.
-- Player (Media3/ExoPlayer): HLS, TS, MP4, MKV, Audio- und Untertitelspuren, automatische Audiospur (Deutsch, Polnisch oder automatisch) mit Fallback, Decoder-Fallback, Passthrough (standardmäßig aus), Stereo-Fallback, Bildmodi, automatisches Wiederverbinden. In der Infoleiste stehen Auflösung, Bildformat und Tonformat so, wie der laufende Stream sie meldet. AC3, E-AC3, MP2 und DTS werden bei Bedarf per FFmpeg dekodiert; Hardware-Decoder bleiben zuerst dran. Die Puffergrößen sind unverändert.
+- Player (Media3/ExoPlayer): HLS, TS, MP4, MKV, Audio- und Untertitelspuren, automatische Audiospur (Deutsch, Polnisch oder automatisch) mit Fallback, Decoder-Fallback, Passthrough (standardmäßig aus), Stereo-Fallback, Bildmodi, automatisches Wiederverbinden. In der Infoleiste stehen Auflösung, Bildformat und Tonformat so, wie der laufende Stream sie meldet. AC3, E-AC3, MP2 und DTS werden bei Bedarf per FFmpeg dekodiert; das Bild bleibt beim Hardware-Decoder, auch bei 4K. Fehlt ein Live-Sender als MPEG-TS, wird einmal HLS probiert, und umgekehrt. Die Puffergrößen sind unverändert.
 - Handy-Player: startet in der aktuellen Ausrichtung. Querformat nur, wenn das Gerät gedreht wird und die Autorotation an ist. Ist die Autorotation aus, bleibt Hochformat, ein Knopf schaltet auf Vollbild.
 - Updates in der App: beim Start, höchstens alle vier Stunden, und in den Einstellungen über „Nach Updates suchen“. Neuere Versionen zeigen den Changelog; die APK wird geladen und mit dem System-Installer installiert.
 - Einstellungen: Design (Akzent, Hintergrund, Glass-Stärke, Animationen, Dunkel/Hell), Uhr, Player, Live-TV, Allgemein inklusive Version. Alles bleibt gespeichert.

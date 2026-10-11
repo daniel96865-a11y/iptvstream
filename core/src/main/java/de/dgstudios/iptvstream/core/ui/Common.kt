@@ -2,6 +2,7 @@ package de.dgstudios.iptvstream.core.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -38,6 +39,7 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import de.dgstudios.iptvstream.core.container
+import de.dgstudios.iptvstream.core.player.UhdPlayback
 import de.dgstudios.iptvstream.core.data.NowNext
 import de.dgstudios.iptvstream.core.data.db.ProfileEntity
 import de.dgstudios.iptvstream.core.data.db.ProfileType
@@ -162,9 +164,16 @@ fun VideoSurface(
 ) {
     val density = LocalDensity.current
     val original = resize == "original" && videoWidth > 0 && videoHeight > 0
-    Box(modifier = modifier.background(Color.Black), contentAlignment = Alignment.Center) {
-        val inner = if (original) {
-            with(density) { Modifier.requiredSize(videoWidth.toDp(), videoHeight.toDp()) }
+    BoxWithConstraints(modifier = modifier.background(Color.Black), contentAlignment = Alignment.Center) {
+        val maxW = if (maxWidth.value.isFinite()) with(density) { maxWidth.roundToPx() } else 0
+        val maxH = if (maxHeight.value.isFinite()) with(density) { maxHeight.roundToPx() } else 0
+        val fitted = if (original && maxW > 0 && maxH > 0) {
+            UhdPlayback.fitInside(videoWidth, videoHeight, maxW, maxH)
+        } else {
+            0 to 0
+        }
+        val inner = if (fitted.first > 0 && fitted.second > 0) {
+            with(density) { Modifier.requiredSize(fitted.first.toDp(), fitted.second.toDp()) }
         } else {
             Modifier.fillMaxSize()
         }
