@@ -123,6 +123,7 @@ fun TvCategoryList(
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         itemsIndexed(items, key = { _, c -> c.id }) { index, c ->
+            var rowFocused by remember { mutableStateOf(false) }
             Box(
                 Modifier
                     .fillMaxWidth()
@@ -138,17 +139,17 @@ fun TvCategoryList(
                         onClick = { onSelect(c.id) },
                         selected = c.id == selected,
                         lockDirections = true,
+                        onFocus = { rowFocused = it },
                     )
                     .padding(horizontal = 14.dp),
                 contentAlignment = Alignment.CenterStart,
             ) {
-                Text(
-                    c.label,
+                TvMarqueeText(
+                    text = c.label,
                     color = s.onSurface,
                     fontSize = 18.sp,
                     fontWeight = if (c.id == selected) FontWeight.Bold else FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    focused = rowFocused,
                 )
             }
         }
@@ -265,25 +266,29 @@ fun TvCategoryDrawer(
                         contentPadding = PaddingValues(bottom = listBottom),
                     ) {
                         itemsIndexed(shown, key = { _, c -> c.id }) { index, c ->
+                            var rowFocused by remember { mutableStateOf(false) }
                             Box(
                                 Modifier
                                     .fillMaxWidth()
                                     .heightIn(min = 56.dp)
                                     .registered(reg, index)
                                     .then(if (index == 0) Modifier.focusProperties { up = search } else Modifier)
-                                    .tvFocus(onClick = { onSelect(c.id) }, selected = c.id == selected, opaque = true)
+                                    .tvFocus(
+                                        onClick = { onSelect(c.id) },
+                                        selected = c.id == selected,
+                                        opaque = true,
+                                        onFocus = { rowFocused = it },
+                                    )
                                     .padding(horizontal = 16.dp, vertical = 14.dp),
                                 contentAlignment = Alignment.CenterStart,
                             ) {
-                                Text(
-                                    c.label,
+                                TvMarqueeText(
+                                    text = c.label,
                                     color = s.onSurface,
                                     fontSize = 20.sp,
                                     fontWeight = FontWeight.SemiBold,
+                                    focused = rowFocused,
                                     lineHeight = 26.sp,
-                                    maxLines = 1,
-                                    softWrap = false,
-                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
                         }
