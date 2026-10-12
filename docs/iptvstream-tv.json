@@ -1,7 +1,7 @@
 {
-  "versionCode": 39,
-  "versionName": "1.0.37",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.37/iptvstream-tv.apk",
-  "sha256": "2a74d2f67214fcb6dd6aca4d7c9373037ce55ad264913010b5c83f1bb0cd1daa",
-  "changelog": "Die Einstellungen auf dem Handy sind in Bereiche geteilt. Design, Uhr, Player, Live-TV und Allgemein öffnet man über die Schublade."
+  "versionCode": 40,
+  "versionName": "1.0.38",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.38/iptvstream-tv.apk",
+  "sha256": "9174464ab5b1899212b32f3d1def16da5858338df850bfee16ab02284d2f0811",
+  "changelog": "In den Einstellungen stehen die Bereiche untereinander. Tippen öffnet die Schublade mit den Optionen."
 }
