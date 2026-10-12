@@ -1,7 +1,7 @@
 {
-  "versionCode": 33,
-  "versionName": "1.0.31",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.31/iptvstream-tv.apk",
-  "sha256": "0c85231de27ce0df1ab339dbb7c9f7366202ededecd4de9228bc43e1b5ab5168",
-  "changelog": "Unten am Live-Sender zeigt ein Balken, wie viel vom Puffer schon geladen ist. Bei groß ist er länger, bei klein kürzer."
+  "versionCode": 34,
+  "versionName": "1.0.32",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.32/iptvstream-tv.apk",
+  "sha256": "a0ea4ec003be4a76898a7a4ab6368b07c3ac2f19fd9b4d73b84d9d45e3a83b94",
+  "changelog": "Der Live-Puffer bleibt bei groß wirklich länger stehen, und der kleine Balken zerlegt den Text nicht mehr."
 }
