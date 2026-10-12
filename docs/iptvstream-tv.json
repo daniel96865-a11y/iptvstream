@@ -1,7 +1,7 @@
 {
-  "versionCode": 37,
-  "versionName": "1.0.35",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.35/iptvstream-tv.apk",
-  "sha256": "789d5d2ed73ac9509006c13ce932a64fb0d2a5f3dd24ba253bbe7d0f390d7370",
-  "changelog": "Das Favoriten-Widget auf dem Startbildschirm nutzt die neueste Version. Sonst keine sichtbaren Änderungen."
+  "versionCode": 38,
+  "versionName": "1.0.36",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.36/iptvstream-tv.apk",
+  "sha256": "b8435193dc3504f10adecac6a7323e76fea0ad82ee13f7dd10e490d7283275d5",
+  "changelog": "Chromecast auf dem Handy: Im Player auf das Cast-Symbol tippen und den Fernseher wählen. An und aus in den Einstellungen, Player."
 }
