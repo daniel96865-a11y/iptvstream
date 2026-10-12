@@ -94,8 +94,8 @@ class ReadmeScreenshots {
     )
 
     @Composable
-    private fun Frame(tab: Tab, content: @Composable () -> Unit) {
-        AppTheme(settings, isTv = false) {
+    private fun Frame(tab: Tab, appSettings: AppSettings = settings, content: @Composable () -> Unit) {
+        AppTheme(appSettings, isTv = false) {
             AppBackground {
                 Box(Modifier.fillMaxSize()) {
                     Column(Modifier.fillMaxSize().padding(top = 28.dp)) { content() }
@@ -222,7 +222,8 @@ class ReadmeScreenshots {
 
     @Test
     fun einstellungen() = paparazzi.snapshot {
-        Frame(Tab.SETTINGS) {
+        val still = AppSettings(mapOf("animations" to "off"))
+        Frame(Tab.SETTINGS, still) {
             ScreenHeader("Einstellungen")
             val s = LocalAppStyle.current
             Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -234,7 +235,7 @@ class ReadmeScreenshots {
                     Spacer(Modifier.height(8.dp))
                     Text("Profile verwalten", color = s.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 }
-                SettingsSectionList {}
+                SettingsSectionList(settings = settings, expanded = setOf("design"))
             }
         }
     }

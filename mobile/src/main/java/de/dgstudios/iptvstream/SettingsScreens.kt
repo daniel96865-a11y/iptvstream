@@ -1,28 +1,29 @@
 package de.dgstudios.iptvstream
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.layout.asPaddingValues
@@ -37,6 +38,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material3.AlertDialog
@@ -56,18 +58,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import de.dgstudios.iptvstream.core.settings.SettingsSection
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.dgstudios.iptvstream.core.data.db.ProfileEntity
@@ -97,8 +95,8 @@ fun SettingsScreen(mainVm: MainViewModel, settings: AppSettings, bottomPad: Dp, 
     val sysNav = androidx.compose.foundation.layout.WindowInsets.navigationBars
         .asPaddingValues().calculateBottomPadding()
     val listBottom = maxOf(bottomPad, 66.dp + 36.dp + sysNav) + 24.dp
-    var openSectionId by rememberSaveable { mutableStateOf<String?>(null) }
-    val openSection = SettingsSchema.sections.firstOrNull { it.id == openSectionId }
+    var openRaw by rememberSaveable { mutableStateOf("") }
+    val expanded = openRaw.split(',').filter { it.isNotEmpty() }.toSet()
 
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -127,47 +125,53 @@ fun SettingsScreen(mainVm: MainViewModel, settings: AppSettings, bottomPad: Dp, 
             }
         }
         item(key = "sections") {
-            SettingsSectionList { openSectionId = it }
-        }
-    }
-    val section = openSection
-    if (section != null) {
-        SettingsOptionsDrawer(
-            section = section,
-            settings = settings,
-            epgRunning = epg.running,
-            epgFraction = epg.fraction,
-            epgMessage = epg.message,
-            onChange = { k, v -> mainVm.set(k, v) },
-            onAction = { id ->
-                when (id) {
-                    "profiles" -> {
-                        openSectionId = null
-                        onProfiles()
+            SettingsSectionList(
+                settings = settings,
+                expanded = expanded,
+                epgRunning = epg.running,
+                epgFraction = epg.fraction,
+                epgMessage = epg.message,
+                onToggle = { id ->
+                    openRaw = (if (id in expanded) expanded - id else expanded + id).joinToString(",")
+                },
+                onChange = { k, v -> mainVm.set(k, v) },
+                onAction = { id ->
+                    when (id) {
+                        "profiles" -> onProfiles()
+                        "reload" -> mainVm.reloadContent()
+                        "epg_refresh" -> mainVm.refreshEpg()
+                        "check_update" -> context.container.updates.checkNow()
                     }
-                    "reload" -> mainVm.reloadContent()
-                    "epg_refresh" -> mainVm.refreshEpg()
-                    "check_update" -> context.container.updates.checkNow()
-                }
-            },
-            onDismiss = { openSectionId = null },
-        )
+                },
+            )
+        }
     }
 }
 
-/** Bereiche untereinander. Tippen öffnet die Schublade mit den Optionen. */
+/** Bereiche untereinander. Tippen klappt die Optionen nach unten auf, so wie früher in der Liste. */
 @Composable
-internal fun SettingsSectionList(onOpen: (String) -> Unit) {
+internal fun SettingsSectionList(
+    settings: AppSettings,
+    expanded: Set<String> = emptySet(),
+    epgRunning: Boolean = false,
+    epgFraction: Float = 0f,
+    epgMessage: String = "",
+    onToggle: (String) -> Unit = {},
+    onChange: (String, String) -> Unit = { _, _ -> },
+    onAction: (String) -> Unit = {},
+) {
     val s = LocalAppStyle.current
+    val motion = s.animations
     Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(20.dp))) {
         SettingsSchema.sections.forEachIndexed { i, sec ->
+            val open = sec.id in expanded
             if (i > 0) {
                 Box(Modifier.fillMaxWidth().height(1.dp).padding(horizontal = 16.dp).background(Color.White.copy(alpha = 0.08f)))
             }
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .pressable({ onOpen(sec.id) })
+                    .pressable({ onToggle(sec.id) })
                     .padding(horizontal = 16.dp, vertical = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -179,89 +183,23 @@ internal fun SettingsSectionList(onOpen: (String) -> Unit) {
                     modifier = Modifier.weight(1f),
                 )
                 Icon(
-                    Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                    contentDescription = null,
+                    if (open) Icons.Rounded.KeyboardArrowDown else Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                    contentDescription = if (open) "Zuklappen" else "Aufklappen",
                     tint = s.onSurfaceDim,
                     modifier = Modifier.size(22.dp),
                 )
             }
-        }
-    }
-}
-
-/** Schwebende Glasfläche links. Nur so hoch wie die Optionen, bei langen Bereichen scrollbar. */
-@Composable
-private fun SettingsOptionsDrawer(
-    section: SettingsSection,
-    settings: AppSettings,
-    epgRunning: Boolean,
-    epgFraction: Float,
-    epgMessage: String,
-    onChange: (String, String) -> Unit,
-    onAction: (String) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val s = LocalAppStyle.current
-    val shape = RoundedCornerShape(28.dp)
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = true),
-    ) {
-        BoxWithConstraints(Modifier.fillMaxSize()) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.62f))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onDismiss,
-                    ),
-            )
-            Column(
-                Modifier
-                    .align(Alignment.TopStart)
-                    .padding(start = 16.dp, top = 12.dp, bottom = 16.dp)
-                    .fillMaxWidth(0.84f)
-                    .widthIn(max = 420.dp)
-                    .heightIn(max = maxHeight - 28.dp)
-                    .windowInsetsPadding(
-                        WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top + WindowInsetsSides.Bottom),
-                    )
-                    .glass(shape, strong = true)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = {},
-                    )
-                    .verticalScroll(rememberScrollState()),
+            AnimatedVisibility(
+                visible = open,
+                enter = if (motion) expandVertically(tween(240)) + fadeIn(tween(180)) else EnterTransition.None,
+                exit = if (motion) shrinkVertically(tween(180)) + fadeOut(tween(120)) else ExitTransition.None,
             ) {
-                Text(
-                    section.title,
-                    color = s.onSurface,
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 20.dp, bottom = 6.dp),
-                )
-                SettingsRows(section, settings, epgRunning, epgFraction, epgMessage, onChange, onAction)
-                Spacer(Modifier.height(10.dp))
+                Column(Modifier.fillMaxWidth()) {
+                    Box(Modifier.fillMaxWidth().height(1.dp).padding(horizontal = 16.dp).background(Color.White.copy(alpha = 0.08f)))
+                    SettingsRows(sec, settings, epgRunning, epgFraction, epgMessage, onChange, onAction)
+                }
             }
         }
-    }
-}
-
-@Composable
-internal fun SettingsCard(
-    section: SettingsSection,
-    settings: AppSettings,
-    epgRunning: Boolean,
-    epgFraction: Float,
-    epgMessage: String,
-    onChange: (String, String) -> Unit,
-    onAction: (String) -> Unit,
-) {
-    Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(20.dp))) {
-        SettingsRows(section, settings, epgRunning, epgFraction, epgMessage, onChange, onAction)
     }
 }
 
@@ -320,38 +258,15 @@ internal fun SettingRow(
             } else {
                 var open by remember { mutableStateOf(false) }
                 Box {
-                    Column(
-                        Modifier.fillMaxWidth().pressable({ open = true }).padding(horizontal = 18.dp, vertical = 13.dp),
+                    Row(
+                        Modifier.fillMaxWidth().pressable({ open = true }).padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                def.title,
-                                color = s.onSurface,
-                                fontSize = 16.sp,
-                                modifier = Modifier.weight(1f).padding(end = 10.dp),
-                            )
-                            Text(
-                                def.labelOf(value),
-                                color = s.accent,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                textAlign = TextAlign.Center,
-                                lineHeight = 16.sp,
-                                modifier = Modifier
-                                    .widthIn(max = 148.dp)
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(s.accent.copy(alpha = 0.16f))
-                                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                            )
+                        Column(Modifier.weight(1f)) {
+                            Text(def.title, color = s.onSurface, fontSize = 15.sp)
+                            if (def.subtitle.isNotEmpty()) Text(def.subtitle, color = s.onSurfaceDim, fontSize = 12.sp)
                         }
-                        if (def.subtitle.isNotEmpty()) {
-                            Text(
-                                def.subtitle,
-                                color = s.onSurfaceDim,
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(top = 4.dp, end = 8.dp),
-                            )
-                        }
+                        Text(def.labelOf(value), color = s.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     }
                     DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
                         for (o in def.options) {
