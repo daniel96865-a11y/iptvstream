@@ -53,7 +53,9 @@ print(f"feed geschrieben: {path}")
 PY
 }
 
-if [ "$TAG" = "v1.0.34" ]; then
+if [ "$TAG" = "v1.0.35" ]; then
+  NOTE="Das Favoriten-Widget auf dem Startbildschirm nutzt die neueste Version. Sonst keine sichtbaren Änderungen."
+elif [ "$TAG" = "v1.0.34" ]; then
   NOTE="Technische Durchsicht: Der Wisch über die untere Leiste trifft den richtigen Punkt, und die Hilfebilder zeigen wieder den aktuellen Stand."
 elif [ "$TAG" = "v1.0.33" ]; then
   NOTE="Die untere Leiste auf dem Handy zeigt den gewählten Punkt als blaue Kapsel mit Namen. Die anderen Punkte sind nur Symbole."
