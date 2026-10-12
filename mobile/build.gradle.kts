@@ -39,8 +39,8 @@ android {
         applicationId = "de.dgstudios.iptvstream"
         minSdk = 24
         targetSdk = 35
-        versionCode = 36
-        versionName = "1.0.34"
+        versionCode = 37
+        versionName = "1.0.35"
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a")
         }
@@ -101,5 +101,5 @@ android {
 
 dependencies {
     implementation(project(":core"))
-    implementation("androidx.glance:glance-appwidget:1.1.1")
+    implementation("androidx.glance:glance-appwidget:1.2.0")
 }
