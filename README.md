@@ -21,7 +21,7 @@ Handy-Oberfläche im Glas-Look (Hintergrund „Mitternacht“, Akzent Blau) mit 
 | Smartphone / Tablet | [iptvstream-mobile.apk](https://github.com/daniel96865-a11y/iptvstream/releases/latest/download/iptvstream-mobile.apk) |
 | Android TV / Fire TV | [iptvstream-tv.apk](https://github.com/daniel96865-a11y/iptvstream/releases/latest/download/iptvstream-tv.apk) |
 
-Aktuelle Version: [Release v1.0.32](https://github.com/daniel96865-a11y/iptvstream/releases/tag/v1.0.32)
+Aktuelle Version: [Release v1.0.33](https://github.com/daniel96865-a11y/iptvstream/releases/tag/v1.0.33)
 
 Installation außerhalb des Play Store: in den Android-Einstellungen „Unbekannte Apps“ für den Browser bzw. Dateimanager erlauben, die APK öffnen und installieren. Auf Fire TV die APK per „Downloader“ oder `adb install` aufspielen.
 
@@ -31,7 +31,7 @@ Zwei Oberflächen in einem Projekt:
 
 | Modul | Zielgerät | Oberfläche |
 |---|---|---|
-| `:mobile` | Smartphone/Tablet | Glas-Look, untere Navigation (blendet beim Scrollen aus), Player in der aktuellen Ausrichtung |
+| `:mobile` | Smartphone/Tablet | Glas-Look, untere Navigation als gleitende Kapsel (blendet beim Scrollen aus), Player in der aktuellen Ausrichtung |
 | `:tv` | Android TV / Fire TV | Komplett per Fernbedienung, deutlicher Fokus, Zahleneingabe für Sender |
 | `:core` | beide | Daten, Repository, EPG, Player, Einstellungen, ViewModels |
 
