@@ -53,7 +53,9 @@ print(f"feed geschrieben: {path}")
 PY
 }
 
-if [ "$TAG" = "v1.0.37" ]; then
+if [ "$TAG" = "v1.0.38" ]; then
+  NOTE="In den Einstellungen stehen die Bereiche untereinander. Tippen öffnet die Schublade mit den Optionen."
+elif [ "$TAG" = "v1.0.37" ]; then
   NOTE="Die Einstellungen auf dem Handy sind in Bereiche geteilt. Design, Uhr, Player, Live-TV und Allgemein öffnet man über die Schublade."
 elif [ "$TAG" = "v1.0.36" ]; then
   NOTE="Chromecast auf dem Handy: Im Player auf das Cast-Symbol tippen und den Fernseher wählen. An und aus in den Einstellungen, Player."
