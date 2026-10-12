@@ -49,7 +49,6 @@ import app.cash.paparazzi.Paparazzi
 import de.dgstudios.iptvstream.core.data.NowNext
 import de.dgstudios.iptvstream.core.data.db.EpgEntity
 import de.dgstudios.iptvstream.core.settings.AppSettings
-import de.dgstudios.iptvstream.core.settings.SettingsSchema
 import de.dgstudios.iptvstream.core.ui.AppBackground
 import de.dgstudios.iptvstream.core.ui.AppTheme
 import de.dgstudios.iptvstream.core.ui.LocalAppStyle
@@ -235,9 +234,7 @@ class ReadmeScreenshots {
                     Spacer(Modifier.height(8.dp))
                     Text("Profile verwalten", color = s.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 }
-                val section = SettingsSchema.sections.first()
-                SettingsSectionBar(section.title) {}
-                SettingsCard(section, settings, false, 0f, "", { _, _ -> }, {})
+                SettingsSectionList {}
             }
         }
     }

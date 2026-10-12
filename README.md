@@ -21,7 +21,7 @@ Handy-Oberfläche im Glas-Look (Hintergrund „Mitternacht“, Akzent Blau) mit 
 | Smartphone / Tablet | [iptvstream-mobile.apk](https://github.com/daniel96865-a11y/iptvstream/releases/latest/download/iptvstream-mobile.apk) |
 | Android TV / Fire TV | [iptvstream-tv.apk](https://github.com/daniel96865-a11y/iptvstream/releases/latest/download/iptvstream-tv.apk) |
 
-Aktuelle Version: [Release v1.0.37](https://github.com/daniel96865-a11y/iptvstream/releases/tag/v1.0.37)
+Aktuelle Version: [Release v1.0.38](https://github.com/daniel96865-a11y/iptvstream/releases/tag/v1.0.38)
 
 Installation außerhalb des Play Store: in den Android-Einstellungen „Unbekannte Apps“ für den Browser bzw. Dateimanager erlauben, die APK öffnen und installieren. Auf Fire TV die APK per „Downloader“ oder `adb install` aufspielen.
 
@@ -47,7 +47,7 @@ Zwei Oberflächen in einem Projekt:
 - Handy-Player: startet in der aktuellen Ausrichtung. Querformat nur, wenn das Gerät gedreht wird und die Autorotation an ist. Ist die Autorotation aus, bleibt Hochformat, ein Knopf schaltet auf Vollbild.
 - **Chromecast** (Handy): im Player auf das Cast-Symbol tippen und den Fernseher wählen. Live läuft dort am Live-Rand, Filme und Serien starten an der aktuellen Stelle, der nächste Sender oder Film läuft automatisch mit. An und aus in den Einstellungen, Player: „Chromecast“.
 - Updates in der App: beim Start, höchstens alle vier Stunden, und in den Einstellungen über „Nach Updates suchen“. Neuere Versionen zeigen den Changelog; die APK wird geladen und mit dem System-Installer installiert.
-- Einstellungen: Design (Akzent, Hintergrund, Glass-Stärke, Animationen, Dunkel/Hell), Uhr, Player, Live-TV, Allgemein inklusive Version. Auf dem Handy wählt man den Bereich über die Schublade, wie die Kategorien. Alles bleibt gespeichert. Sind Animationen an, gleiten Fortschritt, Fokus, Filmdetails und der Spul-Hinweis. Aus heißt: alles steht sofort.
+- Einstellungen: Design (Akzent, Hintergrund, Glass-Stärke, Animationen, Dunkel/Hell), Uhr, Player, Live-TV, Allgemein inklusive Version. Auf dem Handy stehen die Bereiche untereinander. Tippen öffnet die Schublade mit den Optionen. Alles bleibt gespeichert. Sind Animationen an, gleiten Fortschritt, Fokus, Filmdetails und der Spul-Hinweis. Aus heißt: alles steht sofort.
 
 ## Updates
 
