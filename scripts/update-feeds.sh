@@ -53,7 +53,9 @@ print(f"feed geschrieben: {path}")
 PY
 }
 
-if [ "$TAG" = "v1.0.31" ]; then
+if [ "$TAG" = "v1.0.32" ]; then
+  NOTE="Der Live-Puffer bleibt bei groß wirklich länger stehen, und der kleine Balken zerlegt den Text nicht mehr."
+elif [ "$TAG" = "v1.0.31" ]; then
   NOTE="Unten am Live-Sender zeigt ein Balken, wie viel vom Puffer schon geladen ist. Bei groß ist er länger, bei klein kürzer."
 elif [ "$TAG" = "v1.0.30" ]; then
   NOTE="Leise Sender lassen sich im Player unter „Ton lauter“ anheben. Die Stufe gilt nur für diesen Sender und bleibt gespeichert."
