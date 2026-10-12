@@ -4,7 +4,6 @@ package de.dgstudios.iptvstream
 
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.animation.AnimatedVisibility
@@ -21,7 +20,6 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -37,7 +35,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -320,14 +318,13 @@ private fun HomeScreen(
     }
 }
 
-/** Untere Navigation, deckend, damit die Liste nicht durchscheint. */
+/** Untere Navigation. Der gewählte Punkt ist eine Kapsel mit Name, die übrigen nur Symbole. */
 @Composable
 internal fun BottomBar(selected: Tab, onSelect: (Tab) -> Unit) {
     val s = LocalAppStyle.current
     val tabs = Tab.entries
     val shape = RoundedCornerShape(30.dp)
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
-    // Index unter dem Finger beim Wischen über die Leiste, sonst null.
     var hover by remember { mutableStateOf<Int?>(null) }
     BoxWithConstraints(
         Modifier
@@ -336,24 +333,14 @@ internal fun BottomBar(selected: Tab, onSelect: (Tab) -> Unit) {
             .padding(horizontal = 16.dp, vertical = 10.dp)
             .height(BAR_HEIGHT),
     ) {
-        val itemW = maxWidth / tabs.size
         val target = hover ?: selected.ordinal
-        val motion = if (s.animations) spring<Dp>(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow) else tween(0)
-        val offset by animateDpAsState(targetValue = itemW * target, animationSpec = motion, label = "tabOffset")
-        // Die Leiste ist an den Enden rund. Der Rahmen der äußeren Tabs bleibt in dieser Rundung,
-        // sonst schneidet er unten rechts (Einstellungen) und unten links durch die Ecke.
-        val cap = 30.dp
-        val inset = 7.dp
-        val padStart by animateDpAsState(if (target == 0) inset else 5.dp, motion, label = "padStart")
-        val padEnd by animateDpAsState(if (target == tabs.lastIndex) inset else 5.dp, motion, label = "padEnd")
-        val radiusStart by animateDpAsState(if (target == 0) cap - inset else 18.dp, motion, label = "radiusStart")
-        val radiusEnd by animateDpAsState(if (target == tabs.lastIndex) cap - inset else 18.dp, motion, label = "radiusEnd")
-        val indicator = RoundedCornerShape(
-            topStart = radiusStart,
-            bottomStart = radiusStart,
-            topEnd = radiusEnd,
-            bottomEnd = radiusEnd,
-        )
+        val motion = if (s.animations) spring<Dp>(dampingRatio = 0.78f, stiffness = Spring.StiffnessMediumLow) else tween(0)
+        val content = maxWidth - 12.dp
+        val minIcon = 34.dp
+        val capsuleW = 176.dp
+            .coerceAtMost(content - minIcon * (tabs.size - 1))
+            .coerceAtLeast(112.dp)
+        val iconSlot = (content - capsuleW) / (tabs.size - 1)
         Box(
             Modifier
                 .fillMaxSize()
@@ -382,61 +369,52 @@ internal fun BottomBar(selected: Tab, onSelect: (Tab) -> Unit) {
                     )
                 },
         ) {
-            Box(
-                Modifier
-                    .offset(x = offset)
-                    .width(itemW)
-                    .fillMaxHeight()
-                    .padding(start = padStart, end = padEnd, top = inset, bottom = inset)
-                    .clip(indicator)
-                    .background(s.accent.copy(alpha = 0.30f))
-                    .border(1.dp, s.accent.copy(alpha = 0.65f), indicator),
-            )
-            Row(Modifier.fillMaxSize()) {
+            Row(
+                Modifier.fillMaxSize().padding(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 for (t in tabs) {
-                    val isSel = if (hover != null) t.ordinal == hover else t == selected
-                    val lifted = hover == t.ordinal && s.animations
-                    val scale by androidx.compose.animation.core.animateFloatAsState(
-                        targetValue = if (lifted) 1.14f else 1f,
-                        animationSpec = if (s.animations) spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium) else tween(0),
-                        label = "tabScale",
-                    )
-                    val lift by animateDpAsState(
-                        targetValue = if (lifted) (-4).dp else 0.dp,
-                        animationSpec = if (s.animations) spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium) else tween(0),
-                        label = "tabLift",
-                    )
-                    Column(
+                    val isSel = t.ordinal == target
+                    val width by animateDpAsState(if (isSel) capsuleW else iconSlot, motion, label = "tabWidth")
+                    Box(
                         Modifier
-                            .weight(1f)
+                            .width(width)
                             .fillMaxHeight()
-                            .graphicsLayer {
-                                scaleX = scale
-                                scaleY = scale
-                                translationY = lift.toPx()
-                            }
+                            .clip(RoundedCornerShape(24.dp))
+                            .background(if (isSel) s.accent else Color.Transparent)
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
                             ) { onSelect(t) },
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+                        contentAlignment = Alignment.Center,
                     ) {
-                        Icon(
-                            t.icon,
-                            contentDescription = t.label,
-                            tint = if (isSel) Color.White else s.onSurfaceDim,
-                            modifier = Modifier.height(24.dp).width(24.dp),
-                        )
-                        Text(
-                            t.label,
-                            color = if (isSel) Color.White else s.onSurfaceDim,
-                            fontSize = 10.5.sp,
-                            fontWeight = if (isSel) FontWeight.SemiBold else FontWeight.Medium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(top = 2.dp),
-                        )
+                        if (isSel) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    t.icon,
+                                    contentDescription = t.label,
+                                    tint = Color.White,
+                                    modifier = Modifier.height(22.dp).width(22.dp),
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    t.label,
+                                    color = Color.White,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        } else {
+                            Icon(
+                                t.icon,
+                                contentDescription = t.label,
+                                tint = s.onSurfaceDim,
+                                modifier = Modifier.height(24.dp).width(24.dp),
+                            )
+                        }
                     }
                 }
             }

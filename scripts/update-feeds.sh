@@ -53,7 +53,9 @@ print(f"feed geschrieben: {path}")
 PY
 }
 
-if [ "$TAG" = "v1.0.32" ]; then
+if [ "$TAG" = "v1.0.33" ]; then
+  NOTE="Die untere Leiste auf dem Handy zeigt den gewählten Punkt als blaue Kapsel mit Namen. Die anderen Punkte sind nur Symbole."
+elif [ "$TAG" = "v1.0.32" ]; then
   NOTE="Der Live-Puffer bleibt bei groß wirklich länger stehen, und der kleine Balken zerlegt den Text nicht mehr."
 elif [ "$TAG" = "v1.0.31" ]; then
   NOTE="Unten am Live-Sender zeigt ein Balken, wie viel vom Puffer schon geladen ist. Bei groß ist er länger, bei klein kürzer."
