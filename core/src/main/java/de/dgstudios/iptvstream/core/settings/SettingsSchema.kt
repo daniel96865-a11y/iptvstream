@@ -127,6 +127,7 @@ object SettingsSchema {
                     "live_format", "Live-Format",
                     listOf(Option("ts", "MPEG-TS (schnell)"), Option("m3u8", "HLS (kompatibel)")), "ts",
                 ),
+                ChoiceDef("cast", "Chromecast", onOff, "on", "Videos auf Fernseher oder Chromecast senden (nur Handy)"),
             ),
         ),
         SettingsSection(

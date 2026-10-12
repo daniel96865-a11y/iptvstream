@@ -49,6 +49,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Cast
+import androidx.compose.material.icons.rounded.CastConnected
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Forward10
 import androidx.compose.material.icons.rounded.Pause
@@ -246,6 +248,31 @@ private fun PlayerContent(
     val item = ui.item
     val isLive = item?.kind == PlayKind.LIVE
     val liveEdge = isLive && !ui.catchingUp
+    val castOn = ui.settings.castEnabled
+    val castUi by CastHub.state.collectAsStateWithLifecycle()
+    val appCtx = LocalContext.current.applicationContext
+    var castPicker by remember { mutableStateOf(false) }
+    var lastCastKey by remember { mutableStateOf<String?>(null) }
+
+    // Chromecast-Suche nur, solange der Schalter in den Einstellungen an ist.
+    LaunchedEffect(castOn) {
+        if (castOn) CastHub.ensure(appCtx) else CastHub.shutdown()
+    }
+
+    // Läuft auf dem Fernseher: neuen Sender, Film oder neue Episode automatisch
+    // dorthin schicken und lokal pausieren.
+    LaunchedEffect(castUi.casting, item?.id, item?.url) {
+        val it = item
+        if (castOn && castUi.casting && it != null) {
+            val key = it.id + "\n" + it.url
+            if (lastCastKey != key) {
+                lastCastKey = key
+                val pos = if (it.kind == PlayKind.LIVE && !it.catchup) 0L else stateRef.value.positionMs
+                if (CastHub.cast(it, pos) == null) ctrl.pause()
+            }
+        }
+        if (!castUi.casting) lastCastKey = null
+    }
 
     BackHandler {
         when {
@@ -417,10 +444,44 @@ private fun PlayerContent(
                                     )
                                     Spacer(Modifier.width(8.dp))
                                 }
+                                if (castOn) {
+                                    GlassIconButton(
+                                        if (castUi.casting) Icons.Rounded.CastConnected else Icons.Rounded.Cast,
+                                        if (castUi.casting) "Übertragung beenden" else "Auf Fernseher übertragen",
+                                        { castPicker = true },
+                                        tint = if (castUi.casting) Color(0xFFFFC857) else null,
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                }
                                 GlassIconButton(Icons.Rounded.Tune, "Einstellungen", {
                                     sheet = true
                                     interaction++
                                 })
+                            }
+                            // Hinweis, solange der Stream auf dem Fernseher läuft.
+                            if (castOn && (castUi.casting || castUi.connecting)) {
+                                Spacer(Modifier.height(8.dp))
+                                CastBanner(
+                                    deviceName = castUi.deviceName,
+                                    connecting = castUi.connecting,
+                                    onOpen = { castPicker = true },
+                                    onStop = { CastHub.disconnect() },
+                                )
+                            }
+                            val castError = castUi.error
+                            if (castOn && !castUi.casting && castError != null) {
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    castError,
+                                    color = Color(0xFFFFC857),
+                                    fontSize = 12.sp,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier
+                                        .glass(RoundedCornerShape(50), strong = true)
+                                        .pressable({ CastHub.clearError() })
+                                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                                )
                             }
 
                     }
@@ -633,8 +694,120 @@ private fun PlayerContent(
         }
     }
 
+    if (castPicker) {
+        CastPickerDialog(
+            devices = castUi.devices,
+            connecting = castUi.connecting,
+            casting = castUi.casting,
+            deviceName = castUi.deviceName,
+            onPick = { CastHub.connect(it); castPicker = false },
+            onDisconnect = { CastHub.disconnect(); castPicker = false },
+            onDismiss = { castPicker = false },
+        )
+    }
+
     if (archiveOpen) {
         ArchiveDialog(vm, item?.title.orEmpty()) { archiveOpen = false }
+    }
+}
+
+/** Hinweis unter der oberen Leiste, solange der Stream auf dem Fernseher läuft. */
+@Composable
+private fun CastBanner(deviceName: String?, connecting: Boolean, onOpen: () -> Unit, onStop: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .glass(RoundedCornerShape(16.dp), strong = true)
+            .pressable(onOpen)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (connecting) {
+            CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
+        } else {
+            Icon(Icons.Rounded.CastConnected, null, tint = Color(0xFFFFC857), modifier = Modifier.size(20.dp))
+        }
+        Spacer(Modifier.width(10.dp))
+        Text(
+            if (connecting) "Verbinde …" else "Läuft auf ${deviceName ?: "Fernseher"}",
+            color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            "Stoppen",
+            color = Color(0xFFFF8A8A), fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.pressable(onStop).padding(4.dp),
+        )
+    }
+}
+
+/** Geräteauswahl im Glas-Look: listet Chromecast- und Google-TV-Geräte im eigenen WLAN. */
+@Composable
+private fun CastPickerDialog(
+    devices: List<CastHub.Device>,
+    connecting: Boolean,
+    casting: Boolean,
+    deviceName: String?,
+    onPick: (CastHub.Device) -> Unit,
+    onDisconnect: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val s = LocalAppStyle.current
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(22.dp))
+                .background(s.backgroundColors[0])
+                .padding(20.dp),
+        ) {
+            Text("Auf Fernseher übertragen", color = s.onSurface, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                if (casting) "Verbunden mit ${deviceName ?: "Fernseher"}. Neuer Sender oder Film läuft automatisch dort." else "Handy und Fernseher müssen im selben WLAN sein.",
+                color = s.onSurfaceDim, fontSize = 13.sp,
+            )
+            Spacer(Modifier.height(12.dp))
+            if (devices.isEmpty() && !casting) {
+                Text(
+                    "Keine Geräte gefunden. Chromecast oder Google TV einschalten und die Auswahl erneut öffnen.",
+                    color = s.onSurfaceDim, fontSize = 14.sp,
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+            for (d in devices) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(s.backgroundColors[2])
+                        .pressable({ onPick(d) })
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Rounded.Cast, null, tint = s.accent, modifier = Modifier.size(22.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        d.name, color = s.onSurface, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+            if (connecting) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(Modifier.size(18.dp), color = s.accent, strokeWidth = 2.dp)
+                    Spacer(Modifier.width(10.dp))
+                    Text("Verbinde …", color = s.onSurfaceDim, fontSize = 14.sp)
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (casting) SecondaryButton("Trennen", onClick = onDisconnect, modifier = Modifier.weight(1f))
+                SecondaryButton(if (casting) "Schließen" else "Abbrechen", onClick = onDismiss, modifier = Modifier.weight(1f))
+            }
+        }
     }
 }
 

@@ -37,6 +37,7 @@ data class AppSettings(val raw: Map<String, String> = emptyMap()) {
     val resize: String get() = get("resize")
     val reconnect: Boolean get() = on("reconnect")
     val liveFormat: String get() = get("live_format")
+    val castEnabled: Boolean get() = on("cast")
     val startMode: String get() = get("start_mode")
     val showNumbers: Boolean get() = on("show_numbers")
     val epgAuto: Boolean get() = on("epg_auto")
