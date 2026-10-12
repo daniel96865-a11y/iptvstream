@@ -168,6 +168,8 @@ class UpdateChecker(
         return intent
     }
 
+    // Nur aufgerufen, wenn canInstall() false liefert, also erst ab Android 8. Dort existiert die Konstante.
+    @android.annotation.SuppressLint("InlinedApi")
     fun permissionIntent(): Intent = Intent(
         android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
         Uri.parse("package:${appContext.packageName}"),

@@ -56,6 +56,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -68,6 +69,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -341,13 +343,28 @@ internal fun BottomBar(selected: Tab, onSelect: (Tab) -> Unit) {
             .coerceAtMost(content - minIcon * (tabs.size - 1))
             .coerceAtLeast(112.dp)
         val iconSlot = (content - capsuleW) / (tabs.size - 1)
+        // Die Kapsel ist breiter als die übrigen Punkte. Der Wisch rechnet mit den
+        // echten Breiten, sonst landet der Finger auf dem Nachbarpunkt.
+        val density = LocalDensity.current
+        val targetRef = rememberUpdatedState(target)
+        val capsulePx = with(density) { capsuleW.toPx() }
+        val iconPx = with(density) { iconSlot.toPx() }
+        val edgePx = with(density) { 6.dp.toPx() }
         Box(
             Modifier
                 .fillMaxSize()
                 .clip(shape)
                 .background(s.backgroundColors[0], shape)
                 .pointerInput(tabs.size) {
-                    fun indexAt(x: Float) = (x / (size.width.toFloat() / tabs.size)).toInt().coerceIn(0, tabs.size - 1)
+                    fun indexAt(x: Float): Int {
+                        var edge = edgePx
+                        val current = targetRef.value
+                        for (i in tabs.indices) {
+                            edge += if (i == current) capsulePx else iconPx
+                            if (x < edge) return i
+                        }
+                        return tabs.lastIndex
+                    }
                     detectHorizontalDragGestures(
                         onDragStart = { pos ->
                             hover = indexAt(pos.x)

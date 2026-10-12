@@ -1,5 +1,6 @@
 package de.dgstudios.iptvstream.core.ui
 
+import android.annotation.SuppressLint
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -108,13 +109,16 @@ fun formatRating(r: Double): String? = if (r > 0.0) "★ %.1f".format(Locale.GER
 
 // ---------------------------------------------------------------------- EPG
 
+// Fehlalarm dieser Lint-Version: value wird im Block unten gesetzt.
+@SuppressLint("ProduceStateDoesNotAssignValue")
 @Composable
 fun rememberNowNext(profileId: Long, epgKey: String?, tick: Long): State<NowNext?> {
     val repo = LocalContext.current.container.repo
     val initial = repo.peekNowNext(profileId, epgKey)
-    return produceState(initial, profileId, epgKey, tick / 30_000) {
+    val state = produceState(initial, profileId, epgKey, tick / 30_000) {
         value = repo.nowNext(profileId, epgKey)
     }
+    return state
 }
 
 /** Fortschrittsbalken gleitet, statt zu springen. Bei ausgeschalteten Animationen bleibt er sofort. */
@@ -257,6 +261,7 @@ private fun ShimmerBox(modifier: Modifier = Modifier) {
 
 // ---------------------------------------------------------------------- Video
 
+@OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
 fun VideoSurface(
     player: Player,

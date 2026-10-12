@@ -28,7 +28,11 @@ class StreamGain {
 
     fun release() {
         gone = true
-        enhancer?.release()
+        try {
+            enhancer?.release()
+        } catch (_: RuntimeException) {
+            // Ein bereits gestorbener System-Effekt wirft beim Freigeben.
+        }
         enhancer = null
         boundSession = 0
         sessionId = 0
@@ -43,7 +47,10 @@ class StreamGain {
             return
         }
         if (boundSession != sessionId) {
-            enhancer?.release()
+            try {
+                enhancer?.release()
+            } catch (_: RuntimeException) {
+            }
             enhancer = null
             boundSession = 0
             val created = try {

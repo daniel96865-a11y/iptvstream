@@ -76,7 +76,7 @@ fun GlassIconButton(icon: ImageVector, desc: String, onClick: () -> Unit, tint: 
 }
 
 @Composable
-fun PrimaryButton(text: String, icon: ImageVector? = null, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun PrimaryButton(text: String, modifier: Modifier = Modifier, icon: ImageVector? = null, onClick: () -> Unit) {
     val s = LocalAppStyle.current
     Row(
         modifier
@@ -195,7 +195,7 @@ fun MovieDetailScreen(onBack: () -> Unit, onPlay: () -> Unit) {
                 Spacer(Modifier.height(18.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (resume > 10_000) {
-                        PrimaryButton("Fortsetzen ab ${formatDuration(resume)}", Icons.Rounded.PlayArrow, {
+                        PrimaryButton("Fortsetzen ab ${formatDuration(resume)}", icon = Icons.Rounded.PlayArrow, onClick = {
                             vm.play(false)
                             onPlay()
                         })
@@ -204,7 +204,7 @@ fun MovieDetailScreen(onBack: () -> Unit, onPlay: () -> Unit) {
                             onPlay()
                         })
                     } else {
-                        PrimaryButton("Abspielen", Icons.Rounded.PlayArrow, {
+                        PrimaryButton("Abspielen", icon = Icons.Rounded.PlayArrow, onClick = {
                             vm.play(false)
                             onPlay()
                         })
@@ -305,10 +305,15 @@ fun SeriesDetailScreen(onBack: () -> Unit, onPlay: () -> Unit) {
                 if (next != null) {
                     item {
                         val label = "Weiter: S%02d E%02d".format(next.season, next.number)
-                        PrimaryButton(label, Icons.Rounded.PlayArrow, {
-                            vm.play(next)
-                            onPlay()
-                        }, Modifier.padding(vertical = 6.dp))
+                        PrimaryButton(
+                            label,
+                            modifier = Modifier.padding(vertical = 6.dp),
+                            icon = Icons.Rounded.PlayArrow,
+                            onClick = {
+                                vm.play(next)
+                                onPlay()
+                            },
+                        )
                     }
                 }
                 item {

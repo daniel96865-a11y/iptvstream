@@ -12,6 +12,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
@@ -84,6 +85,7 @@ data class PlayerState(
  * Passthrough ist standardmäßig aus: [DefaultAudioSink.Builder] mit Context ignoriert
  * [DefaultAudioSink.Builder.setAudioCapabilities] und würde AC3 sonst durchreichen.
  */
+@OptIn(UnstableApi::class)
 class AppRenderersFactory(context: Context, private val passthrough: Boolean) : DefaultRenderersFactory(context) {
     init {
         setEnableDecoderFallback(true)
@@ -139,6 +141,7 @@ class AppRenderersFactory(context: Context, private val passthrough: Boolean) : 
  * Kapselt ExoPlayer: schnelles Umschalten (ein Player, nur Medium wechseln), Audio-Fallback ohne
  * Endlosschleife, automatische Wiederverbindung, Fortschritt und Spurauswahl.
  */
+@OptIn(UnstableApi::class)
 class PlayerController(
     context: Context,
     private val settings: AppSettings,

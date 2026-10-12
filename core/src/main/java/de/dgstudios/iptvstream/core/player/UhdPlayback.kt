@@ -8,6 +8,7 @@ import androidx.media3.exoplayer.mediacodec.MediaCodecInfo
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.video.MediaCodecVideoRenderer
 import androidx.media3.exoplayer.video.VideoRendererEventListener
+import androidx.media3.common.util.UnstableApi
 import kotlin.math.max
 import kotlin.math.min
 
@@ -64,6 +65,7 @@ object UhdPlayback {
  * schafft die Bilder dann nicht. Der Eingabepuffer von Media3 reicht für große
  * HEVC-Einzelbilder nicht immer.
  */
+@OptIn(UnstableApi::class)
 class UhdVideoRenderer(
     context: Context,
     codecAdapterFactory: MediaCodecAdapter.Factory,

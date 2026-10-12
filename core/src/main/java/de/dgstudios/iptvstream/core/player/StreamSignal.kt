@@ -1,3 +1,5 @@
+@file:OptIn(androidx.media3.common.util.UnstableApi::class)
+
 package de.dgstudios.iptvstream.core.player
 
 import androidx.media3.common.Format
