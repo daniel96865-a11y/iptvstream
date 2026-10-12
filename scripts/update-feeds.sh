@@ -53,7 +53,9 @@ print(f"feed geschrieben: {path}")
 PY
 }
 
-if [ "$TAG" = "v1.0.38" ]; then
+if [ "$TAG" = "v1.0.39" ]; then
+  NOTE="Die Schublade in den Einstellungen ist eine Glasfläche und nur so hoch wie die Optionen."
+elif [ "$TAG" = "v1.0.38" ]; then
   NOTE="In den Einstellungen stehen die Bereiche untereinander. Tippen öffnet die Schublade mit den Optionen."
 elif [ "$TAG" = "v1.0.37" ]; then
   NOTE="Die Einstellungen auf dem Handy sind in Bereiche geteilt. Design, Uhr, Player, Live-TV und Allgemein öffnet man über die Schublade."
