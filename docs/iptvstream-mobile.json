@@ -1,7 +1,7 @@
 {
-  "versionCode": 35,
-  "versionName": "1.0.33",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.33/iptvstream-mobile.apk",
-  "sha256": "e3d078ab3aeaff2dd81062acf50b4b01886bc5bf96dff5bba7df3142584e20d6",
-  "changelog": "Die untere Leiste auf dem Handy zeigt den gewählten Punkt als blaue Kapsel mit Namen. Die anderen Punkte sind nur Symbole."
+  "versionCode": 36,
+  "versionName": "1.0.34",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.34/iptvstream-mobile.apk",
+  "sha256": "70f44a83e13d1d0cad569daf6827f8f9d6a2aab2d6993b3977bdaeecddab2e9c",
+  "changelog": "Technische Durchsicht: Der Wisch über die untere Leiste trifft den richtigen Punkt, und die Hilfebilder zeigen wieder den aktuellen Stand."
 }
