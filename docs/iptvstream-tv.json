@@ -1,7 +1,7 @@
 {
-  "versionCode": 34,
-  "versionName": "1.0.32",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.32/iptvstream-tv.apk",
-  "sha256": "a0ea4ec003be4a76898a7a4ab6368b07c3ac2f19fd9b4d73b84d9d45e3a83b94",
-  "changelog": "Der Live-Puffer bleibt bei groß wirklich länger stehen, und der kleine Balken zerlegt den Text nicht mehr."
+  "versionCode": 35,
+  "versionName": "1.0.33",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.33/iptvstream-tv.apk",
+  "sha256": "8e1895af5b5e8924826791c96f37a83a6c4970faa6e47bc281ab8aa0cbb3b97c",
+  "changelog": "Die untere Leiste auf dem Handy zeigt den gewählten Punkt als blaue Kapsel mit Namen. Die anderen Punkte sind nur Symbole."
 }
