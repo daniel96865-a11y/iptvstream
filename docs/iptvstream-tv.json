@@ -1,7 +1,7 @@
 {
-  "versionCode": 41,
-  "versionName": "1.0.39",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.39/iptvstream-tv.apk",
-  "sha256": "a988136427e539dbb3d8de478af522574f699307e9333f9a8a98f2707ddb38b1",
-  "changelog": "Die Schublade in den Einstellungen ist eine Glasfläche und nur so hoch wie die Optionen."
+  "versionCode": 42,
+  "versionName": "1.0.40",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.40/iptvstream-tv.apk",
+  "sha256": "5cd3ec9bde0db4ff30aea719bb9a1d9299ff535a5ea86799e896afd3d9c270dc",
+  "changelog": "Die Bereiche in den Einstellungen klappen nach unten auf. Die Optionen stehen direkt darunter, wie früher."
 }
