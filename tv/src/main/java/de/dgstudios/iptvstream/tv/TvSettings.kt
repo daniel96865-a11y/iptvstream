@@ -113,7 +113,7 @@ fun TvSettingsScreen(mainVm: MainViewModel, settings: AppSettings, entry: EntryH
                     }
                 }
             }
-            items(section.items, key = { section.id + "/" + it.id }) { def ->
+            items(section.items.filterNot { it.id == "cast" }, key = { section.id + "/" + it.id }) { def ->
                 SettingRow(
                     def = def,
                     settings = settings,

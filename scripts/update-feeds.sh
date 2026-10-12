@@ -53,7 +53,9 @@ print(f"feed geschrieben: {path}")
 PY
 }
 
-if [ "$TAG" = "v1.0.35" ]; then
+if [ "$TAG" = "v1.0.36" ]; then
+  NOTE="Chromecast auf dem Handy: Im Player auf das Cast-Symbol tippen und den Fernseher wählen. An und aus in den Einstellungen, Player."
+elif [ "$TAG" = "v1.0.35" ]; then
   NOTE="Das Favoriten-Widget auf dem Startbildschirm nutzt die neueste Version. Sonst keine sichtbaren Änderungen."
 elif [ "$TAG" = "v1.0.34" ]; then
   NOTE="Technische Durchsicht: Der Wisch über die untere Leiste trifft den richtigen Punkt, und die Hilfebilder zeigen wieder den aktuellen Stand."

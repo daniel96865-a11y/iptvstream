@@ -21,7 +21,7 @@ Handy-Oberfläche im Glas-Look (Hintergrund „Mitternacht“, Akzent Blau) mit 
 | Smartphone / Tablet | [iptvstream-mobile.apk](https://github.com/daniel96865-a11y/iptvstream/releases/latest/download/iptvstream-mobile.apk) |
 | Android TV / Fire TV | [iptvstream-tv.apk](https://github.com/daniel96865-a11y/iptvstream/releases/latest/download/iptvstream-tv.apk) |
 
-Aktuelle Version: [Release v1.0.35](https://github.com/daniel96865-a11y/iptvstream/releases/tag/v1.0.35)
+Aktuelle Version: [Release v1.0.36](https://github.com/daniel96865-a11y/iptvstream/releases/tag/v1.0.36)
 
 Installation außerhalb des Play Store: in den Android-Einstellungen „Unbekannte Apps“ für den Browser bzw. Dateimanager erlauben, die APK öffnen und installieren. Auf Fire TV die APK per „Downloader“ oder `adb install` aufspielen.
 
@@ -45,6 +45,7 @@ Zwei Oberflächen in einem Projekt:
 - Filme und Serien: Details, Fortsetzen, Fortschritt, nächste Episode. Die Filmlänge steht in Stunden und Minuten. Steht im Katalog nur „1 Min.“, liest die App die Länge aus der Datei.
 - Player (Media3/ExoPlayer): HLS, TS, MP4, MKV, Audio- und Untertitelspuren, automatische Audiospur (Deutsch, Polnisch oder automatisch) mit Fallback, Decoder-Fallback, Passthrough (standardmäßig aus), Stereo-Fallback, Bildmodi, automatisches Wiederverbinden. In der Infoleiste stehen Auflösung, Bildformat und Tonformat so, wie der laufende Stream sie meldet. Sechs Audiokanäle sind Surround (5.1), keine Sprachen. Die Sprache der Tonspur wählt man in den Player-Einstellungen. AC3, E-AC3, MP2 und DTS werden bei Bedarf per FFmpeg dekodiert; das Bild bleibt beim Hardware-Decoder, auch bei 4K. Leise Sender lassen sich im Player unter „Ton lauter“ anheben (Leicht, Stark, Sehr stark). Die Stufe gilt nur für diesen Sender, Film oder diese Serie und bleibt gespeichert. Bei Audio-Passthrough bleibt der Ton unverändert. Fehlt ein Live-Sender als MPEG-TS, wird einmal HLS probiert, und umgekehrt. Unten am Live-Sender zeigt ein Balken, wie viel vom Puffer schon geladen ist. Klein ist ein kurzer Balken (etwa 15 Sekunden), groß ein langer (bis zu 90). Der Player bleibt dafür weiter hinter der Live-Sendung, statt den Puffer wieder auf wenige Sekunden zu kürzen.
 - Handy-Player: startet in der aktuellen Ausrichtung. Querformat nur, wenn das Gerät gedreht wird und die Autorotation an ist. Ist die Autorotation aus, bleibt Hochformat, ein Knopf schaltet auf Vollbild.
+- **Chromecast** (Handy): im Player auf das Cast-Symbol tippen und den Fernseher wählen. Live läuft dort am Live-Rand, Filme und Serien starten an der aktuellen Stelle, der nächste Sender oder Film läuft automatisch mit. An und aus in den Einstellungen, Player: „Chromecast“.
 - Updates in der App: beim Start, höchstens alle vier Stunden, und in den Einstellungen über „Nach Updates suchen“. Neuere Versionen zeigen den Changelog; die APK wird geladen und mit dem System-Installer installiert.
 - Einstellungen: Design (Akzent, Hintergrund, Glass-Stärke, Animationen, Dunkel/Hell), Uhr, Player, Live-TV, Allgemein inklusive Version. Alles bleibt gespeichert. Sind Animationen an, gleiten Fortschritt, Fokus, Filmdetails und der Spul-Hinweis. Aus heißt: alles steht sofort.
 
