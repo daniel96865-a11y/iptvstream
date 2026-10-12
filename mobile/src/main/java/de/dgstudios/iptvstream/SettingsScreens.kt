@@ -9,10 +9,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
@@ -55,10 +56,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -186,7 +189,7 @@ internal fun SettingsSectionList(onOpen: (String) -> Unit) {
     }
 }
 
-/** Schublade links, gleiche Fläche wie bei den Kategorien, mit den Optionen eines Bereichs. */
+/** Schwebende Glasfläche links. Nur so hoch wie die Optionen, bei langen Bereichen scrollbar. */
 @Composable
 private fun SettingsOptionsDrawer(
     section: SettingsSection,
@@ -199,15 +202,16 @@ private fun SettingsOptionsDrawer(
     onDismiss: () -> Unit,
 ) {
     val s = LocalAppStyle.current
+    val shape = RoundedCornerShape(28.dp)
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = true),
     ) {
-        Box(Modifier.fillMaxSize()) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
             Box(
                 Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.45f))
+                    .background(Color.Black.copy(alpha = 0.62f))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -216,26 +220,31 @@ private fun SettingsOptionsDrawer(
             )
             Column(
                 Modifier
-                    .fillMaxHeight()
-                    .fillMaxWidth(0.88f)
+                    .align(Alignment.TopStart)
+                    .padding(start = 16.dp, top = 12.dp, bottom = 16.dp)
+                    .fillMaxWidth(0.84f)
                     .widthIn(max = 420.dp)
-                    .background(s.backgroundColors[0])
+                    .heightIn(max = maxHeight - 28.dp)
                     .windowInsetsPadding(
-                        WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
+                        WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top + WindowInsetsSides.Bottom),
                     )
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                    .glass(shape, strong = true)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {},
+                    )
+                    .verticalScroll(rememberScrollState()),
             ) {
-                Text(section.title, color = s.onSurface, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(12.dp))
-                Column(
-                    Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState()),
-                ) {
-                    SettingsCard(section, settings, epgRunning, epgFraction, epgMessage, onChange, onAction)
-                    Spacer(Modifier.height(48.dp))
-                }
+                Text(
+                    section.title,
+                    color = s.onSurface,
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 20.dp, bottom = 6.dp),
+                )
+                SettingsRows(section, settings, epgRunning, epgFraction, epgMessage, onChange, onAction)
+                Spacer(Modifier.height(10.dp))
             }
         }
     }
@@ -252,12 +261,25 @@ internal fun SettingsCard(
     onAction: (String) -> Unit,
 ) {
     Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(20.dp))) {
-        section.items.forEachIndexed { i, def ->
-            if (i > 0) {
-                Box(Modifier.fillMaxWidth().height(1.dp).padding(horizontal = 16.dp).background(Color.White.copy(alpha = 0.08f)))
-            }
-            SettingRow(def, settings, epgRunning, epgFraction, epgMessage, onChange, onAction)
+        SettingsRows(section, settings, epgRunning, epgFraction, epgMessage, onChange, onAction)
+    }
+}
+
+@Composable
+private fun SettingsRows(
+    section: SettingsSection,
+    settings: AppSettings,
+    epgRunning: Boolean,
+    epgFraction: Float,
+    epgMessage: String,
+    onChange: (String, String) -> Unit,
+    onAction: (String) -> Unit,
+) {
+    section.items.forEachIndexed { i, def ->
+        if (i > 0) {
+            Box(Modifier.fillMaxWidth().height(1.dp).padding(horizontal = 18.dp).background(Color.White.copy(alpha = 0.08f)))
         }
+        SettingRow(def, settings, epgRunning, epgFraction, epgMessage, onChange, onAction)
     }
 }
 
@@ -298,21 +320,38 @@ internal fun SettingRow(
             } else {
                 var open by remember { mutableStateOf(false) }
                 Box {
-                    Row(
-                        Modifier.fillMaxWidth().pressable({ open = true }).padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.Top,
+                    Column(
+                        Modifier.fillMaxWidth().pressable({ open = true }).padding(horizontal = 18.dp, vertical = 13.dp),
                     ) {
-                        Column(Modifier.weight(1f).padding(end = 12.dp)) {
-                            Text(def.title, color = s.onSurface, fontSize = 15.sp)
-                            if (def.subtitle.isNotEmpty()) Text(def.subtitle, color = s.onSurfaceDim, fontSize = 12.sp)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                def.title,
+                                color = s.onSurface,
+                                fontSize = 16.sp,
+                                modifier = Modifier.weight(1f).padding(end = 10.dp),
+                            )
+                            Text(
+                                def.labelOf(value),
+                                color = s.accent,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                textAlign = TextAlign.Center,
+                                lineHeight = 16.sp,
+                                modifier = Modifier
+                                    .widthIn(max = 148.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(s.accent.copy(alpha = 0.16f))
+                                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                            )
                         }
-                        Text(
-                            def.labelOf(value),
-                            color = s.accent,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(top = 1.dp),
-                        )
+                        if (def.subtitle.isNotEmpty()) {
+                            Text(
+                                def.subtitle,
+                                color = s.onSurfaceDim,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(top = 4.dp, end = 8.dp),
+                            )
+                        }
                     }
                     DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
                         for (o in def.options) {
