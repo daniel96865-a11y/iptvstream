@@ -107,6 +107,7 @@ import de.dgstudios.iptvstream.core.data.PlayKind
 import de.dgstudios.iptvstream.core.data.db.EpgEntity
 import de.dgstudios.iptvstream.core.player.AudioBoost
 import de.dgstudios.iptvstream.core.player.PlayerController
+import de.dgstudios.iptvstream.core.ui.LiveBufferBar
 import de.dgstudios.iptvstream.core.ui.LocalAppStyle
 import de.dgstudios.iptvstream.core.ui.VideoSurface
 import de.dgstudios.iptvstream.core.ui.formatClock
@@ -472,7 +473,7 @@ private fun PlayerContent(
                     ) {
                             // Unten: Fortschritt
                             if (liveEdge) {
-                                LiveInfo(ui)
+                                LiveInfo(ui, st.bufferedMs, st.bufferMaxMs)
                                 if (!portrait) {
                                     Spacer(Modifier.height(10.dp))
                                     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -822,7 +823,7 @@ private fun SeekBar(ctrl: PlayerController, positionMs: Long, durationMs: Long, 
 }
 
 @Composable
-internal fun LiveInfo(ui: PlayerUi) {
+internal fun LiveInfo(ui: PlayerUi, bufferedMs: Long = 0L, bufferMaxMs: Long = 0L) {
     val s = LocalAppStyle.current
     val nn = ui.nowNext
     val cur = nn?.now
@@ -858,6 +859,10 @@ internal fun LiveInfo(ui: PlayerUi) {
             }
         } else {
             Text("Keine Programminformationen verfügbar", color = Color(0xCCFFFFFF), fontSize = 13.sp)
+        }
+        if (bufferMaxMs > 0L) {
+            Spacer(Modifier.height(10.dp))
+            LiveBufferBar(bufferedMs, bufferMaxMs, barHeight = 4.dp, fontSize = 12.sp)
         }
     }
 }

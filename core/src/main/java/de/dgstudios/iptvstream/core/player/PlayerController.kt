@@ -61,6 +61,8 @@ data class PlayerState(
     val positionMs: Long = 0,
     val durationMs: Long = 0,
     val bufferedMs: Long = 0,
+    /** Ziel des Live-Puffers in Millisekunden. 0 außerhalb des Live-Rands. */
+    val bufferMaxMs: Long = 0,
     val isLive: Boolean = false,
     val error: String? = null,
     val notice: String? = null,
@@ -170,6 +172,7 @@ class PlayerController(
     private var lastSaveAt = 0L
     private var released = false
     private val gain = StreamGain()
+    private val liveBufferMaxMs: Long
 
     init {
         val dataSource = DefaultDataSource.Factory(
@@ -187,11 +190,8 @@ class PlayerController(
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSource, extractors)
             .setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(6))
 
-        val (minMs, maxMs, bytes) = when (settings.buffer) {
-            "small" -> Triple(5_000, 15_000, 40 * 1024 * 1024)
-            "large" -> Triple(30_000, 90_000, 96 * 1024 * 1024)
-            else -> Triple(15_000, 40_000, 64 * 1024 * 1024)
-        }
+        val (minMs, maxMs, bytes) = PlaybackBuffer.spec(settings.buffer)
+        liveBufferMaxMs = maxMs.toLong()
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(minMs, maxMs, 1_000, 2_500)
             .setTargetBufferBytes(bytes)
@@ -268,6 +268,7 @@ class PlayerController(
             it.copy(
                 loading = true, playing = false, error = null, notice = null, ended = false,
                 audioTracks = emptyList(), textTracks = emptyList(), positionMs = 0, durationMs = 0,
+                bufferedMs = 0, bufferMaxMs = if (liveEdge(item)) liveBufferMaxMs else 0L,
                 videoWidth = 0, videoHeight = 0, signalVideo = null, signalAudio = null,
                 isLive = liveEdge(item),
             )
@@ -670,7 +671,8 @@ class PlayerController(
                     it.copy(
                         positionMs = if (live) 0 else player.currentPosition,
                         durationMs = if (dur == C.TIME_UNSET || live) 0 else dur,
-                        bufferedMs = if (live) 0 else player.bufferedPosition,
+                        bufferedMs = if (live) player.totalBufferedDuration.coerceAtLeast(0L) else player.bufferedPosition,
+                        bufferMaxMs = if (live) liveBufferMaxMs else 0L,
                     )
                 }
                 refreshSignal()
