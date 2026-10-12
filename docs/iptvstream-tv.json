@@ -1,7 +1,7 @@
 {
-  "versionCode": 32,
-  "versionName": "1.0.30",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.30/iptvstream-tv.apk",
-  "sha256": "73239bc55a9a42213cc963018b7ef888389a5644cf1abba3036a0b82a8c20481",
-  "changelog": "Leise Sender lassen sich im Player unter „Ton lauter“ anheben. Die Stufe gilt nur für diesen Sender und bleibt gespeichert."
+  "versionCode": 33,
+  "versionName": "1.0.31",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.31/iptvstream-tv.apk",
+  "sha256": "0c85231de27ce0df1ab339dbb7c9f7366202ededecd4de9228bc43e1b5ab5168",
+  "changelog": "Unten am Live-Sender zeigt ein Balken, wie viel vom Puffer schon geladen ist. Bei groß ist er länger, bei klein kürzer."
 }
