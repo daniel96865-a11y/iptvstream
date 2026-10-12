@@ -195,7 +195,7 @@ class PlayerController(
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(minMs, maxMs, 1_000, 2_500)
             .setTargetBufferBytes(bytes)
-            .setPrioritizeTimeOverSizeThresholds(false)
+            .setPrioritizeTimeOverSizeThresholds(true)
             .build()
 
         var params = trackSelector.buildUponParameters().setMaxAudioChannelCount(maxChannels)
@@ -259,10 +259,26 @@ class PlayerController(
                 .build()
         }
         current = item
+        val live = liveEdge(item)
         val mediaItem = MediaItem.Builder()
             .setUri(item.url)
             .setMediaId(item.id)
-            .apply { if (Urls.isHls(item.url)) setMimeType(MimeTypes.APPLICATION_M3U8) }
+            .apply {
+                if (Urls.isHls(item.url)) setMimeType(MimeTypes.APPLICATION_M3U8)
+                if (live) {
+                    // Ohne Zielabstand holt der Player zum Live-Rand auf und wirft den Puffer
+                    // wieder auf wenige Segmente zusammen, auch wenn groß 90 Sekunden erlaubt.
+                    setLiveConfiguration(
+                        MediaItem.LiveConfiguration.Builder()
+                            .setMinOffsetMs(4_000L.coerceAtMost(liveBufferMaxMs))
+                            .setTargetOffsetMs(liveBufferMaxMs)
+                            .setMaxOffsetMs(liveBufferMaxMs)
+                            .setMinPlaybackSpeed(0.98f)
+                            .setMaxPlaybackSpeed(1.02f)
+                            .build(),
+                    )
+                }
+            }
             .build()
         _state.update {
             it.copy(

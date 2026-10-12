@@ -115,7 +115,7 @@ object SettingsSchema {
                     "buffer", "Puffergröße",
                     listOf(Option("small", "Klein (schnell)"), Option("medium", "Mittel"), Option("large", "Groß (stabil)")),
                     "medium",
-                    "Klein ist ein kurzer Live-Puffer, groß ein langer. Der Balken am Sender zeigt den Stand.",
+                    "Klein hält etwa 15 Sekunden vor, groß bis zu 90. Der Sender liegt dann weiter hinter der Live-Sendung.",
                 ),
                 ChoiceDef(
                     "resize", "Bildmodus",

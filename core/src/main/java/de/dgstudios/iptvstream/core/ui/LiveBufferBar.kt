@@ -34,14 +34,26 @@ fun LiveBufferBar(
     if (maxMs <= 0L) return
     val track = PlaybackBuffer.trackFraction(maxMs)
     val fill = animatedProgress(PlaybackBuffer.fill(bufferedMs, maxMs))
-    Column(modifier) {
+    Column(modifier.fillMaxWidth()) {
         Row(
-            Modifier.fillMaxWidth(track),
+            Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Puffer", color = Color.White.copy(alpha = 0.8f), fontSize = fontSize, fontWeight = FontWeight.Medium)
+            Text(
+                "Puffer",
+                color = Color.White.copy(alpha = 0.8f),
+                fontSize = fontSize,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+            )
             Spacer(Modifier.weight(1f))
-            Text(PlaybackBuffer.label(bufferedMs, maxMs), color = Color.White.copy(alpha = 0.8f), fontSize = fontSize)
+            Text(
+                PlaybackBuffer.label(bufferedMs, maxMs),
+                color = Color.White.copy(alpha = 0.8f),
+                fontSize = fontSize,
+                maxLines = 1,
+                softWrap = false,
+            )
         }
         Spacer(Modifier.height(3.dp))
         Box(
