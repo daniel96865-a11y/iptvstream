@@ -1,7 +1,7 @@
 {
-  "versionCode": 36,
-  "versionName": "1.0.34",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.34/iptvstream-tv.apk",
-  "sha256": "13836f015c766f1c317a4be536bf8f4affd682c7c714bf40de556b8c30c90183",
-  "changelog": "Technische Durchsicht: Der Wisch über die untere Leiste trifft den richtigen Punkt, und die Hilfebilder zeigen wieder den aktuellen Stand."
+  "versionCode": 37,
+  "versionName": "1.0.35",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.35/iptvstream-tv.apk",
+  "sha256": "789d5d2ed73ac9509006c13ce932a64fb0d2a5f3dd24ba253bbe7d0f390d7370",
+  "changelog": "Das Favoriten-Widget auf dem Startbildschirm nutzt die neueste Version. Sonst keine sichtbaren Änderungen."
 }
