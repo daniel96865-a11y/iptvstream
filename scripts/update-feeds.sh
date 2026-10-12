@@ -53,7 +53,9 @@ print(f"feed geschrieben: {path}")
 PY
 }
 
-if [ "$TAG" = "v1.0.39" ]; then
+if [ "$TAG" = "v1.0.40" ]; then
+  NOTE="Die Bereiche in den Einstellungen klappen nach unten auf. Die Optionen stehen direkt darunter, wie früher."
+elif [ "$TAG" = "v1.0.39" ]; then
   NOTE="Die Schublade in den Einstellungen ist eine Glasfläche und nur so hoch wie die Optionen."
 elif [ "$TAG" = "v1.0.38" ]; then
   NOTE="In den Einstellungen stehen die Bereiche untereinander. Tippen öffnet die Schublade mit den Optionen."
