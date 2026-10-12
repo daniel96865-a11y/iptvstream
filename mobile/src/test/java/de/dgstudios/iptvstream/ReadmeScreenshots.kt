@@ -235,15 +235,9 @@ class ReadmeScreenshots {
                     Spacer(Modifier.height(8.dp))
                     Text("Profile verwalten", color = s.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 }
-                for (section in SettingsSchema.sections.take(2)) {
-                    Text(section.title, color = s.onSurface, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 6.dp, top = 8.dp))
-                    Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(20.dp))) {
-                        section.items.forEachIndexed { i, def ->
-                            if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).padding(horizontal = 16.dp).background(Color.White.copy(alpha = 0.08f)))
-                            SettingRow(def, settings, false, 0f, "", { _, _ -> }, {})
-                        }
-                    }
-                }
+                val section = SettingsSchema.sections.first()
+                SettingsSectionBar(section.title) {}
+                SettingsCard(section, settings, false, 0f, "", { _, _ -> }, {})
             }
         }
     }

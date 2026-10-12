@@ -1,6 +1,9 @@
 package de.dgstudios.iptvstream
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,14 +11,18 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.layout.asPaddingValues
@@ -30,6 +37,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -44,9 +52,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -55,6 +65,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import de.dgstudios.iptvstream.core.settings.SettingsSection
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.dgstudios.iptvstream.core.data.db.ProfileEntity
 import de.dgstudios.iptvstream.core.data.db.ProfileType
@@ -83,6 +96,9 @@ fun SettingsScreen(mainVm: MainViewModel, settings: AppSettings, bottomPad: Dp, 
     val sysNav = androidx.compose.foundation.layout.WindowInsets.navigationBars
         .asPaddingValues().calculateBottomPadding()
     val listBottom = maxOf(bottomPad, 66.dp + 36.dp + sysNav) + 24.dp
+    var sectionId by rememberSaveable { mutableStateOf(SettingsSchema.sections.first().id) }
+    var drawerOpen by remember { mutableStateOf(false) }
+    val section = SettingsSchema.sections.firstOrNull { it.id == sectionId } ?: SettingsSchema.sections.first()
 
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -110,41 +126,166 @@ fun SettingsScreen(mainVm: MainViewModel, settings: AppSettings, bottomPad: Dp, 
                 }
             }
         }
-        for (section in SettingsSchema.sections) {
-            item(key = "h_" + section.id) {
-                Text(
-                    section.title,
-                    color = s.onSurface,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(start = 6.dp, top = 8.dp),
-                )
-            }
-            item(key = "s_" + section.id) {
-                Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(20.dp))) {
-                    section.items.forEachIndexed { i, def ->
-                        if (i > 0) {
-                            Box(Modifier.fillMaxWidth().height(1.dp).padding(horizontal = 16.dp).background(Color.White.copy(alpha = 0.08f)))
-                        }
-                        SettingRow(
-                            def = def,
-                            settings = settings,
-                            epgRunning = epg.running,
-                            epgFraction = epg.fraction,
-                            epgMessage = epg.message,
-                            onChange = { k, v -> mainVm.set(k, v) },
-                            onAction = { id ->
-                                when (id) {
-                                    "profiles" -> onProfiles()
-                                    "reload" -> mainVm.reloadContent()
-                                    "epg_refresh" -> mainVm.refreshEpg()
-                                    "check_update" -> context.container.updates.checkNow()
-                                }
-                            },
-                        )
+        item(key = "section_bar") {
+            SettingsSectionBar(section.title) { drawerOpen = true }
+        }
+        item(key = "s_" + section.id) {
+            SettingsCard(
+                section = section,
+                settings = settings,
+                epgRunning = epg.running,
+                epgFraction = epg.fraction,
+                epgMessage = epg.message,
+                onChange = { k, v -> mainVm.set(k, v) },
+                onAction = { id ->
+                    when (id) {
+                        "profiles" -> onProfiles()
+                        "reload" -> mainVm.reloadContent()
+                        "epg_refresh" -> mainVm.refreshEpg()
+                        "check_update" -> context.container.updates.checkNow()
+                    }
+                },
+            )
+        }
+    }
+    if (drawerOpen) {
+        SettingsSectionDrawer(
+            selected = section.id,
+            onSelect = {
+                sectionId = it
+                drawerOpen = false
+            },
+            onDismiss = { drawerOpen = false },
+        )
+    }
+}
+
+/** Knopf wie bei den Kategorien: tippen öffnet die Schublade mit den Bereichen. */
+@Composable
+internal fun SettingsSectionBar(title: String, onOpen: () -> Unit) {
+    val s = LocalAppStyle.current
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(36.dp)
+            .glass(RoundedCornerShape(50))
+            .pressable(onOpen)
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Rounded.Menu, contentDescription = "Bereiche öffnen", tint = s.onSurface, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(
+            title,
+            color = s.onSurface,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** Seitliche Schublade mit Design, Uhr, Player, Live-TV und Allgemein. */
+@Composable
+private fun SettingsSectionDrawer(
+    selected: String,
+    onSelect: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val s = LocalAppStyle.current
+    val sections = SettingsSchema.sections
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = true),
+    ) {
+        Box(Modifier.fillMaxSize()) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.45f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onDismiss,
+                    ),
+            )
+            Column(
+                Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(0.88f)
+                    .widthIn(max = 420.dp)
+                    .background(s.backgroundColors[0])
+                    .windowInsetsPadding(
+                        WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
+                    )
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+            ) {
+                Text("Bereiche", color = s.onSurface, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(12.dp))
+                LazyColumn(
+                    Modifier.weight(1f).fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(bottom = 48.dp),
+                ) {
+                    items(sections, key = { it.id }) { sec ->
+                        SettingsDrawerRow(sec.title, sec.id == selected) { onSelect(sec.id) }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SettingsDrawerRow(name: String, selected: Boolean, onClick: () -> Unit) {
+    val s = LocalAppStyle.current
+    val shape = RoundedCornerShape(18.dp)
+    val fill = if (selected) settingsSolidMix(s.backgroundColors[2], s.accent, 0.5f) else s.backgroundColors[2]
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(fill, shape)
+            .then(if (selected) Modifier.border(1.5.dp, s.accent, shape) else Modifier)
+            .pressable(onClick)
+            .padding(horizontal = 14.dp, vertical = 13.dp),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Text(
+            name,
+            color = s.onSurface,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+private fun settingsSolidMix(base: Color, accent: Color, amount: Float): Color = Color(
+    red = base.red * (1f - amount) + accent.red * amount,
+    green = base.green * (1f - amount) + accent.green * amount,
+    blue = base.blue * (1f - amount) + accent.blue * amount,
+    alpha = 1f,
+)
+
+@Composable
+internal fun SettingsCard(
+    section: SettingsSection,
+    settings: AppSettings,
+    epgRunning: Boolean,
+    epgFraction: Float,
+    epgMessage: String,
+    onChange: (String, String) -> Unit,
+    onAction: (String) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(20.dp))) {
+        section.items.forEachIndexed { i, def ->
+            if (i > 0) {
+                Box(Modifier.fillMaxWidth().height(1.dp).padding(horizontal = 16.dp).background(Color.White.copy(alpha = 0.08f)))
+            }
+            SettingRow(def, settings, epgRunning, epgFraction, epgMessage, onChange, onAction)
         }
     }
 }
