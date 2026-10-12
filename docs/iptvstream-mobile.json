@@ -1,7 +1,7 @@
 {
-  "versionCode": 38,
-  "versionName": "1.0.36",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.36/iptvstream-mobile.apk",
-  "sha256": "b7a469e9e412646f215762284a00543b51e0ed17410ad10c351bda8730f9fde4",
-  "changelog": "Chromecast auf dem Handy: Im Player auf das Cast-Symbol tippen und den Fernseher wählen. An und aus in den Einstellungen, Player."
+  "versionCode": 39,
+  "versionName": "1.0.37",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.37/iptvstream-mobile.apk",
+  "sha256": "2d50e0557b862f059206a5057a42f119eb3517a79a755a4578ea7a1733489bce",
+  "changelog": "Die Einstellungen auf dem Handy sind in Bereiche geteilt. Design, Uhr, Player, Live-TV und Allgemein öffnet man über die Schublade."
 }
