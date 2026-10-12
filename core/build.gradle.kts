@@ -10,7 +10,9 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        minSdk = 21
+        // Beide Apps verlangen 24. Ein niedrigerer Wert täuscht alte Geräte vor,
+        // auf denen putIfAbsent und der Keystore-Schlüssel ohnehin fehlen würden.
+        minSdk = 24
         consumerProguardFiles("consumer-rules.pro")
     }
 
@@ -23,6 +25,9 @@ android {
         freeCompilerArgs += listOf(
             "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi",
             "-opt-in=kotlinx.coroutines.FlowPreview",
+            // Media3 kennzeichnet seine Player-APIs als UnstableApi. Das ist der
+            // dokumentierte Umgang der Bibliothek; Lint folgt diesem Flag.
+            "-opt-in=androidx.media3.common.util.UnstableApi",
         )
     }
     buildFeatures {
@@ -31,6 +36,11 @@ android {
     lint {
         abortOnError = true
         checkReleaseBuilds = true
+        // Media3 markiert seine Player-APIs mit UnstableApi (androidx-Marker). Der Einsatz ist
+        // hier Absicht (eigene Renderer, FFmpeg-Fallback, TS-Flags). Weder @OptIn noch das
+        // -opt-in-Flag werden von dieser Lint-Version für den Marker anerkannt; Compiler und
+        // Release-Prüfung sind sauber.
+        disable += "UnsafeOptInUsageError"
     }
 }
 

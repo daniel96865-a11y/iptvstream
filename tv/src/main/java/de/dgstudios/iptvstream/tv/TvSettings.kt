@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -57,7 +58,7 @@ fun TvSettingsScreen(mainVm: MainViewModel, settings: AppSettings, entry: EntryH
     val context = LocalContext.current
     val active by mainVm.active.collectAsStateWithLifecycle()
     val epg by mainVm.epg.collectAsStateWithLifecycle()
-    var sectionIndex by rememberSaveable { mutableStateOf(0) }
+    var sectionIndex by rememberSaveable { mutableIntStateOf(0) }
     val sections = SettingsSchema.sections
     val sectionReqs = remember { sections.map { FocusRequester() } }
 
