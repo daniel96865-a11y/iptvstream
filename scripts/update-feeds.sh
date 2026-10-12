@@ -53,7 +53,9 @@ print(f"feed geschrieben: {path}")
 PY
 }
 
-if [ "$TAG" = "v1.0.30" ]; then
+if [ "$TAG" = "v1.0.31" ]; then
+  NOTE="Unten am Live-Sender zeigt ein Balken, wie viel vom Puffer schon geladen ist. Bei groß ist er länger, bei klein kürzer."
+elif [ "$TAG" = "v1.0.30" ]; then
   NOTE="Leise Sender lassen sich im Player unter „Ton lauter“ anheben. Die Stufe gilt nur für diesen Sender und bleibt gespeichert."
 elif [ "$TAG" = "v1.0.29" ]; then
   NOTE="Das Programm läuft für deutsche Sender richtiger: Sender werden nur noch Einträgen des gleichen Landes zugeordnet, und ein deutscher Programmführer aus dem Netz springt als Ersatz ein (Einstellungen, Live-TV)."

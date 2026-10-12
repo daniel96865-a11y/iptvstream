@@ -57,6 +57,7 @@ import de.dgstudios.iptvstream.core.data.PlayKind
 import de.dgstudios.iptvstream.core.data.db.EpgEntity
 import de.dgstudios.iptvstream.core.player.AudioBoost
 import de.dgstudios.iptvstream.core.player.PlayerController
+import de.dgstudios.iptvstream.core.ui.LiveBufferBar
 import de.dgstudios.iptvstream.core.ui.LocalAppStyle
 import de.dgstudios.iptvstream.core.ui.NumberOverlay
 import de.dgstudios.iptvstream.core.ui.VideoSurface
@@ -323,7 +324,10 @@ private fun TvPlayerContent(vm: PlayerViewModel, ctrl: PlayerController, ui: Pla
             enter = fadeIn(),
             exit = fadeOut(),
         ) {
-            ControlsBar(ui, st.playing, st.positionMs, st.durationMs, tick, isLive, st.signalVideo, st.signalAudio)
+            ControlsBar(
+                ui, st.playing, st.positionMs, st.durationMs, st.bufferedMs, st.bufferMaxMs,
+                tick, isLive, st.signalVideo, st.signalAudio,
+            )
         }
 
         AnimatedVisibility(
@@ -407,6 +411,8 @@ private fun ControlsBar(
     playing: Boolean,
     positionMs: Long,
     durationMs: Long,
+    bufferedMs: Long,
+    bufferMaxMs: Long,
     tick: Long,
     isLive: Boolean,
     signalVideo: String?,
@@ -449,6 +455,10 @@ private fun ControlsBar(
                     if (next != null) {
                         Text("Danach  ${formatClock(next.start)}  ${next.title}", color = Color(0xCCFFFFFF), fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
+                }
+                if (bufferMaxMs > 0L) {
+                    Spacer(Modifier.height(8.dp))
+                    LiveBufferBar(bufferedMs, bufferMaxMs, barHeight = 5.dp, fontSize = 15.sp)
                 }
                 Spacer(Modifier.height(10.dp))
                 Text(
