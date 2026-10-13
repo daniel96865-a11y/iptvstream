@@ -236,6 +236,13 @@ interface EpgDao {
     @Query("DELETE FROM epg WHERE profileId = :p AND channelKey LIKE 'ger:%'")
     suspend fun clearGerman(p: Long)
 
+    /** Erst nach vollständigem Import: die Zwischenablage wird zum echten Profil. */
+    @Query("UPDATE epg SET profileId = :real WHERE profileId = :stage AND channelKey NOT LIKE 'ger:%'")
+    suspend fun promoteProvider(stage: Long, real: Long)
+
+    @Query("UPDATE epg SET profileId = :real WHERE profileId = :stage AND channelKey LIKE 'ger:%'")
+    suspend fun promoteGerman(stage: Long, real: Long)
+
     @Query("SELECT * FROM epg WHERE profileId = :p AND channelKey = :k AND stop > :now ORDER BY start LIMIT :n")
     suspend fun upcoming(p: Long, k: String, now: Long, n: Int): List<EpgEntity>
 

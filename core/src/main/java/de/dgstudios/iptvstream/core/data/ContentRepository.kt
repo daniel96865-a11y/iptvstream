@@ -18,18 +18,20 @@ import de.dgstudios.iptvstream.core.data.remote.HttpService
 import de.dgstudios.iptvstream.core.data.remote.Json
 import de.dgstudios.iptvstream.core.data.remote.Net
 import de.dgstudios.iptvstream.core.data.remote.XtreamApi
+import de.dgstudios.iptvstream.core.settings.SettingsStore
 import de.dgstudios.iptvstream.core.util.Catchup
 import de.dgstudios.iptvstream.core.util.M3uParser
 import de.dgstudios.iptvstream.core.util.Urls
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -47,6 +49,13 @@ object Cat {
         RECENT -> "Zuletzt"
         else -> groupName?.takeIf { it.isNotBlank() } ?: "Kategorie"
     }
+
+    /** Gespeicherte Kategorie nur behalten, wenn sie in diesem Profil noch existiert. */
+    fun restoreCategory(saved: String?, knownIds: Set<String>): String {
+        if (saved.isNullOrEmpty()) return ALL
+        if (saved == ALL || saved == FAV || saved == RECENT) return saved
+        return if (saved in knownIds) saved else ALL
+    }
 }
 
 data class SearchResults(
@@ -63,10 +72,17 @@ class ContentRepository(
     private val xtream: XtreamApi,
     private val epg: EpgManager,
     private val scope: CoroutineScope,
+    private val settings: SettingsStore,
 ) {
     private val _sync = MutableStateFlow(SyncState())
     val syncState: StateFlow<SyncState> = _sync
-    private val syncMutex = Mutex()
+    private val syncQueue = ProfileQueue<SyncRequest>(
+        scope = scope,
+        key = { it.profileId },
+        merge = SyncPlan::merge,
+    )
+    private var sectionRetry: Job? = null
+    private var retryDelayMs = SECTION_RETRY_MS
 
     private val seriesCache = object : LinkedHashMap<String, SeriesDetail>(16, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, SeriesDetail>?): Boolean = size > 24
@@ -129,12 +145,15 @@ class ContentRepository(
             db.content().clearMovies(id)
             db.content().clearSeries(id)
             db.epg().clear(id)
+            db.epg().clear(EpgStaging.profileId(id))
             db.epg().clearNames(id)
+            db.epg().clearNames(EpgStaging.profileId(id))
             db.user().clearFavorites(id)
             db.user().clearProgress(id)
             db.profiles().delete(id)
         }
         withContext(Dispatchers.IO) { M3uSeriesStore.removeProfile(db, id) }
+        settings.remove(SettingsStore.syncRetryKey(id))
     }
 
     // ------------------------------------------------------------------ Listen
@@ -415,17 +434,32 @@ class ContentRepository(
         scope.launch {
             val p = profile(profileId) ?: return@launch
             val age = System.currentTimeMillis() - p.lastSync
-            if (p.lastSync == 0L || age > 12 * 3_600_000L) sync(profileId)
-            if (epgAuto) epg.launchRefreshIfStale(profileId, 6 * 3_600_000L)
+            val pending = SyncPlan.parse(settings.getRaw(SettingsStore.syncRetryKey(profileId)))
+            when {
+                p.lastSync == 0L || age > 12 * 3_600_000L -> sync(profileId)
+                pending.isNotEmpty() -> enqueue(profileId, pending)
+            }
+            if (epgAuto) epg.launchRefreshIfStale(profileId, EpgRefreshInterval.STALE_MS)
         }
     }
 
     fun launchSync(profileId: Long) {
+        sectionRetry?.cancel()
+        retryDelayMs = SECTION_RETRY_MS
         scope.launch { sync(profileId) }
     }
 
     suspend fun sync(profileId: Long) {
-        if (!syncMutex.tryLock()) return
+        enqueue(profileId, null)
+    }
+
+    private suspend fun enqueue(profileId: Long, only: Set<SyncSection>?) {
+        syncQueue.submit(SyncRequest(profileId, only)) { req ->
+            performSync(req.profileId, req.sections)
+        }
+    }
+
+    private suspend fun performSync(profileId: Long, only: Set<SyncSection>?) {
         try {
             val p = profile(profileId) ?: return
             _sync.value = SyncState(true, "Anmeldung …", 0.01f)
@@ -436,20 +470,58 @@ class ContentRepository(
                     _sync.value = SyncState(error = auth.message)
                     return
                 }
-                syncXtream(p, report)
+                val failed = syncXtream(p, report, only)
+                finishXtream(p.id, only, failed)
             } else {
                 syncM3u(p, report)
+                db.profiles().setSync(p.id, System.currentTimeMillis())
+                clearPending(p.id)
+                epg.rematch(p.id)
+                _sync.value = SyncState(false, "Fertig", 1f)
             }
-            db.profiles().setSync(p.id, System.currentTimeMillis())
-            epg.rematch(p.id)
-            _sync.value = SyncState(false, "Fertig", 1f)
         } catch (e: CancellationException) {
             _sync.value = SyncState()
             throw e
         } catch (e: Exception) {
             _sync.value = SyncState(error = Net.friendly(e))
-        } finally {
-            syncMutex.unlock()
+        }
+    }
+
+    /**
+     * Volle Aktualisierung nur, wenn jeder Bereich durch ist. Fehlende Bereiche bleiben gemerkt
+     * und werden allein nachgezogen, ohne die gelungenen noch einmal als frisch zu stempeln.
+     */
+    private suspend fun finishXtream(profileId: Long, only: Set<SyncSection>?, failedNow: SectionFailure) {
+        val attempted = only ?: SyncPlan.ALL
+        val previous = SyncPlan.parse(settings.getRaw(SettingsStore.syncRetryKey(profileId)))
+        val pending = if (only == null) failedNow.sections else (previous - attempted) + failedNow.sections
+        epg.rematch(profileId)
+        if (pending.isEmpty()) {
+            clearPending(profileId)
+            retryDelayMs = SECTION_RETRY_MS
+            db.profiles().setSync(profileId, System.currentTimeMillis())
+            _sync.value = SyncState(false, "Fertig", 1f)
+            return
+        }
+        settings.set(SettingsStore.syncRetryKey(profileId), SyncPlan.format(pending))
+        val message = SyncPlan.message(pending, failedNow.cause)
+        _sync.value = SyncState(running = false, stage = message, fraction = 0f, error = message)
+        scheduleSectionRetry(profileId)
+    }
+
+    private suspend fun clearPending(profileId: Long) {
+        settings.remove(SettingsStore.syncRetryKey(profileId))
+    }
+
+    private fun scheduleSectionRetry(profileId: Long) {
+        sectionRetry?.cancel()
+        val wait = retryDelayMs
+        retryDelayMs = (retryDelayMs * 4).coerceAtMost(MAX_SECTION_RETRY_MS)
+        sectionRetry = scope.launch {
+            delay(wait)
+            val pending = SyncPlan.parse(settings.getRaw(SettingsStore.syncRetryKey(profileId)))
+            if (pending.isEmpty()) return@launch
+            enqueue(profileId, pending)
         }
     }
 
@@ -472,17 +544,25 @@ class ContentRepository(
             }
         }
         db.content().upsertCategories(list)
-        db.content().pruneCategories(p.id, type, token)
     }
 
-    private suspend fun syncXtream(p: ProfileEntity, report: (String, Float) -> Unit) {
+    private suspend fun syncXtream(
+        p: ProfileEntity,
+        report: (String, Float) -> Unit,
+        only: Set<SyncSection>?,
+    ): SectionFailure {
         val token = System.currentTimeMillis()
         val c = db.content()
-        var okSections = 0
-        var firstError: Exception? = null
+        val failed = LinkedHashSet<SyncSection>()
+        var cause: String? = null
+        fun note(section: SyncSection, error: Exception) {
+            failed.add(section)
+            if (cause == null) cause = Net.friendly(error)
+        }
+        val want: (SyncSection) -> Boolean = { only == null || it in only }
 
         // ---- Live ----
-        try {
+        if (want(SyncSection.LIVE)) try {
             report("Live-Kategorien", 0.03f)
             syncCategories(p, "get_live_categories", CatType.LIVE, token)
             report("Live-Sender", 0.08f)
@@ -517,15 +597,15 @@ class ContentRepository(
             }
             if (batch.isNotEmpty()) c.upsertChannels(ArrayList(batch))
             c.pruneChannels(p.id, token)
-            okSections++
+            c.pruneCategories(p.id, CatType.LIVE, token)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            firstError = firstError ?: e
+            note(SyncSection.LIVE, e)
         }
 
         // ---- Filme ----
-        try {
+        if (want(SyncSection.MOVIE)) try {
             report("Film-Kategorien", 0.35f)
             syncCategories(p, "get_vod_categories", CatType.MOVIE, token)
             report("Filme", 0.4f)
@@ -559,15 +639,15 @@ class ContentRepository(
             }
             if (batch.isNotEmpty()) c.upsertMovies(ArrayList(batch))
             c.pruneMovies(p.id, token)
-            okSections++
+            c.pruneCategories(p.id, CatType.MOVIE, token)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            firstError = firstError ?: e
+            note(SyncSection.MOVIE, e)
         }
 
         // ---- Serien ----
-        try {
+        if (want(SyncSection.SERIES)) try {
             report("Serien-Kategorien", 0.7f)
             syncCategories(p, "get_series_categories", CatType.SERIES, token)
             report("Serien", 0.75f)
@@ -601,14 +681,14 @@ class ContentRepository(
             }
             if (batch.isNotEmpty()) c.upsertSeries(ArrayList(batch))
             c.pruneSeries(p.id, token)
-            okSections++
+            c.pruneCategories(p.id, CatType.SERIES, token)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            firstError = firstError ?: e
+            note(SyncSection.SERIES, e)
         }
 
-        if (okSections == 0 && firstError != null) throw firstError
+        return SectionFailure(failed, cause)
     }
 
     private suspend fun syncM3u(p: ProfileEntity, report: (String, Float) -> Unit) {
@@ -717,5 +797,7 @@ class ContentRepository(
 
     private companion object {
         const val BATCH = 500
+        const val SECTION_RETRY_MS = 2 * 60 * 1000L
+        const val MAX_SECTION_RETRY_MS = 30 * 60 * 1000L
     }
 }

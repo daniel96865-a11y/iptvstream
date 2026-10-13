@@ -7,6 +7,7 @@ import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import de.dgstudios.iptvstream.core.data.ContentRepository
+import de.dgstudios.iptvstream.core.data.EpgAutoRefresh
 import de.dgstudios.iptvstream.core.data.EpgManager
 import de.dgstudios.iptvstream.core.data.PlaybackSession
 import de.dgstudios.iptvstream.core.data.db.AppDatabase
@@ -42,7 +43,7 @@ class AppContainer(context: Context) {
     val settings = SettingsStore(context.applicationContext)
     val xtream = XtreamApi(http)
     val epg = EpgManager(db, http, appScope) { settings.current().epgGerman }
-    val repo = ContentRepository(db, http, xtream, epg, appScope)
+    val repo = ContentRepository(db, http, xtream, epg, appScope, settings)
     val session = PlaybackSession()
     val updates = UpdateChecker(context.applicationContext, okHttp, appScope)
 
@@ -59,6 +60,7 @@ class IptvApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        EpgAutoRefresh.install(this, container)
     }
 
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)

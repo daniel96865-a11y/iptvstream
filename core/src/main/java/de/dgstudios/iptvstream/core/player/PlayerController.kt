@@ -307,10 +307,14 @@ class PlayerController(
     }
 
     private var stoppedForBackground = false
+    @Volatile private var inBackground = false
 
     /** App geht in den Hintergrund: Fortschritt sichern, Live-Streams ganz beenden (keine offenen Verbindungen). */
     fun onBackground() {
         if (released) return
+        inBackground = true
+        reconnectJob?.cancel()
+        reconnectJob = null
         current?.let { saveProgress(it, force = true) }
         player.pause()
         if (liveEdge(current)) {
@@ -321,6 +325,7 @@ class PlayerController(
 
     fun onForeground() {
         if (released) return
+        inBackground = false
         if (stoppedForBackground) {
             stoppedForBackground = false
             retry()
@@ -623,6 +628,7 @@ class PlayerController(
     }
 
     private fun tryReconnect(): Boolean {
+        if (inBackground || released) return false
         if (!settings.reconnect) return false
         if (reconnectAttempts >= MAX_RECONNECTS) return false
         reconnectAttempts++
@@ -632,7 +638,7 @@ class PlayerController(
         reconnectJob?.cancel()
         reconnectJob = scope.launch {
             delay(wait)
-            if (released) return@launch
+            if (released || inBackground) return@launch
             if (liveEdge(current)) player.seekToDefaultPosition()
             player.prepare()
             player.playWhenReady = true

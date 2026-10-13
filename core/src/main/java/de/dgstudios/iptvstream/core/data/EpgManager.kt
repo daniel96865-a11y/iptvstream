@@ -22,7 +22,6 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import org.xmlpull.v1.XmlPullParser
 import java.util.concurrent.ConcurrentHashMap
@@ -44,7 +43,17 @@ class EpgManager(
     private val _state = MutableStateFlow(EpgState())
     val state: StateFlow<EpgState> = _state
 
-    private val mutex = Mutex()
+    private val queue = ProfileQueue<EpgRequest>(
+        scope = scope,
+        key = { it.profileId },
+        merge = { queued, incoming ->
+            EpgRequest(
+                profileId = queued.profileId,
+                force = queued.force || incoming.force,
+                maxAgeMs = minOf(queued.maxAgeMs, incoming.maxAgeMs),
+            )
+        },
+    )
     private val guide = ConcurrentHashMap<GuideKey, GuideEntry>()
 
     private data class GuideKey(val profileId: Long, val epgKey: String)
@@ -56,24 +65,26 @@ class EpgManager(
         else -> null
     }
 
-    /** Startet eine Aktualisierung im Hintergrund (falls noch keine läuft). */
+    /** Startet eine Aktualisierung im Hintergrund. Ein laufender Abruf wird zu Ende gebracht, dieser danach. */
     fun launchRefresh(profileId: Long) {
-        scope.launch {
-            val p = db.profiles().get(profileId)?.let(ProfileCrypto::fromStorage) ?: return@launch
-            refresh(p)
-        }
+        scope.launch { refreshIfStale(profileId, maxAgeMs = 0L, force = true) }
     }
 
     /** Startet nur, wenn die letzte Aktualisierung länger als [maxAgeMs] zurückliegt. */
     fun launchRefreshIfStale(profileId: Long, maxAgeMs: Long) {
-        scope.launch {
-            val p = db.profiles().get(profileId)?.let(ProfileCrypto::fromStorage) ?: return@launch
-            if (System.currentTimeMillis() - p.lastEpgSync > maxAgeMs) refresh(p)
+        scope.launch { refreshIfStale(profileId, maxAgeMs, force = false) }
+    }
+
+    /** Wartet, bis dieser Abruf (oder ein zusammengelegter) fertig ist. */
+    suspend fun refreshIfStale(profileId: Long, maxAgeMs: Long, force: Boolean = false) {
+        queue.submit(EpgRequest(profileId, force, maxAgeMs)) { req ->
+            val p = db.profiles().get(req.profileId)?.let(ProfileCrypto::fromStorage) ?: return@submit
+            if (!req.force && System.currentTimeMillis() - p.lastEpgSync <= req.maxAgeMs) return@submit
+            runRefresh(p)
         }
     }
 
-    suspend fun refresh(p: ProfileEntity) {
-        if (!mutex.tryLock()) return
+    private suspend fun runRefresh(p: ProfileEntity) {
         try {
             val mode = germanMode()
             val url = epgUrlFor(p)
@@ -128,8 +139,6 @@ class EpgManager(
             throw e
         } catch (e: Exception) {
             _state.value = EpgState(error = "EPG-Fehler: " + Net.friendly(e))
-        } finally {
-            mutex.unlock()
         }
     }
 
@@ -141,123 +150,128 @@ class EpgManager(
         // Vergangenheit für Zurückblicken behalten (Archivfenster bis 7 Tage).
         val minStop = now - 7 * 24 * 3_600_000L
         val maxStart = now + 72 * 3_600_000L
+        val stage = EpgStaging.profileId(p.id)
         val epg = db.epg()
+        var committed = false
+        try {
+            epg.clear(stage)
+            epg.clearNames(stage)
 
-        http.get(url).use { body ->
-            val total = body.contentLength()
-            val counting = CountingInputStream(body.byteStream())
-            val input = maybeGunzip(counting)
-            val parser = Xml.newPullParser()
-            parser.setInput(input, null)
+            http.get(url).use { body ->
+                val total = body.contentLength()
+                val counting = CountingInputStream(body.byteStream())
+                val input = maybeGunzip(counting)
+                val parser = Xml.newPullParser()
+                parser.setInput(input, null)
 
-            val batch = ArrayList<EpgEntity>(1000)
-            val names = HashMap<String, String>()
-            var lastReport = 0L
-            var replaced = false
-            var event = parser.eventType
+                val batch = ArrayList<EpgEntity>(1000)
+                val names = HashMap<String, String>()
+                var lastReport = 0L
+                var event = parser.eventType
 
-            while (event != XmlPullParser.END_DOCUMENT) {
-                if (event == XmlPullParser.START_TAG) {
-                    when (parser.name) {
-                        "channel" -> readChannel(parser, names, prefix)
-                        "programme" -> {
-                            val start = XmltvTime.parse(parser.getAttributeValue(null, "start"))
-                            val stop = XmltvTime.parse(parser.getAttributeValue(null, "stop"))
-                            val ch = parser.getAttributeValue(null, "channel")?.lowercase()?.let { prefix + it }
-                            var title: String? = null
-                            var desc: String? = null
-                            val depth = parser.depth
-                            while (true) {
-                                val ev = parser.next()
-                                if (ev == XmlPullParser.END_DOCUMENT) break
-                                if (ev == XmlPullParser.END_TAG && parser.depth == depth) break
-                                if (ev == XmlPullParser.START_TAG) {
-                                    when (parser.name) {
-                                        "title" -> {
-                                            val t = parser.nextText()
-                                            if (title == null) title = t
-                                        }
-                                        "desc" -> {
-                                            val t = parser.nextText()
-                                            if (desc == null) desc = t
+                while (event != XmlPullParser.END_DOCUMENT) {
+                    if (event == XmlPullParser.START_TAG) {
+                        when (parser.name) {
+                            "channel" -> readChannel(parser, names, prefix)
+                            "programme" -> {
+                                val start = XmltvTime.parse(parser.getAttributeValue(null, "start"))
+                                val stop = XmltvTime.parse(parser.getAttributeValue(null, "stop"))
+                                val ch = parser.getAttributeValue(null, "channel")?.lowercase()?.let { prefix + it }
+                                var title: String? = null
+                                var desc: String? = null
+                                val depth = parser.depth
+                                while (true) {
+                                    val ev = parser.next()
+                                    if (ev == XmlPullParser.END_DOCUMENT) break
+                                    if (ev == XmlPullParser.END_TAG && parser.depth == depth) break
+                                    if (ev == XmlPullParser.START_TAG) {
+                                        when (parser.name) {
+                                            "title" -> {
+                                                val t = parser.nextText()
+                                                if (title == null) title = t
+                                            }
+                                            "desc" -> {
+                                                val t = parser.nextText()
+                                                if (desc == null) desc = t
+                                            }
                                         }
                                     }
                                 }
-                            }
-                            val finalTitle = title?.trim()
-                            if (start != null && stop != null && ch != null && !finalTitle.isNullOrEmpty() &&
-                                stop > minStop && start < maxStart
-                            ) {
-                                batch.add(
-                                    EpgEntity(
-                                        profileId = p.id,
-                                        channelKey = ch,
-                                        start = start,
-                                        stop = stop,
-                                        title = finalTitle,
-                                        description = desc?.trim()?.takeIf { it.isNotEmpty() },
-                                        sync = token,
-                                    ),
-                                )
+                                val finalTitle = title?.trim()
+                                if (start != null && stop != null && ch != null && !finalTitle.isNullOrEmpty() &&
+                                    stop > minStop && start < maxStart
+                                ) {
+                                    batch.add(
+                                        EpgEntity(
+                                            profileId = stage,
+                                            channelKey = ch,
+                                            start = start,
+                                            stop = stop,
+                                            title = finalTitle,
+                                            description = desc?.trim()?.takeIf { it.isNotEmpty() },
+                                            sync = token,
+                                        ),
+                                    )
+                                }
                             }
                         }
                     }
-                }
-                if (batch.size >= 1000) {
-                    flushProgrammes(p.id, batch, replaced, german)
-                    replaced = true
-                    currentCoroutineContext().ensureActive()
-                }
-                val t = System.nanoTime()
-                if (t - lastReport > 300_000_000L) {
-                    lastReport = t
-                    val bytes = counting.count
-                    val mb = bytes / 1_048_576L
-                    _state.value = if (total > 0) {
-                        EpgState(true, (bytes.toFloat() / total).coerceAtMost(0.98f), "$label wird geladen … $mb MB")
-                    } else {
-                        EpgState(true, -1f, "$label wird geladen … $mb MB")
+                    if (batch.size >= 1000) {
+                        flushProgrammes(batch)
+                        currentCoroutineContext().ensureActive()
                     }
+                    val t = System.nanoTime()
+                    if (t - lastReport > 300_000_000L) {
+                        lastReport = t
+                        val bytes = counting.count
+                        val mb = bytes / 1_048_576L
+                        _state.value = if (total > 0) {
+                            EpgState(true, (bytes.toFloat() / total).coerceAtMost(0.98f), "$label wird geladen … $mb MB")
+                        } else {
+                            EpgState(true, -1f, "$label wird geladen … $mb MB")
+                        }
+                    }
+                    event = parser.next()
                 }
-                event = parser.next()
+                if (batch.isNotEmpty()) flushProgrammes(batch)
+                // Der sichtbare Führer wird erst ersetzt, wenn die Datei vollständig gelesen wurde.
+                db.withTransaction {
+                    if (german) {
+                        epg.clearGerman(p.id)
+                        epg.clearGermanNames(p.id)
+                        epg.promoteGerman(stage, p.id)
+                    } else {
+                        epg.clearProvider(p.id)
+                        epg.clearProviderNames(p.id)
+                        epg.promoteProvider(stage, p.id)
+                    }
+                    val nameRows = names.entries.map {
+                        EpgNameEntity(p.id, if (german) GermanGuide.nameKey(it.key) else it.key, it.value)
+                    }
+                    for (chunk in nameRows.chunked(500)) epg.insertNames(chunk)
+                }
+                committed = true
             }
-            if (batch.isNotEmpty()) {
-                flushProgrammes(p.id, batch, replaced, german)
-            }
-            if (german) {
-                epg.pruneGermanBySync(p.id, token)
-                epg.clearGermanNames(p.id)
-            } else {
-                epg.pruneBySync(p.id, token)
-                epg.clearProviderNames(p.id)
-            }
-            val nameRows = names.entries.map {
-                EpgNameEntity(p.id, if (german) GermanGuide.nameKey(it.key) else it.key, it.value)
-            }
-            for (chunk in nameRows.chunked(500)) epg.insertNames(chunk)
+        } catch (t: Throwable) {
+            if (!committed) abandonStaging(stage)
+            if (!committed || t is CancellationException) throw t
         }
     }
 
-    /**
-     * Alte Sendungen des Profils werden vor dem ersten Einfügen gelöscht (eine Transaktion),
-     * damit ein Abbruch mitten im Import keine Mischung aus alt und neu hinterlässt.
-     */
-    private suspend fun flushProgrammes(
-        profileId: Long,
-        batch: ArrayList<EpgEntity>,
-        alreadyReplaced: Boolean,
-        german: Boolean,
-    ) {
+    /** Neue Sendungen liegen unter der Zwischen-ID und sind in der Übersicht nicht sichtbar. */
+    private suspend fun flushProgrammes(batch: ArrayList<EpgEntity>) {
         val rows = ArrayList(batch)
         batch.clear()
         if (rows.isEmpty()) return
-        if (!alreadyReplaced) {
-            db.withTransaction {
-                if (german) db.epg().clearGerman(profileId) else db.epg().clearProvider(profileId)
-                db.epg().insertAll(rows)
-            }
-        } else {
-            db.epg().insertAll(rows)
+        db.epg().insertAll(rows)
+    }
+
+    private suspend fun abandonStaging(stage: Long) {
+        try {
+            db.epg().clear(stage)
+            db.epg().clearNames(stage)
+        } catch (_: Exception) {
+            // Aufräumen darf den eigentlichen Fehler nicht verdecken.
         }
     }
 
