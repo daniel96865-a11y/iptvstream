@@ -77,19 +77,40 @@ abstract class BrowseViewModel<T>(
     var drawerOffset = 0
 
     private var persistJob: Job? = null
+    private var persistProfile: Long? = null
 
     init {
         viewModelScope.launch {
-            val pid = profileId.filterNotNull().first()
-            val raw = c.settings.getRaw(SettingsStore.listPosKey(pid, section))
-            if (raw != null) {
-                val cat = raw.substringBefore('|')
-                val idx = raw.substringAfter('|', "0").toIntOrNull() ?: 0
-                if (cat.isNotEmpty()) selectedCategory.value = cat
-                scrollIndex = idx
-                focusIndex = idx
+            profileId.collectLatest { pid ->
+                if (pid == null) {
+                    restored.value = false
+                    return@collectLatest
+                }
+                restored.value = false
+                val raw = c.settings.getRaw(SettingsStore.listPosKey(pid, section))
+                val saved = raw?.substringBefore('|')?.takeIf { it.isNotEmpty() }
+                val idx = raw?.substringAfter('|', "0")?.toIntOrNull() ?: 0
+                val cats = repo.categories(pid, catType).first()
+                val cat = Cat.restoreCategory(saved, cats.map { it.id }.toSet())
+                selectedCategory.value = cat
+                val keepPos = cat == saved
+                scrollIndex = if (keepPos) idx else 0
+                scrollOffset = 0
+                focusIndex = scrollIndex
+                drawerIndex = drawerIndexFor(cat, cats)
+                drawerOffset = 0
+                restored.value = true
+                repo.categories(pid, catType).collect { list ->
+                    val current = selectedCategory.value
+                    if (Cat.restoreCategory(current, list.map { it.id }.toSet()) != current) {
+                        selectedCategory.value = Cat.ALL
+                        scrollIndex = 0
+                        scrollOffset = 0
+                        focusIndex = 0
+                        persist()
+                    }
+                }
             }
-            restored.value = true
         }
     }
 
@@ -110,12 +131,12 @@ abstract class BrowseViewModel<T>(
     }
 
     /** Alle, Favoriten und Zuletzt stehen vor den Playlist-Gruppen. */
-    private fun drawerIndexFor(id: String): Int = when (id) {
+    private fun drawerIndexFor(id: String, cats: List<CategoryEntity> = categories.value): Int = when (id) {
         Cat.ALL -> 0
         Cat.FAV -> 1
         Cat.RECENT -> 2
         else -> {
-            val i = categories.value.indexOfFirst { it.id == id }
+            val i = cats.indexOfFirst { it.id == id }
             if (i >= 0) i + 3 else 0
         }
     }
@@ -128,10 +149,12 @@ abstract class BrowseViewModel<T>(
 
     private fun persist() {
         val pid = profileId.value ?: return
-        persistJob?.cancel()
+        val snapshot = "${selectedCategory.value}|$scrollIndex"
+        if (persistProfile == pid) persistJob?.cancel()
+        persistProfile = pid
         persistJob = c.appScope.launch {
             delay(800)
-            c.settings.set(SettingsStore.listPosKey(pid, section), "${selectedCategory.value}|$scrollIndex")
+            c.settings.set(SettingsStore.listPosKey(pid, section), snapshot)
         }
     }
 

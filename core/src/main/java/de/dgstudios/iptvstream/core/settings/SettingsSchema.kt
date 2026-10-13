@@ -144,7 +144,13 @@ object SettingsSchema {
                     "Startsender festlegen: Sender lange drücken",
                 ),
                 ChoiceDef("show_numbers", "Sendernummern anzeigen", onOff, "on"),
-                ChoiceDef("epg_auto", "EPG automatisch aktualisieren", onOff, "on"),
+                ChoiceDef(
+                    "epg_auto",
+                    "EPG automatisch aktualisieren",
+                    onOff,
+                    "on",
+                    "Alle sechs Stunden, auch wenn die App zu ist",
+                ),
                 ChoiceDef(
                     "epg_de",
                     "Deutscher Programmführer aus dem Netz",

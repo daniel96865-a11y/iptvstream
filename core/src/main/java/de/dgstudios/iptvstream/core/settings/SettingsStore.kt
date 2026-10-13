@@ -73,5 +73,6 @@ class SettingsStore(private val context: Context) {
         fun lastChannelKey(profileId: Long) = "last_channel_$profileId"
         fun fixedChannelKey(profileId: Long) = "fixed_channel_$profileId"
         fun listPosKey(profileId: Long, section: String) = "listpos_${section}_$profileId"
+        fun syncRetryKey(profileId: Long) = "sync_retry_$profileId"
     }
 }
