@@ -53,7 +53,9 @@ print(f"feed geschrieben: {path}")
 PY
 }
 
-if [ "$TAG" = "v1.0.41" ]; then
+if [ "$TAG" = "v1.0.42" ]; then
+  NOTE="Senderlisten laufen flüssiger. Das Programm wird für die sichtbaren Sender vorgeladen, und die Logos halten das Scrollen nicht mehr auf."
+elif [ "$TAG" = "v1.0.41" ]; then
   NOTE="Ein abgebrochener Programmführer lässt die alte Übersicht stehen. Fehlende Bereiche einer Liste werden nachgeladen. Der Programmführer aktualisiert sich auch, wenn die App offen bleibt oder zu ist."
 elif [ "$TAG" = "v1.0.40" ]; then
   NOTE="Die Bereiche in den Einstellungen klappen nach unten auf. Die Optionen stehen direkt darunter, wie früher."

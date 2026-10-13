@@ -52,6 +52,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.graphics.painter.ColorPainter
+import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import coil.size.Size
@@ -207,28 +209,43 @@ fun Poster(
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
     frame: PosterFrame = PosterFrame.Poster,
+    /** In Listen: kein Shimmer und kein Überblenden, damit das Scrollen nicht ruckelt. */
+    lite: Boolean = false,
 ) {
     if (url.isNullOrBlank()) {
         Box(modifier.background(Color(0x22FFFFFF)))
         return
     }
     val context = LocalContext.current
-    val fade = LocalAppStyle.current.animations
-    val model = remember(url, frame, fade) {
+    val fade = LocalAppStyle.current.animations && !lite
+    val target = if (lite && frame == PosterFrame.Poster) Size(360, 540) else Size(frame.width, frame.height)
+    val model = remember(url, target, fade) {
         ImageRequest.Builder(context)
             .data(url)
-            .size(Size(frame.width, frame.height))
+            .size(target)
             .crossfade(if (fade) 220 else 0)
             .build()
     }
-    SubcomposeAsyncImage(
-        model = model,
-        contentDescription = null,
-        modifier = modifier,
-        contentScale = contentScale,
-        loading = { ShimmerBox(Modifier.fillMaxSize()) },
-        error = { Box(Modifier.fillMaxSize().background(Color(0x22FFFFFF))) },
-    )
+    if (lite) {
+        val hold = remember { ColorPainter(Color(0x22FFFFFF)) }
+        AsyncImage(
+            model = model,
+            contentDescription = null,
+            modifier = modifier,
+            contentScale = contentScale,
+            placeholder = hold,
+            error = hold,
+        )
+    } else {
+        SubcomposeAsyncImage(
+            model = model,
+            contentDescription = null,
+            modifier = modifier,
+            contentScale = contentScale,
+            loading = { ShimmerBox(Modifier.fillMaxSize()) },
+            error = { Box(Modifier.fillMaxSize().background(Color(0x22FFFFFF))) },
+        )
+    }
 }
 
 @Composable

@@ -711,6 +711,7 @@ private fun ChannelRow(
             Modifier.size(58.dp).clip(RoundedCornerShape(10.dp)).background(Color(0x1AFFFFFF)).padding(4.dp),
             ContentScale.Fit,
             PosterFrame.Logo,
+            lite = true,
         )
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {

@@ -31,6 +31,14 @@ class EpgGuideTest {
     }
 
     @Test
+    fun warmWindowFollowsTheVisibleRow() {
+        assertEquals(0 to 4, EpgGuide.window(10, 0, 4))
+        assertEquals(8 to 10, EpgGuide.window(10, 8, 4))
+        assertEquals(0 to 0, EpgGuide.window(0, 3, 4))
+        assertEquals(0 to 120, EpgGuide.window(500, -2))
+    }
+
+    @Test
     fun emptyGuideCountsAsNoData() {
         assertEquals(false, EpgGuide.hasData(NowNext(null, null)))
         assertEquals(true, EpgGuide.hasData(NowNext(null, row("a", 10, 20, "danach"))))
