@@ -1,7 +1,7 @@
 {
-  "versionCode": 42,
-  "versionName": "1.0.40",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.40/iptvstream-tv.apk",
-  "sha256": "5cd3ec9bde0db4ff30aea719bb9a1d9299ff535a5ea86799e896afd3d9c270dc",
-  "changelog": "Die Bereiche in den Einstellungen klappen nach unten auf. Die Optionen stehen direkt darunter, wie früher."
+  "versionCode": 43,
+  "versionName": "1.0.41",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.41/iptvstream-tv.apk",
+  "sha256": "37ea168f8050e7486dea073cbac32588a716fc8ce008b2ea86e244cc89dcc38d",
+  "changelog": "Ein abgebrochener Programmführer lässt die alte Übersicht stehen. Fehlende Bereiche einer Liste werden nachgeladen. Der Programmführer aktualisiert sich auch, wenn die App offen bleibt oder zu ist."
 }
