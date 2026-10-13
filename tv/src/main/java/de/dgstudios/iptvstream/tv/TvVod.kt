@@ -439,7 +439,7 @@ private fun PosterCell(
             .tvFocus(onClick = onClick, shape = RoundedCornerShape(12.dp), lockDirections = true)
             .padding(6.dp),
     ) {
-        Poster(p.poster, Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp)), frame = PosterFrame.Poster)
+        Poster(p.poster, Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp)), frame = PosterFrame.Poster, lite = true)
         Spacer(Modifier.height(6.dp))
         Text(p.name, color = s.onSurface, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, minLines = 2)
         formatRating(p.rating)?.let { Text(it, color = s.onSurfaceDim, fontSize = 13.sp) }

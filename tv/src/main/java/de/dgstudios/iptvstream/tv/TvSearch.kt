@@ -129,7 +129,7 @@ private fun SearchChannel(ch: ChannelEntity, showNumber: Boolean, onClick: () ->
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (showNumber) Text(ch.num.toString(), color = s.onSurfaceDim, fontSize = 17.sp, modifier = Modifier.width(60.dp))
-        Poster(ch.logo, Modifier.size(46.dp).clip(RoundedCornerShape(8.dp)).background(Color(0x1AFFFFFF)).padding(3.dp), ContentScale.Fit)
+        Poster(ch.logo, Modifier.size(46.dp).clip(RoundedCornerShape(8.dp)).background(Color(0x1AFFFFFF)).padding(3.dp), ContentScale.Fit, lite = true)
         Spacer(Modifier.width(14.dp))
         Text(ch.name, color = s.onSurface, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
@@ -144,7 +144,7 @@ private fun SearchPoster(name: String, poster: String?, onClick: () -> Unit) {
             .tvFocus(onClick = onClick, shape = RoundedCornerShape(12.dp))
             .padding(6.dp),
     ) {
-        Poster(poster, Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp)))
+        Poster(poster, Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp)), lite = true)
         Spacer(Modifier.height(6.dp))
         Text(name, color = s.onSurface, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, minLines = 2)
     }

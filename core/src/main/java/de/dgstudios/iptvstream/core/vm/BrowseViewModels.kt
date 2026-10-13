@@ -145,7 +145,11 @@ abstract class BrowseViewModel<T>(
         scrollIndex = index
         scrollOffset = offset
         persist()
+        afterScroll(index)
     }
+
+    /** Zusätzliche Arbeit nach dem Scrollen, zum Beispiel Programm vorab laden. */
+    protected open fun afterScroll(index: Int) {}
 
     private fun persist() {
         val pid = profileId.value ?: return
@@ -197,14 +201,28 @@ class LiveViewModel(app: Application) :
         return repo.channelByNumber(pid, n)
     }
 
+    private var warmJob: Job? = null
+
     init {
         viewModelScope.launch {
-            combine(profileId.filterNotNull(), items) { pid, list ->
-                pid to list.asSequence().take(EpgGuide.WARM_KEYS).map { it.epgKey }.toList()
-            }.distinctUntilChanged().collectLatest { (pid, keys) ->
-                repo.warmGuide(pid, keys)
-            }
+            combine(profileId.filterNotNull(), items) { pid, list -> pid to list }
+                .collectLatest { (pid, list) -> warm(pid, list, scrollIndex) }
         }
+    }
+
+    override fun afterScroll(index: Int) {
+        warmJob?.cancel()
+        warmJob = viewModelScope.launch {
+            delay(80)
+            val pid = profileId.value ?: return@launch
+            warm(pid, items.value, index)
+        }
+    }
+
+    private suspend fun warm(pid: Long, list: List<ChannelEntity>, index: Int) {
+        val (from, to) = EpgGuide.window(list.size, index)
+        if (from >= to) return
+        repo.warmGuide(pid, list.subList(from, to).map { it.epgKey })
     }
 }
 

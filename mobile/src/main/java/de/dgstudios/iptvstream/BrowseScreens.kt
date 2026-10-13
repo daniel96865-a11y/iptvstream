@@ -459,6 +459,7 @@ private fun ChannelRow(
                 Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(Color(0x1AFFFFFF)).padding(5.dp),
                 ContentScale.Fit,
                 PosterFrame.Logo,
+                lite = true,
             )
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
@@ -635,7 +636,7 @@ fun PosterCard(title: String, image: String?, rating: Double, fav: Boolean, onCl
                 .aspectRatio(2f / 3f)
                 .glass(shape),
         ) {
-            Poster(image, Modifier.fillMaxSize())
+            Poster(image, Modifier.fillMaxSize(), lite = true)
             if (fav) StarBadge(Modifier.align(Alignment.TopEnd).padding(6.dp))
             val r = formatRating(rating)
             if (r != null) {

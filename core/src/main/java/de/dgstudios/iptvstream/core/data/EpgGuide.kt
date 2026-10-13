@@ -13,6 +13,14 @@ object EpgGuide {
     const val WARM_KEYS = 120
     const val WARM_WINDOW_MS = 12L * 60 * 60 * 1000
 
+    /** Bereich ab [index], höchstens [count] Einträge, am Listenende abgeschnitten. */
+    fun window(size: Int, index: Int, count: Int = WARM_KEYS): Pair<Int, Int> {
+        if (size <= 0 || count <= 0) return 0 to 0
+        val from = index.coerceIn(0, size - 1)
+        val to = (from + count).coerceAtMost(size)
+        return from to to
+    }
+
     fun hasData(value: NowNext): Boolean = value.now != null || value.next != null
 
     fun fromRows(list: List<EpgEntity>, now: Long): NowNext {

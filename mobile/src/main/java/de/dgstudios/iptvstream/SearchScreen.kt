@@ -217,6 +217,7 @@ private fun SearchChannelRow(ch: ChannelEntity, showNumber: Boolean, onClick: ()
             ch.logo,
             Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(Color(0x1AFFFFFF)).padding(4.dp),
             ContentScale.Fit,
+            lite = true,
         )
         Spacer(Modifier.width(12.dp))
         Text(ch.name, color = s.onSurface, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
