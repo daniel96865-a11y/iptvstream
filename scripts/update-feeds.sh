@@ -54,7 +54,7 @@ PY
 }
 
 if [ "$TAG" = "v1.0.47" ]; then
-  NOTE="Auf dem Fire TV bleibt bei manchen Sendern das Bild stehen, obwohl der Ton läuft. Die App nimmt dort einen verträglicheren Bilddecoder und wechselt ihn, wenn das Bild nicht weitergeht."
+  NOTE="Auf älteren Fire-TV-Sticks bleibt bei manchen Sendern das Bild stehen, der Ton läuft. Die App lädt dann den Software-Decoder, weil der Hardware-Decoder bei diesem Bildformat hängen bleibt."
 elif [ "$TAG" = "v1.0.46" ]; then
   NOTE="Die Wiederverbindung bei hängendem Live-Bild endet nach fünf Versuchen und zeigt dann die Diagnose. Schon bei jedem Versuch steht der Grund dabei."
 elif [ "$TAG" = "v1.0.45" ]; then

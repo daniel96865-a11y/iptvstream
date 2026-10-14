@@ -717,22 +717,38 @@ class PlayerController(
         stuckError("Die Wiedergabe hängt.")
     }
 
-    /** Ton läuft, aber das Bild kommt nicht weiter. Dann einen anderen Bilddecoder versuchen. */
+    /**
+     * Ton läuft, das Bild nicht. Auf älteren Sticks ist das der hängende Hardware-Decoder
+     * bei Zwischenzeilenbild. Einmal den Software-Decoder laden, danach eine Meldung.
+     */
     private fun onFrozenPicture() {
         if (released || inBackground) return
         val mime = player.videoFormat?.sampleMimeType
-        if (videoDecoders.reject(mime, diag.videoDecoder)) {
-            diag.issue("Bilddecoder wird gewechselt")
-            notice("Bilddecoder wird gewechselt …")
-            stall.reset()
-            frames.reset()
-            player.stop()
-            player.prepare()
-            player.playWhenReady = true
+        val decoder = diag.videoDecoder
+        val older = DevicePlayback.olderFireTv()
+        if (DevicePlayback.isSoftwareDecoder(decoder) || videoDecoders.restarted(mime)) {
+            diag.issue("Bild steht")
+            stuckError("Das Bild bleibt stehen, der Ton läuft. Dieses Bildformat schafft der Fernseher nicht.")
             return
         }
-        diag.issue("Bild steht")
-        stuckError("Das Bild bleibt stehen, der Ton läuft. Dieses Bildformat schafft der Fernseher nicht.")
+        if (older) videoDecoders.useSoftware(mime)
+        val switched = videoDecoders.reject(mime, decoder)
+        if (!older && !switched) {
+            diag.issue("Bild steht")
+            stuckError("Das Bild bleibt stehen, der Ton läuft. Dieses Bildformat schafft der Fernseher nicht.")
+            return
+        }
+        videoDecoders.markRestarted(mime)
+        diag.issue(if (older) "Software-Bilddecoder" else "Bilddecoder wird gewechselt")
+        notice(
+            if (older) "Bilddecoder des Sticks bleibt stehen. Software-Decoder wird geladen …"
+            else "Bilddecoder wird gewechselt …",
+        )
+        stall.reset()
+        frames.reset()
+        player.stop()
+        player.prepare()
+        player.playWhenReady = true
     }
 
     /** Der Player puffert seit Sekunden, ohne dass Daten ankommen. */

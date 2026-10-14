@@ -92,7 +92,7 @@ class UhdVideoRenderer(
         requiresSecureDecoder: Boolean,
     ): List<MediaCodecInfo> {
         val all = super.getDecoderInfos(mediaCodecSelector, format, requiresSecureDecoder)
-        val usable = decoderChoice.keep(format.sampleMimeType, all) { it.name }
+        val usable = decoderChoice.select(format.sampleMimeType, all, { it.name }) { it.softwareOnly }
         return UhdPlayback.decodersFor(usable, UhdPlayback.isUhd(format.width, format.height)) { it.softwareOnly }
     }
 

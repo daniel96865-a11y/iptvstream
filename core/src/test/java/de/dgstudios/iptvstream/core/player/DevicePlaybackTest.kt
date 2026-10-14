@@ -32,4 +32,44 @@ class DevicePlaybackTest {
         assertFalse(choice.reject(null, "omx.hevc"))
         assertFalse(choice.reject("video/hevc", " "))
     }
+
+    @Test
+    fun olderSticksAreTheOnesBeforeTheFourKMax() {
+        assertTrue(DevicePlayback.olderFireTv("Amazon", "AFTMM", 25))
+        assertTrue(DevicePlayback.olderFireTv("Amazon", "AFTSSS", 28))
+        assertTrue(DevicePlayback.olderFireTv("Amazon", "AFTSS", 28))
+        assertTrue(DevicePlayback.olderFireTv(null, "AFTT", 25))
+        assertFalse(DevicePlayback.olderFireTv("Amazon", "AFTKA", 28))
+        assertFalse(DevicePlayback.olderFireTv("Amazon", "AFTKRT", 34))
+        assertFalse(DevicePlayback.olderFireTv("Amazon", "AFTKM", 30))
+        assertFalse(DevicePlayback.olderFireTv("Google", "Chromecast", 25))
+        assertFalse(DevicePlayback.olderFireTv(null, null, 25))
+    }
+
+    @Test
+    fun softwareDecoderNamesAreTheGoogleOnes() {
+        assertTrue(DevicePlayback.isSoftwareDecoder("OMX.google.h264.decoder"))
+        assertTrue(DevicePlayback.isSoftwareDecoder("c2.android.avc.decoder"))
+        assertFalse(DevicePlayback.isSoftwareDecoder("OMX.MTK.VIDEO.DECODER.AVC"))
+        assertFalse(DevicePlayback.isSoftwareDecoder("c2.mtk.avc.decoder"))
+        assertFalse(DevicePlayback.isSoftwareDecoder(null))
+    }
+
+    @Test
+    fun aFrozenHardwareDecoderLeavesOnlySoftwareForThatFormat() {
+        val choice = VideoDecoderChoice()
+        val avc = listOf(
+            "OMX.MTK.VIDEO.DECODER.AVC" to false,
+            "OMX.google.h264.decoder" to true,
+        )
+        assertEquals(avc, choice.select("video/avc", avc, { it.first }) { it.second })
+        choice.useSoftware("video/avc")
+        choice.reject("video/avc", "OMX.MTK.VIDEO.DECODER.AVC")
+        assertEquals(listOf(avc[1]), choice.select("video/avc", avc, { it.first }) { it.second })
+        assertEquals(avc, choice.select("video/hevc", avc, { it.first }) { it.second })
+        assertFalse(choice.restarted("video/avc"))
+        choice.markRestarted("video/avc")
+        assertTrue(choice.restarted("video/avc"))
+        assertFalse(choice.restarted("video/hevc"))
+    }
 }
