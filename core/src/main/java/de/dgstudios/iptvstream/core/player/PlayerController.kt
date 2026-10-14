@@ -24,6 +24,7 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlaybackException
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.Renderer
+import androidx.media3.exoplayer.mediacodec.DefaultMediaCodecAdapterFactory
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.video.VideoRendererEventListener
 import androidx.media3.exoplayer.audio.AudioCapabilities
@@ -89,7 +90,11 @@ data class PlayerState(
  * [DefaultAudioSink.Builder.setAudioCapabilities] und würde AC3 sonst durchreichen.
  */
 @OptIn(UnstableApi::class)
-class AppRenderersFactory(context: Context, private val passthrough: Boolean) : DefaultRenderersFactory(context) {
+class AppRenderersFactory(
+    context: Context,
+    private val passthrough: Boolean,
+    private val decoderChoice: VideoDecoderChoice,
+) : DefaultRenderersFactory(context) {
     init {
         setEnableDecoderFallback(true)
         setExtensionRendererMode(EXTENSION_RENDERER_MODE_ON)
@@ -125,16 +130,22 @@ class AppRenderersFactory(context: Context, private val passthrough: Boolean) : 
         allowedVideoJoiningTimeMs: Long,
         out: ArrayList<Renderer>,
     ) {
+        val adapters = if (DevicePlayback.conservativeVideo()) {
+            DefaultMediaCodecAdapterFactory(context).forceDisableAsynchronous()
+        } else {
+            codecAdapterFactory
+        }
         out.add(
             UhdVideoRenderer(
                 context,
-                codecAdapterFactory,
+                adapters,
                 mediaCodecSelector,
                 allowedVideoJoiningTimeMs,
                 enableDecoderFallback,
                 eventHandler,
                 eventListener,
                 MAX_DROPPED_VIDEO_FRAME_COUNT_TO_NOTIFY,
+                decoderChoice,
             ),
         )
     }
@@ -169,6 +180,7 @@ class PlayerController(
     private var selectedAudioId: String? = null
 
     private val versionName = installedVersionName(context)
+    private val videoDecoders = VideoDecoderChoice()
     private val diag = PlayDiagnostics()
     private val stall = StallDetector()
     private val frames = StallDetector(FROZEN_FRAMES_MS)
@@ -215,7 +227,7 @@ class PlayerController(
         if (settings.audioLang != "auto") params = params.setPreferredAudioLanguage(settings.audioLang)
         trackSelector.setParameters(params)
 
-        player = ExoPlayer.Builder(context, AppRenderersFactory(context, settings.passthrough))
+        player = ExoPlayer.Builder(context, AppRenderersFactory(context, settings.passthrough, videoDecoders))
             .setTrackSelector(trackSelector)
             .setLoadControl(loadControl)
             .setMediaSourceFactory(mediaSourceFactory)
@@ -228,6 +240,9 @@ class PlayerController(
                 true,
             )
             .build()
+        if (DevicePlayback.conservativeVideo()) {
+            player.setVideoChangeFrameRateStrategy(C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF)
+        }
 
         // Untertitel: standardmäßig aus, sonst bevorzugte Sprache.
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
@@ -702,12 +717,22 @@ class PlayerController(
         stuckError("Die Wiedergabe hängt.")
     }
 
-    /** Ton läuft, aber das Bild kommt nicht weiter. */
+    /** Ton läuft, aber das Bild kommt nicht weiter. Dann einen anderen Bilddecoder versuchen. */
     private fun onFrozenPicture() {
         if (released || inBackground) return
+        val mime = player.videoFormat?.sampleMimeType
+        if (videoDecoders.reject(mime, diag.videoDecoder)) {
+            diag.issue("Bilddecoder wird gewechselt")
+            notice("Bilddecoder wird gewechselt …")
+            stall.reset()
+            frames.reset()
+            player.stop()
+            player.prepare()
+            player.playWhenReady = true
+            return
+        }
         diag.issue("Bild steht")
-        if (tryReconnect()) return
-        stuckError("Das Bild steht.")
+        stuckError("Das Bild bleibt stehen, der Ton läuft. Dieses Bildformat schafft der Fernseher nicht.")
     }
 
     /** Der Player puffert seit Sekunden, ohne dass Daten ankommen. */

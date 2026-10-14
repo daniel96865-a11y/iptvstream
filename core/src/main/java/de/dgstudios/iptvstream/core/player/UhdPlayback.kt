@@ -75,6 +75,7 @@ class UhdVideoRenderer(
     eventHandler: Handler,
     eventListener: VideoRendererEventListener,
     maxDroppedFramesToNotify: Int,
+    private val decoderChoice: VideoDecoderChoice,
 ) : MediaCodecVideoRenderer(
     context,
     codecAdapterFactory,
@@ -91,7 +92,13 @@ class UhdVideoRenderer(
         requiresSecureDecoder: Boolean,
     ): List<MediaCodecInfo> {
         val all = super.getDecoderInfos(mediaCodecSelector, format, requiresSecureDecoder)
-        return UhdPlayback.decodersFor(all, UhdPlayback.isUhd(format.width, format.height)) { it.softwareOnly }
+        val usable = decoderChoice.keep(format.sampleMimeType, all) { it.name }
+        return UhdPlayback.decodersFor(usable, UhdPlayback.isUhd(format.width, format.height)) { it.softwareOnly }
+    }
+
+    override fun getCodecOperatingRateV23(targetPlaybackSpeed: Float, format: Format, streamFormats: Array<Format>): Float {
+        if (DevicePlayback.conservativeVideo()) return CODEC_OPERATING_RATE_UNSET
+        return super.getCodecOperatingRateV23(targetPlaybackSpeed, format, streamFormats)
     }
 
     override fun getCodecMaxValues(
