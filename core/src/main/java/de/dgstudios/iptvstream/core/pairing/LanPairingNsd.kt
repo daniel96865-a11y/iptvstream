@@ -12,7 +12,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
-/** Macht den Fernseher im Heimnetz unter dem kurzen Code auffindbar. Der lange Token steht hier nicht. */
+/** Macht den Fernseher im Heimnetz auffindbar. Im TXT steht nur der Hash des Codes, nicht der Code und nicht der Token. */
 class LanPairingAdvertiser(context: Context) {
     private val appContext = context.applicationContext
     private val nsd = appContext.getSystemService(Context.NSD_SERVICE) as NsdManager
@@ -30,7 +30,7 @@ class LanPairingAdvertiser(context: Context) {
             serviceName = "IPTVstream"
             serviceType = LanPairing.SERVICE_TYPE
             this.port = port
-            setAttribute("code", LanPairing.normalizeCode(code))
+            setAttribute("codeHash", LanPairing.codeHash(code))
         }
         val listener = object : NsdManager.RegistrationListener {
             override fun onServiceRegistered(serviceInfo: NsdServiceInfo) {}
@@ -122,8 +122,8 @@ class LanPairingBrowser(context: Context) {
     }
 
     private fun endpointOf(info: NsdServiceInfo, want: String): LanPairing.Endpoint? {
-        val raw = info.attributes?.get("code")?.let { String(it, Charsets.UTF_8) }?.trim('\u0000', ' ') ?: return null
-        if (LanPairing.normalizeCode(raw) != want) return null
+        val raw = info.attributes?.get("codeHash")?.let { String(it, Charsets.UTF_8) }?.trim('\u0000', ' ') ?: return null
+        if (!LanPairing.constantEquals(raw.lowercase(), LanPairing.codeHash(want))) return null
         val host = ipv4(info) ?: return null
         if (info.port !in 1..65535 || !LanPairing.isPrivateHost(host)) return null
         return LanPairing.Endpoint(host, info.port)

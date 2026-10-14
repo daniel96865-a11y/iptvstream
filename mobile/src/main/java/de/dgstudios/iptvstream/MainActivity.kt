@@ -37,7 +37,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleWidget(intent: Intent?) {
-        val ch = intent?.getStringExtra(FavoritesWidget.EXTRA_CHANNEL) ?: return
+        val action = intent?.action ?: return
+        if (!action.startsWith(FavoritesWidget.ACTION_PLAY)) return
+        val ch = intent.getStringExtra(FavoritesWidget.EXTRA_CHANNEL) ?: return
         val p = intent.getLongExtra(FavoritesWidget.EXTRA_PROFILE, -1L)
         if (p >= 0) WidgetLaunch.pending.value = p to ch
     }

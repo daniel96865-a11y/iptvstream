@@ -66,6 +66,7 @@ import de.dgstudios.iptvstream.core.data.NowNext
 import de.dgstudios.iptvstream.core.data.db.ProfileEntity
 import de.dgstudios.iptvstream.core.data.db.ProfileType
 import de.dgstudios.iptvstream.core.settings.AppSettings
+import de.dgstudios.iptvstream.core.util.Urls
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -212,16 +213,17 @@ fun Poster(
     /** In Listen: kein Shimmer und kein Überblenden, damit das Scrollen nicht ruckelt. */
     lite: Boolean = false,
 ) {
-    if (url.isNullOrBlank()) {
+    val safe = Urls.httpUrl(url)
+    if (safe == null) {
         Box(modifier.background(Color(0x22FFFFFF)))
         return
     }
     val context = LocalContext.current
     val fade = LocalAppStyle.current.animations && !lite
     val target = if (lite && frame == PosterFrame.Poster) Size(360, 540) else Size(frame.width, frame.height)
-    val model = remember(url, target, fade) {
+    val model = remember(safe, target, fade) {
         ImageRequest.Builder(context)
-            .data(url)
+            .data(safe)
             .size(target)
             .crossfade(if (fade) 220 else 0)
             .build()

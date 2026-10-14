@@ -234,6 +234,20 @@ fun SendToTvScreen(mainVm: MainViewModel, onDone: () -> Unit) {
             })
             return@Column
         }
+        val dest = target
+        if (dest != null) {
+            Text(
+                "Ziel: ${dest.host}:${dest.port}",
+                color = s.onSurface,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                "Nur senden, wenn das der eigene Fernseher ist.",
+                color = s.onSurfaceDim,
+                fontSize = 14.sp,
+            )
+        }
         Text(
             "Wähle ein gespeichertes Profil oder trag die Zugangsdaten ein. Sie bleiben im eigenen WLAN.",
             color = s.onSurfaceDim,

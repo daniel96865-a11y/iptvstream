@@ -56,6 +56,14 @@ class EpgManager(
     )
     private val guide = ConcurrentHashMap<GuideKey, GuideEntry>()
 
+    private companion object {
+        const val MAX_EPG_BYTES = 256L * 1024 * 1024
+        const val MAX_EPG_ROWS = 400_000
+        const val MAX_EPG_NAMES = 100_000
+        const val MAX_TITLE = 300
+        const val MAX_DESC = 4_000
+    }
+
     private data class GuideKey(val profileId: Long, val epgKey: String)
     private data class GuideEntry(val value: NowNext, val until: Long)
 
@@ -160,12 +168,13 @@ class EpgManager(
             http.get(url).use { body ->
                 val total = body.contentLength()
                 val counting = CountingInputStream(body.byteStream())
-                val input = maybeGunzip(counting)
+                val inflated = CountingInputStream(maybeGunzip(counting))
                 val parser = Xml.newPullParser()
-                parser.setInput(input, null)
+                parser.setInput(inflated, null)
 
                 val batch = ArrayList<EpgEntity>(1000)
                 val names = HashMap<String, String>()
+                var stored = 0
                 var lastReport = 0L
                 var event = parser.eventType
 
@@ -187,11 +196,11 @@ class EpgManager(
                                     if (ev == XmlPullParser.START_TAG) {
                                         when (parser.name) {
                                             "title" -> {
-                                                val t = parser.nextText()
+                                                val t = parser.nextText().take(MAX_TITLE)
                                                 if (title == null) title = t
                                             }
                                             "desc" -> {
-                                                val t = parser.nextText()
+                                                val t = parser.nextText().take(MAX_DESC)
                                                 if (desc == null) desc = t
                                             }
                                         }
@@ -201,6 +210,10 @@ class EpgManager(
                                 if (start != null && stop != null && ch != null && !finalTitle.isNullOrEmpty() &&
                                     stop > minStop && start < maxStart
                                 ) {
+                                    if (inflated.count > MAX_EPG_BYTES || stored >= MAX_EPG_ROWS) {
+                                        error("EPG-Datei ist zu groß")
+                                    }
+                                    stored++
                                     batch.add(
                                         EpgEntity(
                                             profileId = stage,
@@ -283,14 +296,14 @@ class EpgManager(
             if (ev == XmlPullParser.END_DOCUMENT) break
             if (ev == XmlPullParser.END_TAG && p.depth == depth) break
             if (ev == XmlPullParser.START_TAG && p.name == "display-name") {
-                val text = p.nextText()
-                if (id != null) {
+                val text = p.nextText().take(MAX_TITLE)
+                if (id != null && names.size < MAX_EPG_NAMES) {
                     val n = EpgMatcher.normalize(text)
                     if (n.isNotEmpty()) names.putIfAbsent(n, prefix + id)
                 }
             }
         }
-        if (id != null) {
+        if (id != null && names.size < MAX_EPG_NAMES) {
             val n = EpgMatcher.normalize(id)
             if (n.isNotEmpty()) names.putIfAbsent(n, prefix + id)
         }

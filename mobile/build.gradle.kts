@@ -39,8 +39,8 @@ android {
         applicationId = "de.dgstudios.iptvstream"
         minSdk = 24
         targetSdk = 35
-        versionCode = 44
-        versionName = "1.0.42"
+        versionCode = 45
+        versionName = "1.0.43"
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a")
         }
@@ -65,14 +65,14 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            // Release-APKs dürfen niemals mit dem Debug-Schlüssel veröffentlicht werden.
-            if (!hasReleaseSigning && System.getenv("CI")?.equals("true", ignoreCase = true) == true) {
+            // Veröffentlichte APKs signiert nur der Tag-Job. Der setzt REQUIRE_RELEASE_SIGNING.
+            val requireReleaseSigning = System.getenv("REQUIRE_RELEASE_SIGNING")?.equals("true", ignoreCase = true) == true
+            if (!hasReleaseSigning && requireReleaseSigning) {
                 throw GradleException("Release-Signierung fehlt: CI benötigt SIGNING_KEYSTORE_BASE64, SIGNING_STORE_PASSWORD, SIGNING_KEY_PASSWORD und SIGNING_KEY_ALIAS.")
             }
             signingConfig = if (hasReleaseSigning) {
                 signingConfigs.getByName("release")
             } else {
-                // Nur für bewusst lokale Test-Builds zulässig; CI bricht oben ab.
                 signingConfigs.getByName("debug")
             }
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

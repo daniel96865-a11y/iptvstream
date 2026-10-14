@@ -20,10 +20,11 @@ import java.security.SecureRandom
  * oder die App über `iptvstream://pair`. Die Zugangsdaten gehen per POST an
  * denselben Server. Es gibt keinen Cloud-Dienst und keinen fremden Server.
  *
- * Zwei Geheimnisse, beide einmalig und nur auf dem Fernseher sichtbar:
- * - `token`: 128 Bit, hex, steht im QR-Code und in der Seitenadresse.
- * - `code`: 6 Zeichen, tippt man in der App ein. Die App findet den Fernseher
- *   per mDNS (`_iptvstream._tcp`, TXT-Attribut `code`) oder über die angezeigte IP.
+ * Zwei Geheimnisse, beide einmalig:
+ * - `token`: 128 Bit, hex, steht im QR-Code und in der Seitenadresse. Nur damit
+ *   nimmt der Fernseher eine Übertragung an, die nicht den kurzen Code mitschickt.
+ * - `code`: 6 Zeichen, tippt man in der App ein. Er geht nur in der direkten
+ *   Anfrage an den Fernseher mit. mDNS trägt den Hash (`codeHash`), nicht den Code.
  *
  * Der Server bindet an die IPv4 des WLANs, nicht an Localhost und nicht nur an
  * die Wildcard-Adresse. Er nimmt nur Clients aus dem privaten Netz an, schreibt
@@ -88,6 +89,13 @@ object LanPairing {
             repeat(CODE_LENGTH) { append(CODE_ALPHABET[random.nextInt(CODE_ALPHABET.length)]) }
         }
         return Secrets(token, code)
+    }
+
+    /** Hash für die Suche im Heimnetz. Der Klartext-Code bleibt auf dem Bildschirm. */
+    fun codeHash(code: String): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest(normalizeCode(code).toByteArray(Charsets.UTF_8))
+        return digest.joinToString("") { "%02x".format(it) }
     }
 
     fun normalizeCode(raw: String): String =
@@ -325,14 +333,24 @@ object LanPairing {
      */
     fun isAllowedClient(remote: InetAddress?): Boolean {
         if (remote == null) return false
-        if (remote.isLoopbackAddress) return true
+        if (remote.isLoopbackAddress) return allowsRemote(loopback = true, privateV4 = false, netCount = 0, inNet = false)
         val v4 = asV4(remote) ?: return false
-        if (!isPrivateV4(v4)) return false
+        val privateAddr = isPrivateV4(v4)
         val nets = localNets()
-        if (nets.isEmpty()) return true
-        val ip = ipv4ToInt(v4)
-        if (nets.any { it.contains(ip) }) return true
-        return nets.any { same24(it.network, ip) }
+        val inNet = if (privateAddr && nets.isNotEmpty()) {
+            val ip = ipv4ToInt(v4)
+            nets.any { it.contains(ip) } || nets.any { same24(it.network, ip) }
+        } else {
+            false
+        }
+        return allowsRemote(loopback = false, privateV4 = privateAddr, netCount = nets.size, inNet = inNet)
+    }
+
+    /** Ohne bekanntes eigenes Netz gilt keine private Gegenstelle. Sonst wäre jede private Adresse erlaubt. */
+    internal fun allowsRemote(loopback: Boolean, privateV4: Boolean, netCount: Int, inNet: Boolean): Boolean {
+        if (loopback) return true
+        if (!privateV4 || netCount <= 0) return false
+        return inNet
     }
 
     fun profileFromFields(fields: Map<String, String>): ProfileEntity {
