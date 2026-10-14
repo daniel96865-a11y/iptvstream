@@ -209,7 +209,7 @@ object CastHub {
         } ?: return "Kein Gerät verbunden"
         if (!session.isConnected) return "Kein Gerät verbunden"
         val client = session.remoteMediaClient ?: return "Gerät antwortet nicht"
-        val url = receiverUrl(item.url)
+        val url = Urls.httpUrl(receiverUrl(item.url)) ?: return "Die Senderadresse ist ungültig."
         val info = MediaInfo.Builder(url)
             .setStreamType(if (item.kind == PlayKind.LIVE && !item.catchup) MediaInfo.STREAM_TYPE_LIVE else MediaInfo.STREAM_TYPE_BUFFERED)
             .setContentType(contentType(url))

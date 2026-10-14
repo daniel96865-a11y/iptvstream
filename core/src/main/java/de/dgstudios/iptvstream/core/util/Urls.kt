@@ -56,6 +56,13 @@ object Urls {
             .build().toString()
     }
 
+    /** Nur http und https. Andere Schemata (file, content) werden nicht geladen. */
+    fun httpUrl(raw: String?): String? {
+        val parsed = raw?.trim()?.toHttpUrlOrNull() ?: return null
+        if (parsed.scheme != "http" && parsed.scheme != "https") return null
+        return parsed.toString()
+    }
+
     fun isHls(url: String): Boolean {
         val l = url.lowercase()
         return l.substringBefore('?').endsWith(".m3u8") || l.contains(".m3u8?")

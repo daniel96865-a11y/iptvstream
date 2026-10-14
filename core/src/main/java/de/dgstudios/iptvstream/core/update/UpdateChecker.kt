@@ -118,14 +118,14 @@ class UpdateChecker(
     fun confirm() {
         val offer = _prompt.value as? UpdatePrompt.Offer ?: return
         if (offer.downloading) return
-        val cached = apkFile()
-        if (cached.exists() && cached.length() > 0L && prefs.getInt(KEY_CACHED_CODE, -1) == offer.info.versionCode) {
-            requestInstall(offer.info)
-            return
-        }
         downloadJob?.cancel()
         downloadJob = scope.launch {
             try {
+                if (cachedMatches(offer.info)) {
+                    requestInstall(offer.info)
+                    return@launch
+                }
+                apkFile().delete()
                 _prompt.value = offer.copy(downloading = true, progress = null, needPermission = false)
                 download(offer.info)
                 prefs.edit().putInt(KEY_CACHED_CODE, offer.info.versionCode).apply()
@@ -227,6 +227,7 @@ class UpdateChecker(
         val request = Request.Builder().url(info.apkUrl).build()
         downloadClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) error("HTTP ${response.code}")
+            if (!allowedDownloadHost(response.request.url.host)) error("Update-Adresse ungültig")
             val body = response.body ?: error("leer")
             val total = body.contentLength()
             val digest = MessageDigest.getInstance("SHA-256")
@@ -277,6 +278,26 @@ class UpdateChecker(
 
     private fun apkFile(): File = File(appContext.cacheDir, "updates/iptvstream-update.apk")
 
+    private suspend fun cachedMatches(info: UpdateInfo): Boolean = withContext(Dispatchers.IO) {
+        val cached = apkFile()
+        cached.exists() && cached.length() > 0L &&
+            prefs.getInt(KEY_CACHED_CODE, -1) == info.versionCode &&
+            sha256(cached).equals(info.sha256, ignoreCase = true)
+    }
+
+    private fun sha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buf = ByteArray(16 * 1024)
+            while (true) {
+                val n = input.read(buf)
+                if (n < 0) break
+                digest.update(buf, 0, n)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
     companion object {
         private const val PREFS = "iptvstream_update"
         private const val KEY_LAST = "last_check_ms"
@@ -287,6 +308,15 @@ class UpdateChecker(
             val file = if (packageName.endsWith(".tv")) "iptvstream-tv.json" else "iptvstream-mobile.json"
             return "https://raw.githubusercontent.com/daniel96865-a11y/iptvstream/main/docs/$file"
         }
+
+        private val downloadHosts = setOf(
+            "github.com",
+            "release-assets.githubusercontent.com",
+            "objects.githubusercontent.com",
+            "github-releases.githubusercontent.com",
+        )
+
+        fun allowedDownloadHost(host: String): Boolean = host.lowercase() in downloadHosts
 
         fun parseFeed(text: String): UpdateInfo {
             val o = JSONObject(text)

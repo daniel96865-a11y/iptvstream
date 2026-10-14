@@ -9,5 +9,9 @@ captures/
 *.apk
 *.jks
 *.keystore
+.env
+.env.*
+*.pem
+*.key
 !gradle/wrapper/gradle-wrapper.jar
 mobile/src/test/snapshots/

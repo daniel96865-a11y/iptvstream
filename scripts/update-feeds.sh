@@ -53,7 +53,9 @@ print(f"feed geschrieben: {path}")
 PY
 }
 
-if [ "$TAG" = "v1.0.42" ]; then
+if [ "$TAG" = "v1.0.43" ]; then
+  NOTE="Die Übertragung zum Fernseher nennt den Code nicht mehr im Netz. Vor dem Senden steht die Zieladresse. Updates prüfen die Datei erneut, und die Sicherung nimmt die Senderliste nicht mit."
+elif [ "$TAG" = "v1.0.42" ]; then
   NOTE="Senderlisten laufen flüssiger. Das Programm wird für die sichtbaren Sender vorgeladen, und die Logos halten das Scrollen nicht mehr auf."
 elif [ "$TAG" = "v1.0.41" ]; then
   NOTE="Ein abgebrochener Programmführer lässt die alte Übersicht stehen. Fehlende Bereiche einer Liste werden nachgeladen. Der Programmführer aktualisiert sich auch, wenn die App offen bleibt oder zu ist."

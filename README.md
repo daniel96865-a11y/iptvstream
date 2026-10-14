@@ -21,7 +21,7 @@ Handy-Oberfläche im Glas-Look (Hintergrund „Mitternacht“, Akzent Blau) mit 
 | Smartphone / Tablet | [iptvstream-mobile.apk](https://github.com/daniel96865-a11y/iptvstream/releases/latest/download/iptvstream-mobile.apk) |
 | Android TV / Fire TV | [iptvstream-tv.apk](https://github.com/daniel96865-a11y/iptvstream/releases/latest/download/iptvstream-tv.apk) |
 
-Aktuelle Version: [Release v1.0.42](https://github.com/daniel96865-a11y/iptvstream/releases/tag/v1.0.42)
+Aktuelle Version: [Release v1.0.43](https://github.com/daniel96865-a11y/iptvstream/releases/tag/v1.0.43)
 
 Installation außerhalb des Play Store: in den Android-Einstellungen „Unbekannte Apps“ für den Browser bzw. Dateimanager erlauben, die APK öffnen und installieren. Auf Fire TV die APK per „Downloader“ oder `adb install` aufspielen.
 
@@ -114,7 +114,7 @@ export SIGNING_KEY_ALIAS="iptvstream"
 
 Keystore-Dateien (`*.jks`, `*.keystore`) gehören nicht ins Repository.
 
-GitHub Actions (`.github/workflows/build.yml`) baut beide APKs bei jedem Push, lädt sie als Artefakt hoch und hängt sie bei Tags `v*` an ein GitHub-Release (`iptvstream-mobile.apk`, `iptvstream-tv.apk`). Danach werden die Update-Feeds auf `main` nachgezogen. In CI werden die vier Variablen aus den Repository-Secrets gelesen; das Keystore wird vor dem Build dekodiert.
+GitHub Actions (`.github/workflows/build.yml`) baut beide APKs bei jedem Push und bei Pull Requests ohne Signier-Geheimnisse und lädt sie als Artefakt hoch. Nur ein Tag `v*` liest die vier Secrets, signiert die APKs und hängt sie an ein GitHub-Release (`iptvstream-mobile.apk`, `iptvstream-tv.apk`). Danach werden die Update-Feeds auf `main` nachgezogen.
 
 ## Pakete
 

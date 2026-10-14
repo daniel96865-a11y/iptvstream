@@ -9,6 +9,7 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
+import de.dgstudios.iptvstream.core.util.Urls
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.Image
@@ -77,9 +78,9 @@ class FavoritesWidget : GlanceAppWidget() {
     }
 
     private suspend fun loadLogo(context: Context, url: String?): Bitmap? {
-        if (url.isNullOrBlank()) return null
+        val safe = Urls.httpUrl(url) ?: return null
         return runCatching {
-            val req = ImageRequest.Builder(context).data(url).size(96).allowHardware(false).build()
+            val req = ImageRequest.Builder(context).data(safe).size(96).allowHardware(false).build()
             (context.imageLoader.execute(req) as? SuccessResult)?.drawable?.toBitmap(96, 96, Bitmap.Config.ARGB_8888)
         }.getOrNull()
     }

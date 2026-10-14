@@ -16,6 +16,26 @@ import java.net.Socket
 
 class LanPairingTest {
     @Test
+    fun codeHashHidesTheCode() {
+        val code = "K7H3P2"
+        val hash = LanPairing.codeHash("k7h 3p2")
+        assertEquals(64, hash.length)
+        assertEquals(hash, LanPairing.codeHash(code))
+        assertFalse(hash.contains(code))
+        assertTrue(hash.all { it in '0'..'9' || it in 'a'..'f' })
+    }
+
+    @Test
+    fun emptyNetListRejectsPrivateClients() {
+        assertTrue(LanPairing.allowsRemote(loopback = true, privateV4 = false, netCount = 0, inNet = false))
+        assertFalse(LanPairing.allowsRemote(loopback = false, privateV4 = true, netCount = 0, inNet = false))
+        assertFalse(LanPairing.allowsRemote(loopback = false, privateV4 = true, netCount = 0, inNet = true))
+        assertFalse(LanPairing.allowsRemote(loopback = false, privateV4 = false, netCount = 2, inNet = true))
+        assertTrue(LanPairing.allowsRemote(loopback = false, privateV4 = true, netCount = 1, inNet = true))
+        assertFalse(LanPairing.allowsRemote(loopback = false, privateV4 = true, netCount = 1, inNet = false))
+    }
+
+    @Test
     fun secretsAreRandomAndWellFormed() {
         val a = LanPairing.newSecrets()
         val b = LanPairing.newSecrets()

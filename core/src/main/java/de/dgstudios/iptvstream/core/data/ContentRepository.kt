@@ -294,8 +294,16 @@ class ContentRepository(
 
     // ------------------------------------------------------------------ Abspielen
 
+    /** Gespeicherte Direkt-URL nur, wenn sie http(s) ist. Sonst die gebaute Xtream-Adresse, ebenfalls nur http(s). */
+    private fun playableUrl(direct: String?, built: String): String {
+        val stored = Urls.httpUrl(direct)
+        if (stored != null) return stored
+        if (!direct.isNullOrBlank()) return ""
+        return Urls.httpUrl(built).orEmpty()
+    }
+
     fun liveItem(p: ProfileEntity, c: ChannelEntity, format: String): PlayItem {
-        val url = c.directUrl ?: Urls.join(p.url, "live", p.username, p.password, "${c.streamId}.$format")
+        val url = playableUrl(c.directUrl, Urls.join(p.url, "live", p.username, p.password, "${c.streamId}.$format"))
         return PlayItem(
             kind = PlayKind.LIVE,
             id = c.streamId,
@@ -322,7 +330,7 @@ class ContentRepository(
             ext = format.ifBlank { "ts" },
             startMs = programme.start,
             stopMs = programme.stop,
-        ) ?: return null
+        )?.let { Urls.httpUrl(it) } ?: return null
         return PlayItem(
             kind = PlayKind.LIVE,
             id = c.streamId,
@@ -338,7 +346,7 @@ class ContentRepository(
 
     fun movieItem(p: ProfileEntity, m: MovieEntity): PlayItem {
         val ext = m.ext.lowercase()
-        val url = m.directUrl ?: Urls.join(p.url, "movie", p.username, p.password, "${m.streamId}.$ext")
+        val url = playableUrl(m.directUrl, Urls.join(p.url, "movie", p.username, p.password, "${m.streamId}.$ext"))
         return PlayItem(
             kind = PlayKind.MOVIE,
             id = m.streamId,
@@ -351,8 +359,10 @@ class ContentRepository(
 
     fun episodeItem(p: ProfileEntity, s: SeriesEntity, e: EpisodeInfo): PlayItem {
         val ext = e.ext.lowercase()
-        val url = e.directUrl?.takeIf { it.isNotBlank() }
-            ?: Urls.join(p.url, "series", p.username, p.password, "${e.id}.$ext")
+        val url = playableUrl(
+            e.directUrl?.takeIf { it.isNotBlank() },
+            Urls.join(p.url, "series", p.username, p.password, "${e.id}.$ext"),
+        )
         return PlayItem(
             kind = PlayKind.EPISODE,
             id = e.id,

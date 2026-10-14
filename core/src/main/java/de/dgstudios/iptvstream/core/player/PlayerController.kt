@@ -236,6 +236,13 @@ class PlayerController(
 
     private fun open(item: PlayItem, startMs: Long) {
         if (released) return
+        if (Urls.httpUrl(item.url) == null) {
+            current = null
+            _state.update {
+                it.copy(loading = false, playing = false, error = "Die Senderadresse ist ungültig.")
+            }
+            return
+        }
         current?.let { saveProgress(it, force = true) }
         reconnectJob?.cancel()
         fallback.reset()
