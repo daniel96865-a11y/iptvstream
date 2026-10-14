@@ -1,7 +1,7 @@
 {
-  "versionCode": 48,
-  "versionName": "1.0.46",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.46/iptvstream-mobile.apk",
-  "sha256": "f9e8ad0c846abcd5971b9e8a807b58a3fa8a31c9d32b842b09397031bc3b5c24",
-  "changelog": "Die Wiederverbindung bei hängendem Live-Bild endet nach fünf Versuchen und zeigt dann die Diagnose. Schon bei jedem Versuch steht der Grund dabei."
+  "versionCode": 49,
+  "versionName": "1.0.47",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.47/iptvstream-mobile.apk",
+  "sha256": "64b89f838c0eafb9aaeaa844d11955b0d52b8e01f389405cfc6bf24bc4b013cb",
+  "changelog": "Auf älteren Fire-TV-Sticks bleibt bei manchen Sendern das Bild stehen, der Ton läuft. Die App lädt dann den Software-Decoder, weil der Hardware-Decoder bei diesem Bildformat hängen bleibt."
 }
