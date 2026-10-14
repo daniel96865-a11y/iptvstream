@@ -1,5 +1,6 @@
 package de.dgstudios.iptvstream.core.player
 
+import android.app.ActivityManager
 import android.content.Context
 import android.os.Handler
 import androidx.media3.common.AudioAttributes
@@ -165,6 +166,7 @@ class PlayerController(
     private var audioDisabledByUs = false
     private var selectedAudioId: String? = null
 
+    private val stall = StallDetector()
     private var reconnectAttempts = 0
     /** Einmal .ts gegen .m3u8 tauschen, wenn der Live-Stream so nicht existiert. */
     private var triedOtherLiveContainer = false
@@ -193,7 +195,9 @@ class PlayerController(
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSource, extractors)
             .setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(6))
 
-        val (minMs, maxMs, bytes) = PlaybackBuffer.spec(settings.buffer)
+        val (minMs, maxMs, wantedBytes) = PlaybackBuffer.spec(settings.buffer)
+        val memoryClass = (context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager)?.memoryClass ?: 0
+        val bytes = PlaybackBuffer.capBytes(wantedBytes, memoryClass)
         liveBufferMaxMs = maxMs.toLong()
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(minMs, maxMs, 1_000, 2_500)
@@ -252,6 +256,7 @@ class PlayerController(
         silentChecked = false
         selectedAudioId = null
         reconnectAttempts = 0
+        stall.reset()
         playingSince = 0L
         lastTracks = Tracks.EMPTY
         if (audioDisabledByUs) {
@@ -625,6 +630,27 @@ class PlayerController(
         }
     }
 
+    /**
+     * Bild steht, obwohl der Player "spielt". Zuerst den Ton als Ursache behandeln (hängt auf
+     * manchen älteren Geräten bei Mehrkanal), danach neu verbinden, zuletzt eine Meldung.
+     */
+    private fun onStalled() {
+        if (released || inBackground) return
+        val audioActive = !audioDisabledByUs && !fallback.gaveUp && player.audioFormat != null
+        if (audioActive) {
+            audioFallback("Wiedergabe hängt")
+            return
+        }
+        if (tryReconnect()) return
+        _state.update {
+            it.copy(
+                loading = false,
+                playing = false,
+                error = "Die Wiedergabe hängt. In den Einstellungen Tonmodus „Nur Stereo“ und kleinen Puffer wählen.",
+            )
+        }
+    }
+
     private fun httpStatus(error: PlaybackException): Int? {
         var cause: Throwable? = error
         while (cause != null) {
@@ -709,6 +735,9 @@ class PlayerController(
                 }
                 refreshSignal()
                 val now = System.currentTimeMillis()
+                if (stall.observe(now, player.isPlaying && !inBackground, player.currentPosition)) {
+                    onStalled()
+                }
                 if (player.isPlaying) {
                     if (playingSince == 0L) playingSince = now
                     // Stabil gelaufen: Wiederverbindungszähler zurücksetzen.
