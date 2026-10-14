@@ -53,7 +53,9 @@ print(f"feed geschrieben: {path}")
 PY
 }
 
-if [ "$TAG" = "v1.0.46" ]; then
+if [ "$TAG" = "v1.0.47" ]; then
+  NOTE="Auf älteren Fire-TV-Sticks bleibt bei manchen Sendern das Bild stehen, der Ton läuft. Die App lädt dann den Software-Decoder, weil der Hardware-Decoder bei diesem Bildformat hängen bleibt."
+elif [ "$TAG" = "v1.0.46" ]; then
   NOTE="Die Wiederverbindung bei hängendem Live-Bild endet nach fünf Versuchen und zeigt dann die Diagnose. Schon bei jedem Versuch steht der Grund dabei."
 elif [ "$TAG" = "v1.0.45" ]; then
   NOTE="Steht das Live-Bild oder lädt ein Sender nicht weiter, verbindet die App neu und zeigt sonst eine Diagnosezeile mit Version, Decoder und Puffer an."
