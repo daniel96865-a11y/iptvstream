@@ -53,7 +53,9 @@ print(f"feed geschrieben: {path}")
 PY
 }
 
-if [ "$TAG" = "v1.0.44" ]; then
+if [ "$TAG" = "v1.0.45" ]; then
+  NOTE="Steht das Live-Bild oder lädt ein Sender nicht weiter, verbindet die App neu und zeigt sonst eine Diagnosezeile mit Version, Decoder und Puffer an."
+elif [ "$TAG" = "v1.0.44" ]; then
   NOTE="Hängt das Live-Bild auf älteren Fire TVs, erkennt die App den Stillstand und schaltet den Ton um oder verbindet neu. Der Puffer passt sich dem Speicher des Geräts an."
 elif [ "$TAG" = "v1.0.43" ]; then
   NOTE="Die Übertragung zum Fernseher nennt den Code nicht mehr im Netz. Vor dem Senden steht die Zieladresse. Updates prüfen die Datei erneut, und die Sicherung nimmt die Senderliste nicht mit."

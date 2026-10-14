@@ -19,6 +19,7 @@ import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.decoder.ffmpeg.FfmpegAudioRenderer
 import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlaybackException
 import androidx.media3.exoplayer.ExoPlayer
@@ -38,6 +39,7 @@ import de.dgstudios.iptvstream.core.data.PlayItem
 import de.dgstudios.iptvstream.core.data.PlayKind
 import de.dgstudios.iptvstream.core.data.remote.Net
 import de.dgstudios.iptvstream.core.settings.AppSettings
+import de.dgstudios.iptvstream.core.update.installedVersionName
 import de.dgstudios.iptvstream.core.util.Urls
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -166,7 +168,11 @@ class PlayerController(
     private var audioDisabledByUs = false
     private var selectedAudioId: String? = null
 
+    private val versionName = installedVersionName(context)
+    private val diag = PlayDiagnostics()
     private val stall = StallDetector()
+    private val frames = StallDetector(FROZEN_FRAMES_MS)
+    private var bufferingSince = 0L
     private var reconnectAttempts = 0
     /** Einmal .ts gegen .m3u8 tauschen, wenn der Live-Stream so nicht existiert. */
     private var triedOtherLiveContainer = false
@@ -257,6 +263,9 @@ class PlayerController(
         selectedAudioId = null
         reconnectAttempts = 0
         stall.reset()
+        frames.reset()
+        bufferingSince = 0L
+        diag.reset()
         playingSince = 0L
         lastTracks = Tracks.EMPTY
         if (audioDisabledByUs) {
@@ -417,6 +426,7 @@ class PlayerController(
         pollJob?.cancel()
         gain.release()
         player.removeListener(listener)
+        player.removeAnalyticsListener(analytics)
         player.release()
     }
 
@@ -581,8 +591,54 @@ class PlayerController(
         }
     }
 
+    private val analytics = object : AnalyticsListener {
+        override fun onVideoDecoderInitialized(
+            eventTime: AnalyticsListener.EventTime,
+            decoderName: String,
+            initializedTimestampMs: Long,
+            initializationDurationMs: Long,
+        ) {
+            diag.videoDecoder = decoderName
+        }
+
+        override fun onAudioDecoderInitialized(
+            eventTime: AnalyticsListener.EventTime,
+            decoderName: String,
+            initializedTimestampMs: Long,
+            initializationDurationMs: Long,
+        ) {
+            diag.audioDecoder = decoderName
+        }
+
+        override fun onDroppedVideoFrames(eventTime: AnalyticsListener.EventTime, droppedFrames: Int, elapsedMs: Long) {
+            diag.dropped += droppedFrames
+        }
+
+        override fun onAudioUnderrun(
+            eventTime: AnalyticsListener.EventTime,
+            bufferSize: Int,
+            bufferSizeMs: Long,
+            elapsedSinceLastFeedMs: Long,
+        ) {
+            diag.underruns++
+        }
+
+        override fun onVideoCodecError(eventTime: AnalyticsListener.EventTime, videoCodecError: Exception) {
+            diag.issue("Video-Decoder: ${videoCodecError.message ?: videoCodecError.javaClass.simpleName}")
+        }
+
+        override fun onAudioCodecError(eventTime: AnalyticsListener.EventTime, audioCodecError: Exception) {
+            diag.issue("Ton-Decoder: ${audioCodecError.message ?: audioCodecError.javaClass.simpleName}")
+        }
+
+        override fun onAudioSinkError(eventTime: AnalyticsListener.EventTime, audioSinkError: Exception) {
+            diag.issue("Tonausgabe: ${audioSinkError.message ?: audioSinkError.javaClass.simpleName}")
+        }
+    }
+
     init {
         player.addListener(listener)
+        player.addAnalyticsListener(analytics)
         gain.setSession(player.audioSessionId)
         startPolling()
     }
@@ -625,8 +681,9 @@ class PlayerController(
         val networkRelated = code in 2000..2004
         if ((networkRelated || parseRelated) && tryReconnect()) return
 
+        diag.issue("Fehler $code")
         _state.update {
-            it.copy(loading = false, playing = false, error = friendlyError(code))
+            it.copy(loading = false, playing = false, error = "${friendlyError(code)}\n${diagnosisLine()}")
         }
     }
 
@@ -642,13 +699,47 @@ class PlayerController(
             return
         }
         if (tryReconnect()) return
+        stuckError("Die Wiedergabe hängt.")
+    }
+
+    /** Ton läuft, aber das Bild kommt nicht weiter. */
+    private fun onFrozenPicture() {
+        if (released || inBackground) return
+        diag.issue("Bild steht")
+        if (tryReconnect()) return
+        stuckError("Das Bild steht.")
+    }
+
+    /** Der Player puffert seit Sekunden, ohne dass Daten ankommen. */
+    private fun onBufferStuck() {
+        if (released || inBackground) return
+        diag.issue("Puffern ohne Daten")
+        if (tryReconnect()) return
+        stuckError("Der Sender lädt nicht weiter.")
+    }
+
+    private fun stuckError(headline: String) {
         _state.update {
-            it.copy(
-                loading = false,
-                playing = false,
-                error = "Die Wiedergabe hängt. In den Einstellungen Tonmodus „Nur Stereo“ und kleinen Puffer wählen.",
-            )
+            it.copy(loading = false, playing = false, error = "$headline\n${diagnosisLine()}")
         }
+    }
+
+    private fun renderedFrames(): Int? {
+        val counters = player.videoDecoderCounters ?: return null
+        counters.ensureUpdated()
+        return counters.renderedOutputBufferCount
+    }
+
+    private fun diagnosisLine(): String {
+        val size = player.videoSize
+        return diag.line(
+            version = versionName,
+            playbackState = player.playbackState,
+            bufferedMs = player.totalBufferedDuration,
+            renderedFrames = renderedFrames(),
+            video = StreamSignal.videoLine(player.videoFormat, size.width, size.height),
+            audio = StreamSignal.audioLine(player.audioFormat),
+        )
     }
 
     private fun httpStatus(error: PlaybackException): Int? {
@@ -735,8 +826,23 @@ class PlayerController(
                 }
                 refreshSignal()
                 val now = System.currentTimeMillis()
-                if (stall.observe(now, player.isPlaying && !inBackground, player.currentPosition)) {
+                val running = player.isPlaying && !inBackground
+                if (stall.observe(now, running, player.currentPosition)) {
                     onStalled()
+                }
+                val rendered = renderedFrames()
+                val hasVideo = player.videoFormat != null && rendered != null
+                if (frames.observe(now, running && hasVideo, (rendered ?: 0).toLong())) {
+                    onFrozenPicture()
+                }
+                val buffering = player.playbackState == Player.STATE_BUFFERING && player.playWhenReady && !inBackground
+                if (!buffering) {
+                    bufferingSince = 0L
+                } else if (bufferingSince == 0L) {
+                    bufferingSince = now
+                } else if (now - bufferingSince > BUFFER_STUCK_MS) {
+                    bufferingSince = now
+                    onBufferStuck()
                 }
                 if (player.isPlaying) {
                     if (playingSince == 0L) playingSince = now
@@ -778,6 +884,8 @@ class PlayerController(
 
     private companion object {
         const val MAX_RECONNECTS = 5
+        const val FROZEN_FRAMES_MS = 8_000L
+        const val BUFFER_STUCK_MS = 20_000L
     }
 }
 
