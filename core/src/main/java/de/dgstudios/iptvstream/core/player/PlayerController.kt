@@ -647,6 +647,7 @@ class PlayerController(
         if (released) return
         val code = error.errorCode
         val isLive = liveEdge(current)
+        diag.issue(describe(error))
 
         // Live-Fenster überholt: einfach zum Live-Rand springen.
         if (code == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
@@ -681,7 +682,6 @@ class PlayerController(
         val networkRelated = code in 2000..2004
         if ((networkRelated || parseRelated) && tryReconnect()) return
 
-        diag.issue("Fehler $code")
         _state.update {
             it.copy(loading = false, playing = false, error = "${friendlyError(code)}\n${diagnosisLine()}")
         }
@@ -742,6 +742,13 @@ class PlayerController(
         )
     }
 
+    private fun describe(error: PlaybackException): String {
+        var cause: Throwable = error
+        while (cause.cause != null && cause.cause !== cause) cause = cause.cause!!
+        val root = if (cause === error) "" else " / ${cause.javaClass.simpleName}"
+        return "${error.errorCodeName}$root"
+    }
+
     private fun httpStatus(error: PlaybackException): Int? {
         var cause: Throwable? = error
         while (cause != null) {
@@ -757,7 +764,10 @@ class PlayerController(
         if (reconnectAttempts >= MAX_RECONNECTS) return false
         reconnectAttempts++
         val wait = (1000L shl (reconnectAttempts - 1)).coerceAtMost(8000L)
-        notice("Verbindung unterbrochen – neuer Versuch $reconnectAttempts/$MAX_RECONNECTS …", wait + 1500)
+        notice(
+            "Verbindung unterbrochen – neuer Versuch $reconnectAttempts/$MAX_RECONNECTS …\n${diagnosisLine()}",
+            wait + 3_500,
+        )
         _state.update { it.copy(loading = true) }
         reconnectJob?.cancel()
         reconnectJob = scope.launch {
@@ -847,7 +857,9 @@ class PlayerController(
                 if (player.isPlaying) {
                     if (playingSince == 0L) playingSince = now
                     // Stabil gelaufen: Wiederverbindungszähler zurücksetzen.
-                    if (now - playingSince > 10_000) reconnectAttempts = 0
+                    // Nur zählen, wenn die Wiedergabe auch vorankommt, sonst endet die Wiederverbindung nie.
+                    val moving = stall.idleMs(now) < 3_000L && frames.idleMs(now) < 3_000L
+                    if (moving && now - playingSince > 10_000) reconnectAttempts = 0
                     // Bild ohne Ton erkennen: Audiospuren vorhanden, aber keine wird abgespielt.
                     if (!silentChecked && !audioDisabledByUs && now - playingSince > 4_000) {
                         silentChecked = true

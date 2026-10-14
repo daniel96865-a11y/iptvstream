@@ -49,7 +49,7 @@ class PlayDiagnostics {
     }
 
     companion object {
-        private const val MAX_ISSUE = 80
+        private const val MAX_ISSUE = 120
 
         fun stateName(state: Int): String = when (state) {
             Player.STATE_IDLE -> "Leerlauf"

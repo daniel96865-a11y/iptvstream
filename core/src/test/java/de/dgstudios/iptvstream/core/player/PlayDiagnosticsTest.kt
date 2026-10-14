@@ -27,9 +27,9 @@ class PlayDiagnosticsTest {
     fun missingValuesAreSpelledOutAndResetClears() {
         val d = PlayDiagnostics()
         d.issue("x".repeat(500))
-        assertEquals(80, d.lastIssue?.length)
+        assertEquals(120, d.lastIssue?.length)
         val line = d.line("", Player.STATE_BUFFERING, -5, null, null, null)
-        assertEquals("v? · Puffern · Puffer 0 s · Video keins · Ton keiner · " + "x".repeat(80), line)
+        assertEquals("v? · Puffern · Puffer 0 s · Video keins · Ton keiner · " + "x".repeat(120), line)
         d.reset()
         assertFalse(d.line("1", Player.STATE_IDLE, 0, null, null, null).contains("x"))
         assertTrue(d.line("1", Player.STATE_IDLE, 0, null, null, null).contains("Leerlauf"))
