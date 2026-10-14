@@ -47,6 +47,20 @@ class StallDetectorTest {
     }
 
     @Test
+    fun idleTimeGrowsOnlyWhileTheValueStandsStill() {
+        val d = StallDetector(6_000)
+        assertEquals(0L, d.idleMs(1_000))
+        d.observe(1_000, true, 50)
+        assertEquals(0L, d.idleMs(1_000))
+        d.observe(3_000, true, 50)
+        assertEquals(2_000L, d.idleMs(3_000))
+        d.observe(3_500, true, 90)
+        assertEquals(0L, d.idleMs(3_500))
+        d.observe(4_000, false, 90)
+        assertEquals(0L, d.idleMs(9_000))
+    }
+
+    @Test
     fun smallHeapLimitsTheBufferButNotBelowTheFloor() {
         val big = 384 * 1024 * 1024
         assertEquals(big, PlaybackBuffer.capBytes(big, 0))

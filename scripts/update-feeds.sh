@@ -53,7 +53,9 @@ print(f"feed geschrieben: {path}")
 PY
 }
 
-if [ "$TAG" = "v1.0.45" ]; then
+if [ "$TAG" = "v1.0.46" ]; then
+  NOTE="Die Wiederverbindung bei hängendem Live-Bild endet nach fünf Versuchen und zeigt dann die Diagnose. Schon bei jedem Versuch steht der Grund dabei."
+elif [ "$TAG" = "v1.0.45" ]; then
   NOTE="Steht das Live-Bild oder lädt ein Sender nicht weiter, verbindet die App neu und zeigt sonst eine Diagnosezeile mit Version, Decoder und Puffer an."
 elif [ "$TAG" = "v1.0.44" ]; then
   NOTE="Hängt das Live-Bild auf älteren Fire TVs, erkennt die App den Stillstand und schaltet den Ton um oder verbindet neu. Der Puffer passt sich dem Speicher des Geräts an."
