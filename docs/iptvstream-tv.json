@@ -1,7 +1,7 @@
 {
-  "versionCode": 44,
-  "versionName": "1.0.42",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.42/iptvstream-tv.apk",
-  "sha256": "bebc0ee6a9ea19ce995a8aeef25074a2d638c91d1d6e97fe10cb2ef2d56fa38c",
-  "changelog": "Senderlisten laufen flüssiger. Das Programm wird für die sichtbaren Sender vorgeladen, und die Logos halten das Scrollen nicht mehr auf."
+  "versionCode": 45,
+  "versionName": "1.0.43",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.43/iptvstream-tv.apk",
+  "sha256": "b6d20cc4ada25b27b94cf1e51de30b8e734f082de8156d7d764fb3be0d41cf48",
+  "changelog": "Die Übertragung zum Fernseher nennt den Code nicht mehr im Netz. Vor dem Senden steht die Zieladresse. Updates prüfen die Datei erneut, und die Sicherung nimmt die Senderliste nicht mit."
 }
