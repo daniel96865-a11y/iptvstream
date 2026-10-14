@@ -21,6 +21,18 @@ object PlaybackBuffer {
      * Anteil an der vollen Breite. Groß füllt die Zeile, klein bleibt kürzer,
      * aber breit genug für eine Zeile Text.
      */
+    /**
+     * Der Puffer liegt im Java-Heap der App. Auf Geräten mit kleinem Heap (ältere Fire TVs)
+     * darf er nur einen Teil davon belegen, sonst droht Speichermangel mitten im Sender.
+     */
+    fun capBytes(wanted: Int, memoryClassMb: Int): Int {
+        if (memoryClassMb <= 0) return wanted
+        val limit = (memoryClassMb.toLong() * 1024 * 1024 * 3 / 10).coerceAtLeast(MIN_BYTES.toLong())
+        return minOf(wanted.toLong(), limit).toInt()
+    }
+
+    private const val MIN_BYTES = 24 * 1024 * 1024
+
     fun trackFraction(maxMs: Long): Float = when {
         maxMs <= 0L -> 0f
         maxMs <= SMALL_MAX_MS -> 0.5f
