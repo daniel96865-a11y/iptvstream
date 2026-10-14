@@ -1,7 +1,7 @@
 {
-  "versionCode": 47,
-  "versionName": "1.0.45",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.45/iptvstream-tv.apk",
-  "sha256": "658f4e3393f48163cdcfa115b6cc2fb1f01461fc376b7d3b78b5df768aeee4c1",
-  "changelog": "Steht das Live-Bild oder lädt ein Sender nicht weiter, verbindet die App neu und zeigt sonst eine Diagnosezeile mit Version, Decoder und Puffer an."
+  "versionCode": 48,
+  "versionName": "1.0.46",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.46/iptvstream-tv.apk",
+  "sha256": "eac30f73e3d1d16836e0bcfb357743461ef37aa7b1bfa6064ca4f294ba143f71",
+  "changelog": "Die Wiederverbindung bei hängendem Live-Bild endet nach fünf Versuchen und zeigt dann die Diagnose. Schon bei jedem Versuch steht der Grund dabei."
 }
