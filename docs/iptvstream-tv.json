@@ -1,7 +1,7 @@
 {
-  "versionCode": 45,
-  "versionName": "1.0.43",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.43/iptvstream-tv.apk",
-  "sha256": "b6d20cc4ada25b27b94cf1e51de30b8e734f082de8156d7d764fb3be0d41cf48",
-  "changelog": "Die Übertragung zum Fernseher nennt den Code nicht mehr im Netz. Vor dem Senden steht die Zieladresse. Updates prüfen die Datei erneut, und die Sicherung nimmt die Senderliste nicht mit."
+  "versionCode": 46,
+  "versionName": "1.0.44",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.44/iptvstream-tv.apk",
+  "sha256": "1d81b7e10ccc3c1081d26a200547984315ef774a4b93c0dc9edc3b472b8649a6",
+  "changelog": "Hängt das Live-Bild auf älteren Fire TVs, erkennt die App den Stillstand und schaltet den Ton um oder verbindet neu. Der Puffer passt sich dem Speicher des Geräts an."
 }

@@ -1,7 +1,7 @@
 {
-  "versionCode": 45,
-  "versionName": "1.0.43",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.43/iptvstream-mobile.apk",
-  "sha256": "26bd03468bb525d39354a9f6706242047bc501d710396e33c95ffb9c9c5279ea",
-  "changelog": "Die Übertragung zum Fernseher nennt den Code nicht mehr im Netz. Vor dem Senden steht die Zieladresse. Updates prüfen die Datei erneut, und die Sicherung nimmt die Senderliste nicht mit."
+  "versionCode": 46,
+  "versionName": "1.0.44",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.44/iptvstream-mobile.apk",
+  "sha256": "6d19e9ec847c5608d3f3ea4e1a7471c44ed48e8823f93403330533f242036f62",
+  "changelog": "Hängt das Live-Bild auf älteren Fire TVs, erkennt die App den Stillstand und schaltet den Ton um oder verbindet neu. Der Puffer passt sich dem Speicher des Geräts an."
 }
