@@ -43,6 +43,9 @@ import de.dgstudios.iptvstream.core.data.SyncState
 import de.dgstudios.iptvstream.core.ui.LocalAppStyle
 import de.dgstudios.iptvstream.core.ui.popIn
 
+/** Kühles Blauweiß für Glasflächen im Marineblau-Design. */
+val GlassBlue = Color(0xFFA9C8FF)
+
 /** Glas-Optik: halbtransparente Fläche mit hellem Rand und Verlauf. */
 @Composable
 fun Modifier.glass(shape: Shape = RoundedCornerShape(22.dp), strong: Boolean = false): Modifier {
@@ -50,7 +53,7 @@ fun Modifier.glass(shape: Shape = RoundedCornerShape(22.dp), strong: Boolean = f
     val a = s.glassAlpha * (if (strong) 1.7f else 1f)
     val fill = remember(s.dark, a) {
         if (s.dark) {
-            Brush.verticalGradient(listOf(Color.White.copy(alpha = a + 0.05f), Color.White.copy(alpha = a * 0.6f)))
+            Brush.verticalGradient(listOf(GlassBlue.copy(alpha = a + 0.07f), GlassBlue.copy(alpha = a * 0.5f)))
         } else {
             Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.78f), Color.White.copy(alpha = 0.52f)))
         }
@@ -58,8 +61,8 @@ fun Modifier.glass(shape: Shape = RoundedCornerShape(22.dp), strong: Boolean = f
     val border = remember(s.dark) {
         Brush.linearGradient(
             listOf(
-                Color.White.copy(alpha = if (s.dark) 0.45f else 0.95f),
-                Color.White.copy(alpha = if (s.dark) 0.06f else 0.3f),
+                (if (s.dark) GlassBlue else Color.White).copy(alpha = if (s.dark) 0.5f else 0.95f),
+                (if (s.dark) GlassBlue else Color.White).copy(alpha = if (s.dark) 0.08f else 0.3f),
             ),
         )
     }

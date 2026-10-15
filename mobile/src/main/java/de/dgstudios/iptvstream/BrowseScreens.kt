@@ -477,9 +477,9 @@ private fun ChannelRow(
                     val fraction = animatedProgress(nn?.progress(tick) ?: 0f)
                     LinearProgressIndicator(
                         progress = { fraction },
-                        modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)),
+                        modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
                         color = s.accent,
-                        trackColor = Color.White.copy(alpha = 0.14f),
+                        trackColor = Color.White.copy(alpha = 0.2f),
                     )
                     if (next != null) {
                         Text(
