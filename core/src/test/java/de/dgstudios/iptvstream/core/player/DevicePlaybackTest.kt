@@ -72,4 +72,41 @@ class DevicePlaybackTest {
         assertTrue(choice.restarted("video/avc"))
         assertFalse(choice.restarted("video/hevc"))
     }
+
+    @Test
+    fun legacyFireTvPrefersSoftwareForHdH264ButUhdKeepsHardware() {
+        val choice = VideoDecoderChoice()
+        val codecs = listOf("OMX.google.h264.decoder" to true, "OMX.MTK.VIDEO.DECODER.AVC" to false)
+        assertTrue(DevicePlayback.olderFireTv("Amazon", "AFTMM", 25))
+        choice.useSoftware("video/avc")
+
+        assertEquals(
+            listOf(codecs[0]),
+            choice.select("video/avc", codecs, { it.first }) { it.second },
+        )
+        val uhdCandidates = UhdPlayback.decodersFor(codecs, uhd = true) { it.second }
+        assertEquals(
+            listOf(codecs[1]),
+            choice.select("video/avc", uhdCandidates, { it.first }) { it.second },
+        )
+    }
+
+    @Test
+    fun softwarePreferenceFallsBackToHardwareWhenNoSoftwareCodecExists() {
+        val choice = VideoDecoderChoice()
+        val hardware = listOf("OMX.MTK.VIDEO.DECODER.AVC")
+        choice.useSoftware("video/avc")
+
+        assertEquals(hardware, choice.select("video/avc", hardware, { it }) { DevicePlayback.isSoftwareDecoder(it) })
+    }
+
+    @Test
+    fun aStalledSoftwareDecoderCanFallBackToHardwareOnce() {
+        val choice = VideoDecoderChoice()
+        val codecs = listOf("OMX.google.h264.decoder" to true, "OMX.MTK.VIDEO.DECODER.AVC" to false)
+        choice.useSoftware("video/avc")
+        choice.fallbackFromSoftware("video/avc", codecs[0].first)
+
+        assertEquals(listOf(codecs[1]), choice.select("video/avc", codecs, { it.first }) { it.second })
+    }
 }
