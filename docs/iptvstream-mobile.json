@@ -1,7 +1,7 @@
 {
-  "versionCode": 50,
-  "versionName": "1.0.48",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.48/iptvstream-mobile.apk",
-  "sha256": "2906dfecf83b9a905fc5a53c973032c3a38c4e981973dfd23459b530cb988c1d",
-  "changelog": "Stürzt der Ton-Decoder bei einem Sender ab (DECODING_FAILED), probiert die App nacheinander einen anderen Decoder, den Software-Decoder und einen Neustart des Senders. Klappt nichts, läuft das Bild ohne Ton weiter statt mit einer Fehlermeldung."
+  "versionCode": 51,
+  "versionName": "1.0.49",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.49/iptvstream-mobile.apk",
+  "sha256": "748caa684d8eb7264b6af2986fa5e4c3dec07b6aba73e3b0bbb4961d5a3a5e12",
+  "changelog": "Version 1.0.49"
 }
