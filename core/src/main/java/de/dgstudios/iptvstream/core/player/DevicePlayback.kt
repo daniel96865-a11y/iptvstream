@@ -60,6 +60,12 @@ class VideoDecoderChoice {
         key(mime)?.let(softwareMimes::add)
     }
 
+    /** Falls der Software-Decoder selbst stockt, ihn einmal ausschließen und wieder Hardware bevorzugen. */
+    fun fallbackFromSoftware(mime: String?, decoder: String?) {
+        key(mime)?.let(softwareMimes::remove)
+        reject(mime, decoder)
+    }
+
     fun wantsSoftware(mime: String?): Boolean = key(mime)?.let { it in softwareMimes } == true
 
     fun markRestarted(mime: String?) {

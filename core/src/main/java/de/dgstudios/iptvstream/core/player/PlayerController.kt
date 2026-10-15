@@ -207,6 +207,11 @@ class PlayerController(
     private val liveBufferMaxMs: Long
 
     init {
+        // Ältere Fire-TV-Decoder können bei H.264-Zwischenzeilenbild stehen bleiben,
+        // ohne dass Media3 einen Fehler meldet. Deshalb H.264 dort von Anfang an per Software,
+        // aber UHD behält unten weiterhin den Hardware-Decoder, wenn einer verfügbar ist.
+        if (DevicePlayback.olderFireTv()) videoDecoders.useSoftware(MimeTypes.VIDEO_H264)
+
         val dataSource = DefaultDataSource.Factory(
             context,
             OkHttpDataSource.Factory(okHttp).setUserAgent(Net.USER_AGENT),
@@ -796,7 +801,20 @@ class PlayerController(
         val mime = player.videoFormat?.sampleMimeType
         val decoder = diag.videoDecoder
         val older = DevicePlayback.olderFireTv()
-        if (DevicePlayback.isSoftwareDecoder(decoder) || videoDecoders.restarted(mime)) {
+        val software = DevicePlayback.isSoftwareDecoder(decoder)
+        if (older && software && !videoDecoders.restarted(mime)) {
+            videoDecoders.fallbackFromSoftware(mime, decoder)
+            videoDecoders.markRestarted(mime)
+            diag.issue("Software-Bilddecoder stockt; Hardware-Fallback")
+            notice("Software-Bilddecoder stockt. Hardware wird versucht …")
+            stall.reset()
+            frames.reset()
+            player.stop()
+            player.prepare()
+            player.playWhenReady = true
+            return
+        }
+        if (software || videoDecoders.restarted(mime)) {
             diag.issue("Bild steht")
             stuckError("Das Bild bleibt stehen, der Ton läuft. Dieses Bildformat schafft der Fernseher nicht.")
             return

@@ -92,8 +92,8 @@ class UhdVideoRenderer(
         requiresSecureDecoder: Boolean,
     ): List<MediaCodecInfo> {
         val all = super.getDecoderInfos(mediaCodecSelector, format, requiresSecureDecoder)
-        val usable = decoderChoice.select(format.sampleMimeType, all, { it.name }) { it.softwareOnly }
-        return UhdPlayback.decodersFor(usable, UhdPlayback.isUhd(format.width, format.height)) { it.softwareOnly }
+        val candidates = UhdPlayback.decodersFor(all, UhdPlayback.isUhd(format.width, format.height)) { it.softwareOnly }
+        return decoderChoice.select(format.sampleMimeType, candidates, { it.name }) { it.softwareOnly }
     }
 
     override fun getCodecOperatingRateV23(targetPlaybackSpeed: Float, format: Format, streamFormats: Array<Format>): Float {
