@@ -1,7 +1,7 @@
 {
-  "versionCode": 49,
-  "versionName": "1.0.47",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.47/iptvstream-mobile.apk",
-  "sha256": "64b89f838c0eafb9aaeaa844d11955b0d52b8e01f389405cfc6bf24bc4b013cb",
-  "changelog": "Auf älteren Fire-TV-Sticks bleibt bei manchen Sendern das Bild stehen, der Ton läuft. Die App lädt dann den Software-Decoder, weil der Hardware-Decoder bei diesem Bildformat hängen bleibt."
+  "versionCode": 50,
+  "versionName": "1.0.48",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.48/iptvstream-mobile.apk",
+  "sha256": "2906dfecf83b9a905fc5a53c973032c3a38c4e981973dfd23459b530cb988c1d",
+  "changelog": "Stürzt der Ton-Decoder bei einem Sender ab (DECODING_FAILED), probiert die App nacheinander einen anderen Decoder, den Software-Decoder und einen Neustart des Senders. Klappt nichts, läuft das Bild ohne Ton weiter statt mit einer Fehlermeldung."
 }
