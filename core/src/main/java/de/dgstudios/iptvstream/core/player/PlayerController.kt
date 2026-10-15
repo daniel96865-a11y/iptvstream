@@ -25,6 +25,7 @@ import androidx.media3.exoplayer.ExoPlaybackException
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.Renderer
 import androidx.media3.exoplayer.mediacodec.DefaultMediaCodecAdapterFactory
+import androidx.media3.exoplayer.mediacodec.MediaCodecDecoderException
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.video.VideoRendererEventListener
 import androidx.media3.exoplayer.audio.AudioCapabilities
@@ -94,9 +95,15 @@ class AppRenderersFactory(
     context: Context,
     private val passthrough: Boolean,
     private val decoderChoice: VideoDecoderChoice,
+    private val audioChoice: AudioDecoderChoice = AudioDecoderChoice(),
 ) : DefaultRenderersFactory(context) {
     init {
         setEnableDecoderFallback(true)
+        // Ton: gescheiterte Decoder überspringen, im letzten Schritt nur noch FFmpeg (Software).
+        setMediaCodecSelector { mime, secure, tunneling ->
+            val all = MediaCodecSelector.DEFAULT.getDecoderInfos(mime, secure, tunneling)
+            if (MimeTypes.isAudio(mime)) audioChoice.select(mime, all) { it.name } else all
+        }
         setExtensionRendererMode(EXTENSION_RENDERER_MODE_ON)
         // Harte Referenz: DefaultRenderersFactory lädt den Renderer nur per Reflection.
         check(FfmpegAudioRenderer::class.java.constructors.isNotEmpty())
@@ -180,6 +187,8 @@ class PlayerController(
     private var selectedAudioId: String? = null
 
     private val versionName = installedVersionName(context)
+    private val audioDecoders = AudioDecoderChoice()
+    private var audioDecoderStage = 0
     private val videoDecoders = VideoDecoderChoice()
     private val diag = PlayDiagnostics()
     private val stall = StallDetector()
@@ -227,7 +236,7 @@ class PlayerController(
         if (settings.audioLang != "auto") params = params.setPreferredAudioLanguage(settings.audioLang)
         trackSelector.setParameters(params)
 
-        player = ExoPlayer.Builder(context, AppRenderersFactory(context, settings.passthrough, videoDecoders))
+        player = ExoPlayer.Builder(context, AppRenderersFactory(context, settings.passthrough, videoDecoders, audioDecoders))
             .setTrackSelector(trackSelector)
             .setLoadControl(loadControl)
             .setMediaSourceFactory(mediaSourceFactory)
@@ -281,6 +290,7 @@ class PlayerController(
         frames.reset()
         bufferingSince = 0L
         diag.reset()
+        audioDecoderStage = 0
         playingSince = 0L
         lastTracks = Tracks.EMPTY
         if (audioDisabledByUs) {
@@ -675,7 +685,9 @@ class PlayerController(
         val audioRelated = code in 5001..5005 ||
             (code in 4001..4004 && MimeTypes.isAudio(rendererFormat?.sampleMimeType)) ||
             (rendererFormat != null && MimeTypes.isAudio(rendererFormat.sampleMimeType))
-        if (audioRelated) {
+        val decoderFailure = code in 4001..4004 && (audioRelated || audioDecoderCause(error))
+        if (decoderFailure && !audioDisabledByUs && audioDecoderRecovery(rendererFormat?.sampleMimeType ?: player.audioFormat?.sampleMimeType)) return
+        if (audioRelated || (decoderFailure && !audioDisabledByUs)) {
             audioFallback("Fehler $code")
             return
         }
@@ -700,6 +712,64 @@ class PlayerController(
         _state.update {
             it.copy(loading = false, playing = false, error = "${friendlyError(code)}\n${diagnosisLine()}")
         }
+    }
+
+    /** Fehler stammt vom Ton-Decoder, auch wenn der Player kein Format dazu meldet. */
+    private fun audioDecoderCause(error: PlaybackException): Boolean {
+        val audioName = diag.audioDecoder?.lowercase()
+        var cause: Throwable? = error
+        while (cause != null) {
+            val info = (cause as? MediaCodecDecoderException)?.codecInfo?.name?.lowercase()
+            if (info != null) {
+                return (audioName != null && info == audioName) ||
+                    info.contains("aac") || info.contains("audio") || info.contains("mp3") || info.contains("ac3")
+            }
+            cause = cause.cause
+        }
+        return diag.audioDecoder != null && diag.videoDecoder == null
+    }
+
+    /**
+     * Stufen bei Ton-Decoder-Absturz: 1) nächster Hardware-/System-Decoder, 2) FFmpeg-Software-Decoder,
+     * 3) Sender einmal komplett neu starten. Danach greift [audioFallback] (Spur, Stereo, zuletzt ohne Ton).
+     */
+    private fun audioDecoderRecovery(mime: String?): Boolean {
+        val item = current ?: return false
+        val decoder = diag.audioDecoder
+        when (audioDecoderStage) {
+            0 -> {
+                audioDecoderStage = 1
+                if (audioDecoders.reject(mime, decoder)) {
+                    notice("Ton-Decoder wird gewechselt …")
+                    restartForDecoder()
+                    return true
+                }
+                return audioDecoderRecovery(mime)
+            }
+            1 -> {
+                audioDecoderStage = 2
+                audioDecoders.useFfmpegOnly(mime)
+                notice("Ton: Software-Decoder wird geladen …")
+                restartForDecoder()
+                return true
+            }
+            2 -> {
+                audioDecoders.clearFfmpegOnly(mime)
+                notice("Sender wird neu gestartet …")
+                open(item, 0L)
+                audioDecoderStage = 3
+                return true
+            }
+            else -> return false
+        }
+    }
+
+    private fun restartForDecoder() {
+        diag.audioDecoder = null
+        if (liveEdge(current)) player.seekToDefaultPosition()
+        player.stop()
+        player.prepare()
+        player.playWhenReady = true
     }
 
     /**
