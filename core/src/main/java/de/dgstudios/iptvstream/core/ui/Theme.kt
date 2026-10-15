@@ -31,13 +31,13 @@ object Palette {
     )
 
     val accents = listOf(
-        Color(0xFF4C8DFF), Color(0xFF9B7BFF), Color(0xFF22D3C5),
+        Color(0xFF2F7BFF), Color(0xFF9B7BFF), Color(0xFF22D3C5),
         Color(0xFF34D399), Color(0xFFFFA24C), Color(0xFFFF5C7A),
     )
 
     /** Dunkle Verläufe (oben -> unten). */
     val darkBackgrounds = listOf(
-        listOf(Color(0xFF05070F), Color(0xFF0B1226), Color(0xFF111A33)), // Mitternacht
+        listOf(Color(0xFF030712), Color(0xFF071230), Color(0xFF0C1C45)), // Mitternacht (tiefes Marineblau)
         listOf(Color(0xFF031A26), Color(0xFF053247), Color(0xFF0A4A63)), // Ozean
         listOf(Color(0xFF07121A), Color(0xFF0E2A2F), Color(0xFF1B2F4A)), // Aurora
         listOf(Color(0xFF1B0B1E), Color(0xFF3A1626), Color(0xFF5A2A2A)), // Sonnenuntergang

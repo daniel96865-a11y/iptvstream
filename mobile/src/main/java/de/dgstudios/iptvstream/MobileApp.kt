@@ -20,6 +20,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -64,6 +65,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -355,6 +357,8 @@ internal fun BottomBar(selected: Tab, onSelect: (Tab) -> Unit) {
                 .fillMaxSize()
                 .clip(shape)
                 .background(s.backgroundColors[0], shape)
+                .background(Brush.verticalGradient(listOf(GlassBlue.copy(alpha = 0.14f), GlassBlue.copy(alpha = 0.05f))), shape)
+                .border(1.dp, Brush.linearGradient(listOf(GlassBlue.copy(alpha = 0.45f), GlassBlue.copy(alpha = 0.08f))), shape)
                 .pointerInput(tabs.size) {
                     fun indexAt(x: Float): Int {
                         var edge = edgePx
@@ -398,7 +402,7 @@ internal fun BottomBar(selected: Tab, onSelect: (Tab) -> Unit) {
                             .width(width)
                             .fillMaxHeight()
                             .clip(RoundedCornerShape(24.dp))
-                            .background(if (isSel) s.accent else Color.Transparent)
+                            .then(if (isSel) Modifier.background(Brush.verticalGradient(listOf(s.accent.copy(alpha = 0.92f), s.accent)), RoundedCornerShape(24.dp)) else Modifier)
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,

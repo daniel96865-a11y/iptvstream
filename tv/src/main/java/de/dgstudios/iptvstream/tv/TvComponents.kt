@@ -103,7 +103,7 @@ fun Modifier.tvFocus(
         }
     } else {
         when {
-            focused -> s.accent.copy(alpha = 0.60f)
+            focused -> s.accent.copy(alpha = 0.50f)
             selected -> s.accent.copy(alpha = 0.22f)
             else -> s.card
         }
@@ -122,7 +122,7 @@ fun Modifier.tvFocus(
         .background(bg, shape)
         .then(
             when {
-                focused -> Modifier.border(3.dp, Color.White, shape)
+                focused -> Modifier.border(3.dp, androidx.compose.ui.graphics.lerp(s.accent, Color.White, 0.55f), shape)
                 selected -> Modifier.border(2.dp, s.accent, shape)
                 else -> Modifier
             },
