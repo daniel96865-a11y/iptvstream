@@ -384,18 +384,25 @@ fun TvLiveScreen(
     var drawerOpen by remember { mutableStateOf(false) }
     val drawerListState = rememberLazyListState(vm.drawerIndex, vm.drawerOffset)
     val drawerBottom = drawerSystemBottom()
-    var railOpen by remember { mutableStateOf(true) }
+    val returning = remember { vm.returnPending }
+    var railOpen by remember { mutableStateOf(!returning) }
     var railHold by remember { mutableStateOf(false) }
     val move = remember { MoveGate() }
     val escapeRef = rememberUpdatedState(onEscapeUp)
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         // Der erste Start zählt nicht: erst die Rückkehr aus dem Hintergrund setzt die Liste zurück.
+        var guardReturn = returning
         var skipFirst = !lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
         val observer = LifecycleEventObserver { _, event ->
             if (event != Lifecycle.Event.ON_START) return@LifecycleEventObserver
             if (skipFirst) {
                 skipFirst = false
+                return@LifecycleEventObserver
+            }
+            // Zurück aus dem Player ist kein Neustart: Position und Sender bleiben.
+            if (guardReturn || vm.returnPending) {
+                guardReturn = false
                 return@LifecycleEventObserver
             }
             railOpen = true
@@ -542,9 +549,33 @@ fun TvLiveScreen(
     LaunchedEffect(restored) {
         if (!restored) return@LaunchedEffect
         first.pending = false
+        if (returning && vm.returnPending) return@LaunchedEffect
         vm.focusIndex = 0
         vm.onScroll(0, 0)
         listState.scrollToItem(0)
+    }
+
+    // Zurück aus dem Player: Liste und Fokus auf den zuletzt gespielten Sender setzen.
+    LaunchedEffect(restored, items.isNotEmpty()) {
+        if (!returning || !restored || items.isEmpty()) return@LaunchedEffect
+        val target = vm.takeReturnTarget(items)
+        if (target == null) {
+            vm.clearReturn()
+            return@LaunchedEffect
+        }
+        first.pending = false
+        vm.focusIndex = target
+        listState.scrollToItem((target - 2).coerceAtLeast(0))
+        vm.onScroll(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
+        withFrameNanos { }
+        withFrameNanos { }
+        withFrameNanos { }
+        move.launch(scope) {
+            if (!listReg.focus(target, tries = 40)) {
+                listState.scrollToItem(target)
+                listReg.focus(target, tries = 40)
+            }
+        }
     }
 
     // Nach Kategoriewechsel (OK) in die neue Liste springen, sobald sie da ist.
