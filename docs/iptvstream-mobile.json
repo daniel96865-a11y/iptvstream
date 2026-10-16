@@ -1,7 +1,7 @@
 {
-  "versionCode": 52,
-  "versionName": "1.0.50",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.50/iptvstream-mobile.apk",
-  "sha256": "57b92669b74e985540ada81135cc281be5053619b1e985b9a4415163e5df1092",
-  "changelog": "Version 1.0.50"
+  "versionCode": 53,
+  "versionName": "1.0.51",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.51/iptvstream-mobile.apk",
+  "sha256": "e3c431a98bd1863a7f0b258dae1619fc79e6c687160948a50d9b0648ceb744e5",
+  "changelog": "• Die Senderliste bleibt nach Zurück aus dem Player beim zuletzt gespielten Sender (Handy und TV).\n• Kompatibilitätsmodus für ältere Fire-TV-Sticks.\n• Fix gegen Standbilder bei H.264 auf älteren Fire-TV-Sticks.\n• Neues Fenster „Neu in dieser Version“ nach einem Update, und die Neuerungen stehen auch im Update-Dialog."
 }
