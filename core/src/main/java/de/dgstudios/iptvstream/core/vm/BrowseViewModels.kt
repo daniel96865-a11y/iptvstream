@@ -182,7 +182,7 @@ class LiveViewModel(app: Application) :
     fun takeReturnTarget(items: List<ChannelEntity>): Int? {
         if (!returnPending || items.isEmpty()) return null
         returnPending = false
-        val id = c.session.request?.streamId
+        val id = (c.session.request as? LiveRequest)?.channelId
         return ListReturn.indexOf(items.map { it.streamId }, id)
     }
 
