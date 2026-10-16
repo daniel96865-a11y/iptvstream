@@ -1,7 +1,7 @@
 {
-  "versionCode": 51,
-  "versionName": "1.0.49",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.49/iptvstream-mobile.apk",
-  "sha256": "748caa684d8eb7264b6af2986fa5e4c3dec07b6aba73e3b0bbb4961d5a3a5e12",
-  "changelog": "Version 1.0.49"
+  "versionCode": 52,
+  "versionName": "1.0.50",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.50/iptvstream-mobile.apk",
+  "sha256": "57b92669b74e985540ada81135cc281be5053619b1e985b9a4415163e5df1092",
+  "changelog": "Version 1.0.50"
 }
