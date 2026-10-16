@@ -30,6 +30,7 @@ android {
             "-opt-in=androidx.media3.common.util.UnstableApi",
         )
     }
+    sourceSets["main"].assets.srcDir(rootProject.file("release-notes"))
     buildFeatures {
         compose = true
     }
