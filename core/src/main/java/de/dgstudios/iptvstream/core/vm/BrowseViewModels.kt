@@ -174,8 +174,25 @@ class LiveViewModel(app: Application) :
     override fun itemsFlow(profileId: Long, category: String): Flow<List<ChannelEntity>> =
         repo.channels(profileId, category)
 
+    /** Wahr, solange der Player offen ist und die Liste danach wieder zum Sender zurückkehren soll. */
+    var returnPending = false
+        private set
+
+    /** Liefert den zuletzt gespielten Sender (Index in [items]) einmalig nach der Rückkehr aus dem Player. */
+    fun takeReturnTarget(items: List<ChannelEntity>): Int? {
+        if (!returnPending || items.isEmpty()) return null
+        returnPending = false
+        val id = (c.session.request as? LiveRequest)?.channelId
+        return ListReturn.indexOf(items.map { it.streamId }, id)
+    }
+
+    fun clearReturn() {
+        returnPending = false
+    }
+
     /** Merkt den Kontext für den Player und gibt den Request zurück. */
     fun play(ch: ChannelEntity): LiveRequest {
+        returnPending = true
         val req = LiveRequest(ch.profileId, selectedCategory.value, ch.streamId)
         c.session.request = req
         return req
@@ -238,4 +255,13 @@ class SeriesViewModel(app: Application) :
 
     override fun itemsFlow(profileId: Long, category: String): Flow<List<SeriesEntity>> =
         repo.series(profileId, category)
+}
+
+/** Findet nach der Rückkehr aus dem Player die Position des zuletzt gespielten Senders. */
+object ListReturn {
+    fun indexOf(ids: List<String>, last: String?): Int? {
+        if (last == null) return null
+        val i = ids.indexOf(last)
+        return if (i >= 0) i else null
+    }
 }

@@ -136,6 +136,14 @@ jobs:
           dist/iptvstream-tv.apk
         if-no-files-found: error
 
+    - name: Release-Text (deutsch)
+      run: |
+        if [ -s "release-notes/${GITHUB_REF_NAME}.txt" ]; then
+          sed -e 's/^[[:space:]]*//' -e '/^$/d' -e 's/^/- /' "release-notes/${GITHUB_REF_NAME}.txt" > dist/release-notes.txt
+        else
+          echo "Version ${GITHUB_REF_NAME#v}" > dist/release-notes.txt
+        fi
+
     - name: GitHub-Release (nur bei Tags)
       uses: softprops/action-gh-release@v2
       with:
@@ -143,6 +151,8 @@ jobs:
           dist/iptvstream-mobile.apk
           dist/iptvstream-tv.apk
         fail_on_unmatched_files: true
+        # Deutsche Release-Notes aus release-notes/<tag>.txt, sonst automatisch erzeugt.
+        body_path: dist/release-notes.txt
         # Tags mit Bindestrich (z. B. v1.0.12-beta1) sind Test-Vorabversionen.
         prerelease: ${{ contains(github.ref_name, '-') }}
         make_latest: ${{ !contains(github.ref_name, '-') }}

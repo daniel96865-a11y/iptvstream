@@ -381,6 +381,14 @@ fun LiveScreen(
         LaunchedEffect(hasItems, selected) {
             if (!hasItems) return@LaunchedEffect
             listState.scrollToItem(vm.scrollIndex.coerceAtMost(items.lastIndex), vm.scrollOffset)
+            // Zurück aus dem Player: der zuletzt gespielte Sender bleibt sichtbar.
+            vm.takeReturnTarget(items)?.let { t ->
+                val visible = listState.layoutInfo.visibleItemsInfo
+                if (visible.none { it.index == t }) {
+                    listState.scrollToItem((t - 1).coerceAtLeast(0))
+                    vm.onScroll(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
+                }
+            }
             snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
                 .collect { (i, o) -> vm.onScroll(i, o) }
         }

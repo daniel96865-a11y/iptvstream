@@ -53,7 +53,9 @@ print(f"feed geschrieben: {path}")
 PY
 }
 
-if [ "$TAG" = "v1.0.48" ]; then
+if [ -s "$ROOT/release-notes/$TAG.txt" ]; then
+  NOTE="$(sed -e 's/^[[:space:]]*//' -e '/^$/d' -e 's/^/• /' "$ROOT/release-notes/$TAG.txt")"
+elif [ "$TAG" = "v1.0.48" ]; then
   NOTE="Stürzt der Ton-Decoder bei einem Sender ab (DECODING_FAILED), probiert die App nacheinander einen anderen Decoder, den Software-Decoder und einen Neustart des Senders. Klappt nichts, läuft das Bild ohne Ton weiter statt mit einer Fehlermeldung."
 elif [ "$TAG" = "v1.0.47" ]; then
   NOTE="Auf älteren Fire-TV-Sticks bleibt bei manchen Sendern das Bild stehen, der Ton läuft. Die App lädt dann den Software-Decoder, weil der Hardware-Decoder bei diesem Bildformat hängen bleibt."

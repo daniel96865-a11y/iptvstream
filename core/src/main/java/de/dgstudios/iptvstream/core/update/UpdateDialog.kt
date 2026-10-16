@@ -65,6 +65,8 @@ fun UpdateHost(checker: UpdateChecker, television: Boolean = false) {
         }
     }
 
+    WhatsNewHost(show = prompt is UpdatePrompt.Hidden, television = television)
+
     val current = prompt
     if (current is UpdatePrompt.Hidden) return
 
