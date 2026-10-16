@@ -192,7 +192,7 @@ class PlayerController(
     private val videoDecoders = VideoDecoderChoice()
     private val diag = PlayDiagnostics()
     private val stall = StallDetector()
-    private val frames = StallDetector(FROZEN_FRAMES_MS)
+    private val frames: StallDetector by lazy { StallDetector(frozenFramesMs) }
     private var bufferingSince = 0L
     private var reconnectAttempts = 0
     /** Einmal .ts gegen .m3u8 tauschen, wenn der Live-Stream so nicht existiert. */
@@ -205,12 +205,28 @@ class PlayerController(
     private var released = false
     private val gain = StreamGain()
     private val liveBufferMaxMs: Long
+    private val compat: Boolean
+    private val frozenFramesMs: Long
+    private var lowQuality = false
+    private var lastDropped = 0
+    private var lastRendered = 0
+    private var dropWindowSince = 0L
 
     init {
         // Ältere Fire-TV-Decoder können bei H.264-Zwischenzeilenbild stehen bleiben,
         // ohne dass Media3 einen Fehler meldet. Deshalb H.264 dort von Anfang an per Software,
         // aber UHD behält unten weiterhin den Hardware-Decoder, wenn einer verfügbar ist.
-        if (DevicePlayback.olderFireTv()) videoDecoders.useSoftware(MimeTypes.VIDEO_H264)
+        val memoryClass = (context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager)?.memoryClass ?: 0
+        compat = CompatMode.enabled(
+            settings.compat,
+            DevicePlayback.olderFireTv(),
+            android.os.Build.SUPPORTED_64_BIT_ABIS.isNullOrEmpty(),
+            memoryClass,
+        )
+        frozenFramesMs = if (compat) CompatMode.FROZEN_FRAMES_MS else FROZEN_FRAMES_MS
+        // Im Kompatibilitätsmodus zuerst der Hardware-Decoder bei höchstens 720p: Ein Software-Decoder
+        // schafft auf diesen Geräten 1080p nicht und lässt das Bild ruckeln oder stehen, während der Ton läuft.
+        // Bleibt der Hardware-Decoder stehen, schaltet der Wächter auf Software um (onFrozenPicture).
 
         val dataSource = DefaultDataSource.Factory(
             context,
@@ -228,8 +244,8 @@ class PlayerController(
             .setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(6))
 
         val (minMs, maxMs, wantedBytes) = PlaybackBuffer.spec(settings.buffer)
-        val memoryClass = (context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager)?.memoryClass ?: 0
-        val bytes = PlaybackBuffer.capBytes(wantedBytes, memoryClass)
+        val capped = PlaybackBuffer.capBytes(wantedBytes, memoryClass)
+        val bytes = if (compat) minOf(capped, CompatMode.BUFFER_BYTES) else capped
         liveBufferMaxMs = maxMs.toLong()
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(minMs, maxMs, 1_000, 2_500)
@@ -239,6 +255,7 @@ class PlayerController(
 
         var params = trackSelector.buildUponParameters().setMaxAudioChannelCount(maxChannels)
         if (settings.audioLang != "auto") params = params.setPreferredAudioLanguage(settings.audioLang)
+        if (compat) params = params.setMaxVideoSize(CompatMode.MAX_WIDTH, CompatMode.MAX_HEIGHT)
         trackSelector.setParameters(params)
 
         player = ExoPlayer.Builder(context, AppRenderersFactory(context, settings.passthrough, videoDecoders, audioDecoders))
@@ -254,7 +271,7 @@ class PlayerController(
                 true,
             )
             .build()
-        if (DevicePlayback.conservativeVideo()) {
+        if (compat || DevicePlayback.conservativeVideo()) {
             player.setVideoChangeFrameRateStrategy(C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF)
         }
 
@@ -293,6 +310,7 @@ class PlayerController(
         reconnectAttempts = 0
         stall.reset()
         frames.reset()
+        dropWindowSince = 0L
         bufferingSince = 0L
         diag.reset()
         audioDecoderStage = 0
@@ -800,7 +818,7 @@ class PlayerController(
         if (released || inBackground) return
         val mime = player.videoFormat?.sampleMimeType
         val decoder = diag.videoDecoder
-        val older = DevicePlayback.olderFireTv()
+        val older = compat
         val software = DevicePlayback.isSoftwareDecoder(decoder)
         if (older && software && !videoDecoders.restarted(mime)) {
             videoDecoders.fallbackFromSoftware(mime, decoder)
@@ -837,6 +855,37 @@ class PlayerController(
         player.stop()
         player.prepare()
         player.playWhenReady = true
+    }
+
+    /**
+     * Zu viele verworfene Bilder in zehn Sekunden: einmal auf höchstens 480p senken.
+     * Das greift nur, wenn der Sender mehrere Qualitätsstufen anbietet (HLS).
+     */
+    private fun checkOverload(now: Long, running: Boolean, rendered: Int) {
+        if (!running) {
+            dropWindowSince = 0L
+            return
+        }
+        if (dropWindowSince == 0L) {
+            dropWindowSince = now
+            lastDropped = diag.dropped
+            lastRendered = rendered
+            return
+        }
+        if (now - dropWindowSince < 10_000L) return
+        val dropped = diag.dropped - lastDropped
+        val shown = rendered - lastRendered
+        dropWindowSince = now
+        lastDropped = diag.dropped
+        lastRendered = rendered
+        if (CompatMode.overloaded(dropped, shown)) {
+            lowQuality = true
+            diag.issue("Gerät überlastet, Auflösung gesenkt")
+            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                .setMaxVideoSize(CompatMode.LOW_WIDTH, CompatMode.LOW_HEIGHT)
+                .build()
+            notice("Gerät überlastet. Bildqualität wird gesenkt …")
+        }
     }
 
     /** Der Player puffert seit Sekunden, ohne dass Daten ankommen. */
@@ -974,6 +1023,7 @@ class PlayerController(
                 if (frames.observe(now, running && hasVideo, (rendered ?: 0).toLong())) {
                     onFrozenPicture()
                 }
+                if (compat && !lowQuality) checkOverload(now, running, rendered ?: 0)
                 val buffering = player.playbackState == Player.STATE_BUFFERING && player.playWhenReady && !inBackground
                 if (!buffering) {
                     bufferingSince = 0L

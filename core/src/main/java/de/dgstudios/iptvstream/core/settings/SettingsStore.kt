@@ -34,6 +34,7 @@ data class AppSettings(val raw: Map<String, String> = emptyMap()) {
     val surround: Boolean get() = get("surround") == "surround"
     val passthrough: Boolean get() = on("passthrough")
     val buffer: String get() = get("buffer")
+    val compat: String get() = get("compat")
     val resize: String get() = get("resize")
     val reconnect: Boolean get() = on("reconnect")
     val liveFormat: String get() = get("live_format")

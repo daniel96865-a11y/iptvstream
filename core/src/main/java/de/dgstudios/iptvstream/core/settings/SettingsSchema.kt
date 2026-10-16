@@ -122,6 +122,12 @@ object SettingsSchema {
                     listOf(Option("fit", "Anpassen"), Option("fill", "Füllen"), Option("stretch", "Strecken"), Option("original", "Original")),
                     "fit",
                 ),
+                ChoiceDef(
+                    "compat", "Kompatibilitätsmodus (schwache Geräte)",
+                    listOf(Option("auto", "Automatisch"), Option("on", "Ein"), Option("off", "Aus")),
+                    "auto",
+                    "Für ältere Fire-TV-Sticks: Bild höchstens 720p, kleinerer Puffer, bei hängendem Bild automatisch anderer Decoder. Wirkt ab dem nächsten Sender.",
+                ),
                 ChoiceDef("reconnect", "Automatisch neu verbinden", onOff, "on"),
                 ChoiceDef(
                     "live_format", "Live-Format",
