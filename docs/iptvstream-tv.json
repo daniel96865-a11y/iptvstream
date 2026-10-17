@@ -1,7 +1,7 @@
 {
-  "versionCode": 57,
-  "versionName": "1.0.55",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.55/iptvstream-tv.apk",
-  "sha256": "32c465ef0d1eb6300a386c673c89085017c70e8a21ab72ec6f2497f1ea436798",
-  "changelog": "• Bildruckeln und Standbild aus 1.0.54 behoben: Der Puffer arbeitet wieder wie vorher (Minimum und Maximum getrennt).\n• Die nahtlose Neuverbindung ist jetzt eine Einstellung (Player → „Nahtlose Neuverbindung“) und standardmäßig aus.\n• Beendet der Anbieter den Live-Stream, spielt die App den Puffer zu Ende und verbindet erst kurz vor dem Ende neu, damit die Lücke klein bleibt."
+  "versionCode": 58,
+  "versionName": "1.0.56",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.56/iptvstream-tv.apk",
+  "sha256": "2defe53f53bc40622e2aaf3aded3593f79a269c7987d3293dd3ea655287a9ec8",
+  "changelog": "• Beim Schließen des Players stoppt die App die Programmabfrage und den Wechsel zur nächsten Folge. Beides läuft danach nicht mehr im Hintergrund weiter."
 }
