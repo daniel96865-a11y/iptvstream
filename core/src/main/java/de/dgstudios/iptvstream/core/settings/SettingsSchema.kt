@@ -134,6 +134,10 @@ object SettingsSchema {
                     listOf(Option("ts", "MPEG-TS (schnell)"), Option("m3u8", "HLS (kompatibel)")), "ts",
                 ),
                 ChoiceDef(
+                    "seamless", "Nahtlose Neuverbindung (Test)", onOff, "off",
+                    "Öffnet bei Streamende sofort eine neue Verbindung im laufenden Player. Kann Bildruckeln auslösen, wenn der Anbieter Daten wiederholt. Standard aus: dann verbindet die Wiederverbindung neu.",
+                ),
+                ChoiceDef(
                     "user_agent", "Kennung gegenüber dem Anbieter",
                     listOf(
                         Option("chrome", "Browser (Standard)"),

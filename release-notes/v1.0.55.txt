@@ -1,0 +1,3 @@
+Bildruckeln und Standbild aus 1.0.54 behoben: Der Puffer arbeitet wieder wie vorher (Minimum und Maximum getrennt).
+Die nahtlose Neuverbindung ist jetzt eine Einstellung (Player → „Nahtlose Neuverbindung“) und standardmäßig aus.
+Beendet der Anbieter den Live-Stream, spielt die App den Puffer zu Ende und verbindet erst kurz vor dem Ende neu, damit die Lücke klein bleibt.
