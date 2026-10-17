@@ -247,14 +247,19 @@ class PlayerController(
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSource, extractors)
             .setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(6))
 
-        val (minMs, maxMs, wantedBytes) = PlaybackBuffer.spec(settings.buffer)
+        val (_, wantedMaxMs, wantedBytes) = PlaybackBuffer.spec(settings.buffer)
         val capped = PlaybackBuffer.capBytes(wantedBytes, memoryClass)
         val bytes = if (compat) minOf(capped, CompatMode.BUFFER_BYTES) else capped
+        // Schwache Geräte: kürzerer Puffer, damit er ohne Pause im kleinen Speicher Platz hat.
+        val maxMs = if (compat) wantedMaxMs.coerceAtMost(CompatMode.MAX_BUFFER_MS) else wantedMaxMs
         liveBufferMaxMs = maxMs.toLong()
+        // Wichtig: Minimum = Maximum. Sonst hört der Player bei vollem Puffer auf zu lesen und liest erst
+        // wieder, wenn er auf das Minimum gefallen ist. Viele IPTV-Anbieter kappen eine Verbindung, aus der
+        // der Client Sekunden lang nicht liest ("Client zu langsam"). Der Puffer läuft dann leer und der Sender stoppt.
         val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(minMs, maxMs, 1_000, 2_500)
+            .setBufferDurationsMs(maxMs, maxMs, 1_000, 2_500)
             .setTargetBufferBytes(bytes)
-            .setPrioritizeTimeOverSizeThresholds(true)
+            .setPrioritizeTimeOverSizeThresholds(false)
             .build()
 
         var params = trackSelector.buildUponParameters().setMaxAudioChannelCount(maxChannels)
@@ -672,6 +677,35 @@ class PlayerController(
             diag.dropped += droppedFrames
         }
 
+        override fun onLoadCompleted(
+            eventTime: AnalyticsListener.EventTime,
+            loadEventInfo: androidx.media3.exoplayer.source.LoadEventInfo,
+            mediaLoadData: androidx.media3.exoplayer.source.MediaLoadData,
+        ) {
+            // Bei einem Live-.ts-Stream endet das Laden nur, wenn der Server die Verbindung schließt.
+            if (liveEdge(current)) {
+                diag.event(
+                    "Laden beendet: ${loadEventInfo.bytesLoaded / 1024} KB in ${loadEventInfo.loadDurationMs / 1000} s, " +
+                        "Puffer ${player.totalBufferedDuration / 1000} s",
+                )
+            }
+        }
+
+        override fun onLoadError(
+            eventTime: AnalyticsListener.EventTime,
+            loadEventInfo: androidx.media3.exoplayer.source.LoadEventInfo,
+            mediaLoadData: androidx.media3.exoplayer.source.MediaLoadData,
+            error: java.io.IOException,
+            wasCanceled: Boolean,
+        ) {
+            val http = (error as? HttpDataSource.InvalidResponseCodeException)?.responseCode
+            diag.event(
+                "Ladefehler ${error.javaClass.simpleName}${http?.let { " HTTP $it" } ?: ""}: " +
+                    "${loadEventInfo.bytesLoaded / 1024} KB in ${loadEventInfo.loadDurationMs / 1000} s, " +
+                    "Puffer ${player.totalBufferedDuration / 1000} s",
+            )
+        }
+
         override fun onAudioUnderrun(
             eventTime: AnalyticsListener.EventTime,
             bufferSize: Int,
@@ -951,6 +985,7 @@ class PlayerController(
         if (!settings.reconnect) return false
         if (reconnectAttempts >= MAX_RECONNECTS) return false
         reconnectAttempts++
+        diag.event("Neuverbindung $reconnectAttempts, Puffer ${player.totalBufferedDuration / 1000} s, ${diag.lastIssue ?: "ohne Fehler"}")
         val wait = (1000L shl (reconnectAttempts - 1)).coerceAtMost(8000L)
         notice(
             "Verbindung unterbrochen – neuer Versuch $reconnectAttempts/$MAX_RECONNECTS …\n${diagnosisLine()}",

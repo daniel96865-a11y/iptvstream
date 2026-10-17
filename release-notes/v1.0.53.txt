@@ -1,0 +1,2 @@
+Live-Sender: Die App liest den Stream jetzt ohne Pausen weiter, statt bei vollem Puffer anzuhalten. Das verhindert, dass der Anbieter die Verbindung kappt und der Puffer leerläuft.
+Player-Diagnose zeigt bei Verbindungsabbruch den Verlauf (wie lange, wie viele Daten, Fehlerart).

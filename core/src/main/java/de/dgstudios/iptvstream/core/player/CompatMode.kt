@@ -20,6 +20,9 @@ object CompatMode {
     /** Pufferobergrenze im Kompatibilitätsmodus. Schont den kleinen Heap. */
     const val BUFFER_BYTES = 48 * 1024 * 1024
 
+    /** Längster Puffer im Kompatibilitätsmodus (Millisekunden). */
+    const val MAX_BUFFER_MS = 25_000
+
     /** Frist für ein stehendes Bild bei Hardware-Decodern, die ohne Fehler hängen. */
     const val FROZEN_FRAMES_MS = 5_000L
 
