@@ -59,8 +59,10 @@ fun UpdateHost(checker: UpdateChecker, television: Boolean = false) {
             val intent = checker.installIntent(file)
             try {
                 if (activity != null) activity.startActivity(intent) else context.startActivity(intent)
-            } catch (_: ActivityNotFoundException) {
-                // Installer fehlt: Dialog bleibt, der Nutzer kann es erneut versuchen.
+            } catch (e: ActivityNotFoundException) {
+                checker.installUnavailable("kein Installer gefunden")
+            } catch (e: SecurityException) {
+                checker.installUnavailable("Zugriff verweigert")
             }
         }
     }
@@ -94,6 +96,9 @@ fun UpdateHost(checker: UpdateChecker, television: Boolean = false) {
                     try {
                         permissionLauncher.launch(checker.permissionIntent())
                     } catch (_: ActivityNotFoundException) {
+                        checker.installUnavailable("Einstellung für unbekannte Apps fehlt")
+                    } catch (_: SecurityException) {
+                        checker.installUnavailable("Einstellung nicht erreichbar")
                     }
                 })
                 is UpdatePrompt.Message -> {

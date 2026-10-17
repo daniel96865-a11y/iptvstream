@@ -118,6 +118,7 @@ class UpdateChecker(
     fun confirm() {
         val offer = _prompt.value as? UpdatePrompt.Offer ?: return
         if (offer.downloading) return
+        lastOffered = offer.info
         downloadJob?.cancel()
         downloadJob = scope.launch {
             try {
@@ -140,6 +141,21 @@ class UpdateChecker(
                 }
             }
         }
+    }
+
+    private var lastOffered: UpdateInfo? = null
+
+    /**
+     * Der System-Installer lässt sich nicht öffnen (zum Beispiel auf manchen Fire-TV-Geräten).
+     * Dann zeigt der Dialog den Weg über die Downloader-App mit der Adresse der APK.
+     */
+    fun installUnavailable(reason: String) {
+        val url = lastOffered?.apkUrl ?: "github.com/daniel96865-a11y/iptvstream/releases/latest"
+        _prompt.value = UpdatePrompt.Message(
+            "Die Installation lässt sich hier nicht starten ($reason).\n\n" +
+                "Manuell: App „Downloader“ öffnen, diese Adresse eingeben und die Datei installieren:\n$url\n\n" +
+                "Falls gefragt: „Unbekannte Apps“ für Downloader erlauben.",
+        )
     }
 
     fun onPermissionReturned() {
