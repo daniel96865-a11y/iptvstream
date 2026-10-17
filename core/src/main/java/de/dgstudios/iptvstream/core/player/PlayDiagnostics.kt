@@ -12,6 +12,19 @@ class PlayDiagnostics {
     @Volatile var dropped = 0
     @Volatile var underruns = 0
     @Volatile var lastIssue: String? = null
+    private val events = ArrayDeque<String>()
+    private var startedAt = System.currentTimeMillis()
+
+    /** Kurzes Ereignisprotokoll (Laden beendet, Ladefehler, Neuverbindung) mit Sekunden seit Sendestart. */
+    @Synchronized
+    fun event(text: String) {
+        val sec = (System.currentTimeMillis() - startedAt) / 1000
+        events.addLast("${sec}s $text".take(MAX_ISSUE))
+        while (events.size > 6) events.removeFirst()
+    }
+
+    @Synchronized
+    fun recentEvents(count: Int = 3): String = events.toList().takeLast(count).joinToString(" | ")
 
     fun reset() {
         videoDecoder = null
@@ -19,6 +32,8 @@ class PlayDiagnostics {
         dropped = 0
         underruns = 0
         lastIssue = null
+        synchronized(this) { events.clear() }
+        startedAt = System.currentTimeMillis()
     }
 
     fun issue(text: String) {
@@ -46,6 +61,7 @@ class PlayDiagnostics {
         audioDecoder?.let { append(" [").append(it).append("]") }
         if (underruns > 0) append(" · Ton-Aussetzer ").append(underruns)
         lastIssue?.let { append(" · ").append(it) }
+        recentEvents().takeIf { it.isNotEmpty() }?.let { append("\nVerlauf: ").append(it) }
     }
 
     companion object {
