@@ -196,6 +196,8 @@ class PlayerController(
     private val frames: StallDetector by lazy { StallDetector(frozenFramesMs) }
     private var bufferingSince = 0L
     @Volatile private var seamlessLive = false
+    /** Der Anbieter hat die Verbindung beendet; der Rest des Puffers läuft noch. */
+    @Volatile private var eofPending = false
     private var reconnectAttempts = 0
     /** Einmal .ts gegen .m3u8 tauschen, wenn der Live-Stream so nicht existiert. */
     private var triedOtherLiveContainer = false
@@ -350,6 +352,7 @@ class PlayerController(
         }
         current = item
         val live = liveEdge(item)
+        eofPending = false
         seamlessLive = live && settings.seamless && !Urls.isHls(item.url)
         diag.format = if (Urls.isHls(item.url)) "HLS" else "TS"
         diag.agent = settings.userAgent
@@ -696,6 +699,7 @@ class PlayerController(
         ) {
             // Bei einem Live-.ts-Stream endet das Laden nur, wenn der Server die Verbindung schließt.
             if (liveEdge(current)) {
+                eofPending = true
                 diag.event(
                     "Laden beendet: ${loadEventInfo.bytesLoaded / 1024} KB in ${loadEventInfo.loadDurationMs / 1000} s, " +
                         "Puffer ${player.totalBufferedDuration / 1000} s",
@@ -1019,6 +1023,16 @@ class PlayerController(
         return true
     }
 
+    /** Sofortige Neuverbindung zum Live-Rand, ohne Wartezeit und ohne den Versuchszähler zu belasten. */
+    private fun reconnectNow() {
+        if (released || inBackground || !settings.reconnect) return
+        diag.event("Neustart bei Puffer ${player.totalBufferedDuration / 1000} s (Anbieter hat beendet)")
+        player.stop()
+        player.seekToDefaultPosition()
+        player.prepare()
+        player.playWhenReady = true
+    }
+
     private fun friendlyError(code: Int): String = when (code) {
         2001 -> "Keine Verbindung zum Server. Bitte Netzwerk prüfen."
         2002 -> "Zeitüberschreitung. Der Server antwortet nicht."
@@ -1085,6 +1099,12 @@ class PlayerController(
                     onFrozenPicture()
                 }
                 if (compat && !lowQuality) checkOverload(now, running, rendered ?: 0)
+                // Anbieter hat beendet: erst neu verbinden, wenn der Puffer fast leer ist. So läuft die Sendung
+                // so lange wie möglich weiter und die Lücke beim Neustart bleibt kurz.
+                if (eofPending && live && !inBackground && player.totalBufferedDuration <= EOF_RECONNECT_BUFFER_MS) {
+                    eofPending = false
+                    reconnectNow()
+                }
                 val buffering = player.playbackState == Player.STATE_BUFFERING && player.playWhenReady && !inBackground
                 if (!buffering) {
                     bufferingSince = 0L
@@ -1137,6 +1157,7 @@ class PlayerController(
     private companion object {
         const val MAX_RECONNECTS = 8
         const val FROZEN_FRAMES_MS = 8_000L
+        const val EOF_RECONNECT_BUFFER_MS = 5_000L
         const val BUFFER_STUCK_MS = 10_000L
         const val STREAM_READ_TIMEOUT_S = 15L
     }
