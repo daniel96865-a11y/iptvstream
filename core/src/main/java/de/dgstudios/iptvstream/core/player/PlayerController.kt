@@ -15,6 +15,7 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.decoder.ffmpeg.FfmpegAudioRenderer
@@ -194,6 +195,7 @@ class PlayerController(
     private val stall = StallDetector()
     private val frames: StallDetector by lazy { StallDetector(frozenFramesMs) }
     private var bufferingSince = 0L
+    @Volatile private var seamlessLive = false
     private var reconnectAttempts = 0
     /** Einmal .ts gegen .m3u8 tauschen, wenn der Live-Stream so nicht existiert. */
     private var triedOtherLiveContainer = false
@@ -228,14 +230,24 @@ class PlayerController(
         // schafft auf diesen Geräten 1080p nicht und lässt das Bild ruckeln oder stehen, während der Ton läuft.
         // Bleibt der Hardware-Decoder stehen, schaltet der Wächter auf Software um (onFrozenPicture).
 
-        val dataSource = DefaultDataSource.Factory(
+        val httpFactory = DefaultDataSource.Factory(
             context,
             // Kürzeres Lese-Zeitlimit für Streams: Hängt die Verbindung, kommt nach 15 s ein Fehler
             // und die Wiederverbindung greift, statt 45 s lang mit leerem Puffer zu warten.
             OkHttpDataSource.Factory(
                 okHttp.newBuilder().readTimeout(STREAM_READ_TIMEOUT_S, java.util.concurrent.TimeUnit.SECONDS).build(),
-            ).setUserAgent(Net.USER_AGENT),
+            ).setUserAgent(Net.userAgentFor(settings.userAgent)),
         )
+        // Live-TS: Beendet der Anbieter die Verbindung, wird sofort neu geöffnet, ohne den Player anzufassen.
+        val dataSource = DataSource.Factory {
+            ReconnectingDataSource(
+                httpFactory,
+                enabled = { seamlessLive },
+                onReconnect = { bytes, millis ->
+                    diag.event("Anbieter beendete nach ${bytes / 1024} KB / ${millis / 1000} s, nahtlos neu verbunden")
+                },
+            )
+        }
         val extractors = DefaultExtractorsFactory()
             .setTsExtractorMode(TsExtractor.MODE_SINGLE_PMT)
             .setTsExtractorTimestampSearchBytes(TsExtractor.TS_PACKET_SIZE * 5_000)
@@ -341,6 +353,9 @@ class PlayerController(
         }
         current = item
         val live = liveEdge(item)
+        seamlessLive = live && !Urls.isHls(item.url)
+        diag.format = if (Urls.isHls(item.url)) "HLS" else "TS"
+        diag.agent = settings.userAgent
         val mediaItem = MediaItem.Builder()
             .setUri(item.url)
             .setMediaId(item.id)

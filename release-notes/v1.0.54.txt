@@ -1,0 +1,3 @@
+Live-Sender (TS): Beendet der Anbieter die Verbindung, öffnet die App sofort eine neue und spielt ohne Neustart und ohne Aussetzer weiter.
+Neue Einstellung „Kennung gegenüber dem Anbieter“ (Browser, VLC, Android-App, IPTV Smarters).
+Die Diagnose zeigt Format und Kennung und wie lange eine Verbindung gehalten hat.

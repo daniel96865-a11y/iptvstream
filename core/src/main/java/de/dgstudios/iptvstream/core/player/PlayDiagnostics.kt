@@ -12,6 +12,8 @@ class PlayDiagnostics {
     @Volatile var dropped = 0
     @Volatile var underruns = 0
     @Volatile var lastIssue: String? = null
+    @Volatile var format: String? = null
+    @Volatile var agent: String? = null
     private val events = ArrayDeque<String>()
     private var startedAt = System.currentTimeMillis()
 
@@ -50,6 +52,7 @@ class PlayDiagnostics {
     ): String = buildString {
         append("v").append(version.ifBlank { "?" })
         append(" · ").append(stateName(playbackState))
+        format?.let { append(" · ").append(it).append("/").append(agent ?: "?") }
         append(" · Puffer ").append((bufferedMs.coerceAtLeast(0L) / 1000L)).append(" s")
         if (renderedFrames != null) {
             append(" · Bilder ").append(renderedFrames)
