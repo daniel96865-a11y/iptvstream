@@ -1,7 +1,7 @@
 {
-  "versionCode": 54,
-  "versionName": "1.0.52",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.52/iptvstream-tv.apk",
-  "sha256": "6b8cc624d24857640b2f68bf097ef3d753b86e4ffbb98a98607ce91451232208",
-  "changelog": "• Live-Sender: bricht der Anbieter die Verbindung ab oder hört der Puffer auf sich zu füllen, verbindet die App jetzt automatisch neu, statt zu stoppen.\n• Schnellere Erkennung hängender Verbindungen und mehr Wiederverbindungsversuche."
+  "versionCode": 55,
+  "versionName": "1.0.53",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.53/iptvstream-tv.apk",
+  "sha256": "3fb196c7afe4bfa9e6114e1872b6ff81f824bf109db6edb02598de434915469a",
+  "changelog": "• Live-Sender: Die App liest den Stream jetzt ohne Pausen weiter, statt bei vollem Puffer anzuhalten. Das verhindert, dass der Anbieter die Verbindung kappt und der Puffer leerläuft.\n• Player-Diagnose zeigt bei Verbindungsabbruch den Verlauf (wie lange, wie viele Daten, Fehlerart)."
 }
