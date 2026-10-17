@@ -259,19 +259,16 @@ class PlayerController(
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSource, extractors)
             .setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(6))
 
-        val (_, wantedMaxMs, wantedBytes) = PlaybackBuffer.spec(settings.buffer)
+        // Wie bis 1.0.52: Minimum und Maximum getrennt, Zeit vor Größe. Die Gleichsetzung in 1.0.53 hat
+        // das Ruckeln nicht behoben (der Anbieter beendet den Strom unabhängig vom Lesen) und ist zurückgenommen.
+        val (minMs, maxMs, wantedBytes) = PlaybackBuffer.spec(settings.buffer)
         val capped = PlaybackBuffer.capBytes(wantedBytes, memoryClass)
         val bytes = if (compat) minOf(capped, CompatMode.BUFFER_BYTES) else capped
-        // Schwache Geräte: kürzerer Puffer, damit er ohne Pause im kleinen Speicher Platz hat.
-        val maxMs = if (compat) wantedMaxMs.coerceAtMost(CompatMode.MAX_BUFFER_MS) else wantedMaxMs
         liveBufferMaxMs = maxMs.toLong()
-        // Wichtig: Minimum = Maximum. Sonst hört der Player bei vollem Puffer auf zu lesen und liest erst
-        // wieder, wenn er auf das Minimum gefallen ist. Viele IPTV-Anbieter kappen eine Verbindung, aus der
-        // der Client Sekunden lang nicht liest ("Client zu langsam"). Der Puffer läuft dann leer und der Sender stoppt.
         val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(maxMs, maxMs, 1_000, 2_500)
+            .setBufferDurationsMs(minMs, maxMs, 1_000, 2_500)
             .setTargetBufferBytes(bytes)
-            .setPrioritizeTimeOverSizeThresholds(false)
+            .setPrioritizeTimeOverSizeThresholds(true)
             .build()
 
         var params = trackSelector.buildUponParameters().setMaxAudioChannelCount(maxChannels)
@@ -353,7 +350,7 @@ class PlayerController(
         }
         current = item
         val live = liveEdge(item)
-        seamlessLive = live && !Urls.isHls(item.url)
+        seamlessLive = live && settings.seamless && !Urls.isHls(item.url)
         diag.format = if (Urls.isHls(item.url)) "HLS" else "TS"
         diag.agent = settings.userAgent
         val mediaItem = MediaItem.Builder()

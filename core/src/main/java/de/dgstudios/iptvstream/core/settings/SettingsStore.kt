@@ -39,6 +39,7 @@ data class AppSettings(val raw: Map<String, String> = emptyMap()) {
     val reconnect: Boolean get() = on("reconnect")
     val liveFormat: String get() = get("live_format")
     val userAgent: String get() = get("user_agent")
+    val seamless: Boolean get() = on("seamless")
     val castEnabled: Boolean get() = on("cast")
     val startMode: String get() = get("start_mode")
     val showNumbers: Boolean get() = on("show_numbers")

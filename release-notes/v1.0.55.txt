@@ -1,0 +1,2 @@
+Bildruckeln aus 1.0.54 behoben: Der Puffer arbeitet wieder wie vorher (Minimum und Maximum getrennt).
+Die nahtlose Neuverbindung ist jetzt eine Einstellung (Player → „Nahtlose Neuverbindung“) und standardmäßig aus.
