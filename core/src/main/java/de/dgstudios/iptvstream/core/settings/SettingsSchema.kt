@@ -133,6 +133,17 @@ object SettingsSchema {
                     "live_format", "Live-Format",
                     listOf(Option("ts", "MPEG-TS (schnell)"), Option("m3u8", "HLS (kompatibel)")), "ts",
                 ),
+                ChoiceDef(
+                    "user_agent", "Kennung gegenüber dem Anbieter",
+                    listOf(
+                        Option("chrome", "Browser (Standard)"),
+                        Option("vlc", "VLC"),
+                        Option("okhttp", "Android-App"),
+                        Option("smarters", "IPTV Smarters"),
+                    ),
+                    "chrome",
+                    "Manche Anbieter behandeln Player unterschiedlich. Wirkt ab dem nächsten Sender.",
+                ),
                 ChoiceDef("cast", "Chromecast", onOff, "on", "Videos auf Fernseher oder Chromecast senden (nur Handy)"),
             ),
         ),

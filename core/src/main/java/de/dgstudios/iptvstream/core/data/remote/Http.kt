@@ -25,6 +25,14 @@ object Net {
     const val USER_AGENT =
         "Mozilla/5.0 (Linux; Android 11) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
 
+    /** Wählbare Kennung für die Stream-Verbindung. */
+    fun userAgentFor(choice: String): String = when (choice) {
+        "vlc" -> "VLC/3.0.20 LibVLC/3.0.20"
+        "okhttp" -> "okhttp/4.12.0"
+        "smarters" -> "IPTVSmartersPro"
+        else -> USER_AGENT
+    }
+
     fun client(): OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(45, TimeUnit.SECONDS)
