@@ -1,7 +1,7 @@
 {
-  "versionCode": 56,
-  "versionName": "1.0.54",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.54/iptvstream-mobile.apk",
-  "sha256": "099ebb4f7ee0ffc0f2811ef0dd27feed01a9cc064c7b3058d628c24d57bfa466",
-  "changelog": "• Live-Sender (TS): Beendet der Anbieter die Verbindung, öffnet die App sofort eine neue und spielt ohne Neustart und ohne Aussetzer weiter.\n• Neue Einstellung „Kennung gegenüber dem Anbieter“ (Browser, VLC, Android-App, IPTV Smarters).\n• Die Diagnose zeigt Format und Kennung und wie lange eine Verbindung gehalten hat."
+  "versionCode": 57,
+  "versionName": "1.0.55",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.55/iptvstream-mobile.apk",
+  "sha256": "247629574d700ca09f03a1768e5a69eab84914bd0504213a9819cfe520c14963",
+  "changelog": "• Bildruckeln und Standbild aus 1.0.54 behoben: Der Puffer arbeitet wieder wie vorher (Minimum und Maximum getrennt).\n• Die nahtlose Neuverbindung ist jetzt eine Einstellung (Player → „Nahtlose Neuverbindung“) und standardmäßig aus.\n• Beendet der Anbieter den Live-Stream, spielt die App den Puffer zu Ende und verbindet erst kurz vor dem Ende neu, damit die Lücke klein bleibt."
 }
