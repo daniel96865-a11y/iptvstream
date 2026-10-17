@@ -1,0 +1,2 @@
+Live-Sender: bricht der Anbieter die Verbindung ab oder hört der Puffer auf sich zu füllen, verbindet die App jetzt automatisch neu, statt zu stoppen.
+Schnellere Erkennung hängender Verbindungen und mehr Wiederverbindungsversuche.
