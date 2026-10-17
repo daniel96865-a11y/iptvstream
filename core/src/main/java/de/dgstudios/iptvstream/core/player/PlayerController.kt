@@ -230,7 +230,11 @@ class PlayerController(
 
         val dataSource = DefaultDataSource.Factory(
             context,
-            OkHttpDataSource.Factory(okHttp).setUserAgent(Net.USER_AGENT),
+            // Kürzeres Lese-Zeitlimit für Streams: Hängt die Verbindung, kommt nach 15 s ein Fehler
+            // und die Wiederverbindung greift, statt 45 s lang mit leerem Puffer zu warten.
+            OkHttpDataSource.Factory(
+                okHttp.newBuilder().readTimeout(STREAM_READ_TIMEOUT_S, java.util.concurrent.TimeUnit.SECONDS).build(),
+            ).setUserAgent(Net.USER_AGENT),
         )
         val extractors = DefaultExtractorsFactory()
             .setTsExtractorMode(TsExtractor.MODE_SINGLE_PMT)
@@ -566,6 +570,12 @@ class PlayerController(
                 }
                 Player.STATE_BUFFERING -> _state.update { it.copy(loading = true) }
                 Player.STATE_ENDED -> {
+                    // Ein Live-Sender endet nie. Schließt der Anbieter die Verbindung (Zeit- oder
+                    // Verbindungslimit), läuft der Puffer leer und der Player meldet "Ende": neu verbinden.
+                    if (liveEdge(current) && !inBackground && !released) {
+                        diag.issue("Anbieter hat den Live-Stream beendet")
+                        if (tryReconnect()) return
+                    }
                     current?.let { saveProgress(it, force = true) }
                     _state.update { it.copy(loading = false, playing = false, ended = true) }
                 }
@@ -951,7 +961,11 @@ class PlayerController(
         reconnectJob = scope.launch {
             delay(wait)
             if (released || inBackground) return@launch
-            if (liveEdge(current)) player.seekToDefaultPosition()
+            if (liveEdge(current)) {
+                // Alte Verbindung sicher schließen, damit der Anbieter kein Verbindungslimit meldet.
+                player.stop()
+                player.seekToDefaultPosition()
+            }
             player.prepare()
             player.playWhenReady = true
         }
@@ -1074,9 +1088,10 @@ class PlayerController(
     }
 
     private companion object {
-        const val MAX_RECONNECTS = 5
+        const val MAX_RECONNECTS = 8
         const val FROZEN_FRAMES_MS = 8_000L
-        const val BUFFER_STUCK_MS = 20_000L
+        const val BUFFER_STUCK_MS = 10_000L
+        const val STREAM_READ_TIMEOUT_S = 15L
     }
 }
 

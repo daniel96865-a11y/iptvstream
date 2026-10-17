@@ -1,4 +1,0 @@
-Die Senderliste bleibt nach Zurück aus dem Player beim zuletzt gespielten Sender (Handy und TV).
-Kompatibilitätsmodus für ältere Fire-TV-Sticks.
-Fix gegen Standbilder bei H.264 auf älteren Fire-TV-Sticks.
-Neues Fenster „Neu in dieser Version“ nach einem Update, und die Neuerungen stehen auch im Update-Dialog.
