@@ -1,0 +1,1 @@
+Beim Schließen des Players stoppt die App die Programmabfrage und den Wechsel zur nächsten Folge. Beides läuft danach nicht mehr im Hintergrund weiter.
