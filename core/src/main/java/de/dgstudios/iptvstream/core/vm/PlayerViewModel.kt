@@ -152,10 +152,20 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Bricht jedes laufende Umschalten ab, bevor ein neues load() starten kann. */
     private fun launchPlay(block: suspend kotlinx.coroutines.CoroutineScope.() -> Unit) {
-        autoNextJob?.cancel()
-        nowNextJob?.cancel()
-        playJob?.cancel()
+        cancelPlaybackJobs()
         playJob = viewModelScope.launch(block = block)
+    }
+
+    /** Programmabfrage, Folgenwechsel, Hinweis und laufendes Umschalten. */
+    private fun cancelPlaybackJobs() {
+        nowNextJob?.cancel()
+        autoNextJob?.cancel()
+        toastJob?.cancel()
+        playJob?.cancel()
+        nowNextJob = null
+        autoNextJob = null
+        toastJob = null
+        playJob = null
     }
 
     private suspend fun playLoaded(i: Int, fromStart: Boolean) {
@@ -356,6 +366,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Gibt den Player bereits vor der Navigationsanimation frei. */
     fun close() {
+        cancelPlaybackJobs()
         _controller.value?.release()
         _controller.value = null
     }
