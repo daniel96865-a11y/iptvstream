@@ -108,9 +108,12 @@ object SettingsSchema {
                 ),
                 ChoiceDef(
                     "surround", "Tonmodus",
-                    listOf(Option("surround", "Surround (wenn möglich)"), Option("stereo", "Nur Stereo")), "surround",
+                    listOf(Option("surround", "5.1 Surround (wenn möglich)"), Option("stereo", "Nur Stereo")), "surround",
                 ),
-                ChoiceDef("passthrough", "Audio-Passthrough", onOff, "off", "AC3/E-AC3 unverändert an den Receiver"),
+                ChoiceDef(
+                    "passthrough", "Audio-Passthrough", onOff, "off",
+                    "Für stabilen 5.1-Ton ausgeschaltet lassen. Eingeschaltet wird AC3/E-AC3 direkt an den Receiver gegeben.",
+                ),
                 ChoiceDef(
                     "buffer", "Puffergröße",
                     listOf(Option("small", "Klein (schnell)"), Option("medium", "Mittel"), Option("large", "Groß (stabil)")),
@@ -123,10 +126,10 @@ object SettingsSchema {
                     "fit",
                 ),
                 ChoiceDef(
-                    "compat", "Kompatibilitätsmodus (schwache Geräte)",
+                    "compat", "TV-Kompatibilitätsmodus",
                     listOf(Option("auto", "Automatisch"), Option("on", "Ein"), Option("off", "Aus")),
                     "auto",
-                    "Für ältere Fire-TV-Sticks: Bild höchstens 720p, kleinerer Puffer, bei hängendem Bild automatisch anderer Decoder. Wirkt ab dem nächsten Sender.",
+                    "Auf Fernsehern automatisch aktiv: Bild höchstens 720p, kleinerer Puffer, bei hängendem Bild automatisch anderer Decoder. Wirkt ab dem nächsten Sender.",
                 ),
                 ChoiceDef("reconnect", "Automatisch neu verbinden", onOff, "on"),
                 ChoiceDef(

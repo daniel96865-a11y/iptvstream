@@ -26,11 +26,20 @@ object CompatMode {
     /** Frist für ein stehendes Bild bei Hardware-Decodern, die ohne Fehler hängen. */
     const val FROZEN_FRAMES_MS = 5_000L
 
-    fun enabled(setting: String?, olderFireTv: Boolean, only32Bit: Boolean, memoryClassMb: Int): Boolean =
+    fun enabled(
+        setting: String?,
+        olderFireTv: Boolean,
+        only32Bit: Boolean,
+        memoryClassMb: Int,
+        television: Boolean = false,
+    ): Boolean =
         when (setting?.trim()?.lowercase()) {
             ON -> true
             OFF -> false
-            else -> olderFireTv || (only32Bit && memoryClassMb in 1..WEAK_MEMORY_CLASS_MB)
+            // Die TV-App braucht den konservativen Player auch auf neueren Fernsehern:
+            // verschiedene TV-Firmwares melden ihre Decoder zwar als voll leistungsfähig,
+            // lassen aber Bild und Ton bei den größeren Standardpuffern regelmäßig stehen.
+            else -> television || olderFireTv || (only32Bit && memoryClassMb in 1..WEAK_MEMORY_CLASS_MB)
         }
 
     /** Zu viele verworfene Bilder in einem Zeitfenster: Das Gerät schafft die Auflösung nicht. */

@@ -2,6 +2,7 @@ package de.dgstudios.iptvstream.core.player
 
 import android.app.ActivityManager
 import android.content.Context
+import android.content.res.Configuration
 import android.os.Handler
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -221,11 +222,14 @@ class PlayerController(
         // ohne dass Media3 einen Fehler meldet. Deshalb H.264 dort von Anfang an per Software,
         // aber UHD behält unten weiterhin den Hardware-Decoder, wenn einer verfügbar ist.
         val memoryClass = (context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager)?.memoryClass ?: 0
+        val television = context.resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK ==
+            Configuration.UI_MODE_TYPE_TELEVISION
         compat = CompatMode.enabled(
             settings.compat,
             DevicePlayback.olderFireTv(),
             android.os.Build.SUPPORTED_64_BIT_ABIS.isNullOrEmpty(),
             memoryClass,
+            television,
         )
         frozenFramesMs = if (compat) CompatMode.FROZEN_FRAMES_MS else FROZEN_FRAMES_MS
         // Im Kompatibilitätsmodus zuerst der Hardware-Decoder bei höchstens 720p: Ein Software-Decoder
