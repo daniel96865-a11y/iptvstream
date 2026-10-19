@@ -14,9 +14,14 @@ class CompatModeTest {
     @Test fun autoFollowsDevice() {
         assertTrue(CompatMode.enabled("auto", true, false, 512))
         assertTrue(CompatMode.enabled(null, false, true, 192))
+        assertTrue(CompatMode.enabled("auto", false, false, 512, television = true))
         assertFalse(CompatMode.enabled("auto", false, true, 256))
         assertFalse(CompatMode.enabled("auto", false, false, 128))
         assertFalse(CompatMode.enabled("auto", false, true, 0))
+    }
+
+    @Test fun explicitOffStillDisablesTelevisionCompatibility() {
+        assertFalse(CompatMode.enabled("off", false, false, 512, television = true))
     }
 
     @Test fun overloadNeedsManyDroppedFrames() {

@@ -1,0 +1,1 @@
+TV-Wiedergabe stabilisiert: Der Kompatibilitätsmodus greift auf Fernsehern jetzt automatisch. 5.1 bleibt über „5.1 Surround“ verfügbar; Audio-Passthrough bleibt für eine stabile Wiedergabe standardmäßig aus.
