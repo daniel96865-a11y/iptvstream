@@ -295,6 +295,9 @@ class PlayerController(
                 true,
             )
             .build()
+        // WLAN und CPU während der Wiedergabe wach halten. Ohne diese Sperre geht das WLAN nach ein paar
+        // Minuten in den Stromsparmodus, der Strom kommt stockend und der Sender hängt.
+        player.setWakeMode(C.WAKE_MODE_NETWORK)
         if (compat || DevicePlayback.conservativeVideo()) {
             player.setVideoChangeFrameRateStrategy(C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF)
         }

@@ -1,0 +1,1 @@
+Sender hängen nicht mehr nach ein paar Minuten: WLAN bleibt während der Wiedergabe wach.
