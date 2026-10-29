@@ -1,7 +1,7 @@
 {
-  "versionCode": 59,
-  "versionName": "1.0.57",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.57/iptvstream-mobile.apk",
-  "sha256": "8c75619d539c1aa5127011e57a428c4caf9a933f416245b5fe8a5ad72cffe7f1",
-  "changelog": "• TV-Wiedergabe stabilisiert: Der Kompatibilitätsmodus greift auf Fernsehern jetzt automatisch. 5.1 bleibt über „5.1 Surround“ verfügbar; Audio-Passthrough bleibt für eine stabile Wiedergabe standardmäßig aus."
+  "versionCode": 60,
+  "versionName": "1.0.58",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.58/iptvstream-mobile.apk",
+  "sha256": "495753ddc358f5d40b254137ca285fcdb5975e1b55ffaa37f18a0c4edd0bea0a",
+  "changelog": "• Sender hängen nicht mehr nach ein paar Minuten: WLAN bleibt während der Wiedergabe wach."
 }
