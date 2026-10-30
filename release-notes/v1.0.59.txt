@@ -1,0 +1,4 @@
+Neues Design „Glas & Verlauf“: violett-türkiser Hintergrund und Karten aus Glas.
+Fortschritt, Chips und die untere Leiste haben einen Verlauf von Violett zu Türkis.
+Live TV zeigt Suche und Weiterschauen direkt oben.
+Am Fernseher ist die Infoleiste jetzt ein Glas-Panel.
