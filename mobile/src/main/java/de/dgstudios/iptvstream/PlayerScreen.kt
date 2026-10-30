@@ -1,5 +1,6 @@
 package de.dgstudios.iptvstream
 
+import de.dgstudios.iptvstream.core.ui.AccentBar
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -1017,10 +1018,9 @@ internal fun LiveInfo(ui: PlayerUi, bufferedMs: Long = 0L, bufferMaxMs: Long = 0
                 Text(cur.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             }
             Spacer(Modifier.height(8.dp))
-            LinearProgressIndicator(
+            AccentBar(
                 progress = { nn?.progress(System.currentTimeMillis()) ?: 0f },
                 modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
-                color = s.accent,
                 trackColor = Color.White.copy(alpha = 0.2f),
             )
             if (next != null) {

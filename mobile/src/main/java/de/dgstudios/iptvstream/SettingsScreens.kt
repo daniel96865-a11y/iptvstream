@@ -1,5 +1,6 @@
 package de.dgstudios.iptvstream
 
+import de.dgstudios.iptvstream.core.ui.AccentBar
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -293,10 +294,9 @@ internal fun SettingRow(
                 if (def.id == "epg_refresh" && epgRunning) {
                     Text(epgMessage, color = s.onSurfaceDim, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
                     if (epgFraction >= 0f) {
-                        LinearProgressIndicator(
+                        AccentBar(
                             progress = { epgFraction },
                             modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-                            color = s.accent,
                             trackColor = Color.White.copy(alpha = 0.15f),
                         )
                     } else {

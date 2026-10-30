@@ -1,5 +1,7 @@
 package de.dgstudios.iptvstream
 
+import androidx.compose.material.icons.rounded.Search
+import de.dgstudios.iptvstream.core.ui.AccentBar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -347,6 +349,54 @@ private suspend fun LazyListState.reveal(index: Int) {
     if (!visibleFully()) scrollToItem(index)
 }
 
+/** Suche und „Weiterschauen“ oben in Live TV (Design „Glas & Verlauf“). Die Suche öffnet den Such-Tab. */
+@Composable
+internal fun LiveTopBar(recent: List<ChannelEntity>, onSearch: () -> Unit, onPlay: (ChannelEntity) -> Unit) {
+    val s = LocalAppStyle.current
+    Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp)) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .glass(RoundedCornerShape(16.dp))
+                .pressable(onSearch)
+                .padding(horizontal = 14.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Rounded.Search, null, tint = s.onSurfaceDim, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(10.dp))
+            Text("Sender, Filme, Serien suchen", color = s.onSurfaceDim, fontSize = 15.sp)
+        }
+        if (recent.isNotEmpty()) {
+            Spacer(Modifier.height(10.dp))
+            Text("Weiterschauen", color = s.onSurface, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                recent.forEach { ch ->
+                    Row(
+                        Modifier
+                            .weight(1f)
+                            .glass(RoundedCornerShape(16.dp))
+                            .pressable({ onPlay(ch) })
+                            .padding(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Poster(
+                            ch.logo,
+                            Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(Color(0x1AFFFFFF)).padding(4.dp),
+                            ContentScale.Fit,
+                            PosterFrame.Logo,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(ch.name, color = s.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                if (recent.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+    }
+}
+
 @Composable
 fun LiveScreen(
     vm: LiveViewModel,
@@ -354,7 +404,9 @@ fun LiveScreen(
     settings: AppSettings,
     bottomPad: Dp,
     onPlay: () -> Unit,
+    onSearch: () -> Unit = {},
 ) {
+    val recent by vm.recent.collectAsStateWithLifecycle()
     val categories by vm.categories.collectAsStateWithLifecycle()
     val selected by vm.selectedCategory.collectAsStateWithLifecycle()
     val items by vm.items.collectAsStateWithLifecycle()
@@ -365,6 +417,10 @@ fun LiveScreen(
 
     Column(Modifier.fillMaxSize()) {
         ScreenHeader("Live TV", if (items.isNotEmpty()) "${items.size} Sender" else null)
+        LiveTopBar(recent, onSearch) { ch ->
+            vm.play(ch)
+            onPlay()
+        }
         CategoryPicker(
             categories,
             selected,
@@ -483,10 +539,9 @@ private fun ChannelRow(
                     Text(cur.title, color = s.onSurface.copy(alpha = 0.85f), fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Spacer(Modifier.height(4.dp))
                     val fraction = animatedProgress(nn?.progress(tick) ?: 0f)
-                    LinearProgressIndicator(
+                    AccentBar(
                         progress = { fraction },
                         modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
-                        color = s.accent,
                         trackColor = Color.White.copy(alpha = 0.2f),
                     )
                     if (next != null) {

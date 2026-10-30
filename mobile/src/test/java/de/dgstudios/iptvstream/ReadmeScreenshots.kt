@@ -152,6 +152,13 @@ class ReadmeScreenshots {
     fun liveTv() = paparazzi.snapshot {
         Frame(Tab.LIVE) {
             ScreenHeader("Live TV", "${channels.size} Sender")
+            LiveTopBar(
+                listOf("Das Erste HD", "Sport Live").mapIndexed { i, n ->
+                    de.dgstudios.iptvstream.core.data.db.ChannelEntity(0, "r$i", i + 1, n, null, "", "", null)
+                },
+                {},
+                {},
+            )
             Chips("Alle Sender", "★ Favoriten", "Nachrichten", "Unterhaltung")
             Column(Modifier.padding(horizontal = 14.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 channels.forEachIndexed { i, (n, p) ->

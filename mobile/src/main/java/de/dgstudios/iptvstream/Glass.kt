@@ -1,5 +1,6 @@
 package de.dgstudios.iptvstream
 
+import de.dgstudios.iptvstream.core.ui.AccentBar
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -46,23 +47,31 @@ import de.dgstudios.iptvstream.core.ui.popIn
 /** Kühles Blauweiß für Glasflächen im Marineblau-Design. */
 val GlassBlue = Color(0xFFA9C8FF)
 
+/** Neutrales Lavendelweiß für das Thema „Glas & Verlauf“. */
+val GlassLavender = Color(0xFFDCD6FF)
+
+/** Glasfarbe passend zum Thema. */
+val glassTint: Color
+    @Composable get() = if (LocalAppStyle.current.gradient) GlassLavender else GlassBlue
+
 /** Glas-Optik: halbtransparente Fläche mit hellem Rand und Verlauf. */
 @Composable
 fun Modifier.glass(shape: Shape = RoundedCornerShape(22.dp), strong: Boolean = false): Modifier {
     val s = LocalAppStyle.current
     val a = s.glassAlpha * (if (strong) 1.7f else 1f)
-    val fill = remember(s.dark, a) {
+    val tint = glassTint
+    val fill = remember(s.dark, a, tint) {
         if (s.dark) {
-            Brush.verticalGradient(listOf(GlassBlue.copy(alpha = a + 0.07f), GlassBlue.copy(alpha = a * 0.5f)))
+            Brush.verticalGradient(listOf(tint.copy(alpha = a + 0.07f), tint.copy(alpha = a * 0.5f)))
         } else {
             Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.78f), Color.White.copy(alpha = 0.52f)))
         }
     }
-    val border = remember(s.dark) {
+    val border = remember(s.dark, tint) {
         Brush.linearGradient(
             listOf(
-                (if (s.dark) GlassBlue else Color.White).copy(alpha = if (s.dark) 0.5f else 0.95f),
-                (if (s.dark) GlassBlue else Color.White).copy(alpha = if (s.dark) 0.08f else 0.3f),
+                (if (s.dark) tint else Color.White).copy(alpha = if (s.dark) 0.5f else 0.95f),
+                (if (s.dark) tint else Color.White).copy(alpha = if (s.dark) 0.08f else 0.3f),
             ),
         )
     }
@@ -100,7 +109,7 @@ fun GlassChip(text: String, selected: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(50)
     val base = Modifier.height(36.dp)
     val m = if (selected) {
-        base.clip(shape).background(s.accent, shape)
+        base.clip(shape).background(s.accentFillBrush, shape)
     } else {
         base.glass(shape)
     }
@@ -167,10 +176,9 @@ fun SyncBanner(sync: SyncState, epg: EpgState, onRetry: () -> Unit) {
                 Text("Inhalte laden: ${sync.stage}", color = s.onSurface, fontSize = 13.sp, modifier = Modifier.weight(1f))
             }
             Spacer(Modifier.height(6.dp))
-            LinearProgressIndicator(
+            AccentBar(
                 progress = { sync.fraction.coerceIn(0f, 1f) },
                 modifier = Modifier.fillMaxWidth(),
-                color = s.accent,
                 trackColor = Color.White.copy(alpha = 0.15f),
             )
         } else if (sync.error != null) {
@@ -191,10 +199,9 @@ fun SyncBanner(sync: SyncState, epg: EpgState, onRetry: () -> Unit) {
             Text(epg.message, color = s.onSurfaceDim, fontSize = 12.sp)
             Spacer(Modifier.height(4.dp))
             if (epg.fraction >= 0f) {
-                LinearProgressIndicator(
+                AccentBar(
                     progress = { epg.fraction.coerceIn(0f, 1f) },
                     modifier = Modifier.fillMaxWidth(),
-                    color = s.accent,
                     trackColor = Color.White.copy(alpha = 0.15f),
                 )
             } else {

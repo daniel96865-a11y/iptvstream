@@ -21,6 +21,7 @@ object Palette {
     data class ColorTheme(val accent: Int, val background: Int)
 
     val colorThemes = mapOf(
+        "glas" to ColorTheme(accent = 6, background = 5),
         "blue" to ColorTheme(accent = 0, background = 0),
         "violet" to ColorTheme(accent = 1, background = 2),
         "aqua" to ColorTheme(accent = 2, background = 1),
@@ -33,6 +34,7 @@ object Palette {
     val accents = listOf(
         Color(0xFF2F7BFF), Color(0xFF9B7BFF), Color(0xFF22D3C5),
         Color(0xFF34D399), Color(0xFFFFA24C), Color(0xFFFF5C7A),
+        Color(0xFF8C70FF), // Glas & Verlauf (Violett, Verlauf nach Cyan)
     )
 
     /** Dunkle Verläufe (oben -> unten). */
@@ -42,6 +44,7 @@ object Palette {
         listOf(Color(0xFF07121A), Color(0xFF0E2A2F), Color(0xFF1B2F4A)), // Aurora
         listOf(Color(0xFF1B0B1E), Color(0xFF3A1626), Color(0xFF5A2A2A)), // Sonnenuntergang
         listOf(Color(0xFF0C0C0E), Color(0xFF17171B), Color(0xFF222228)), // Graphit
+        listOf(Color(0xFF0B0D1A), Color(0xFF120F2E), Color(0xFF0A1C2C)), // Glas & Verlauf
     )
 
     val lightBackgrounds = listOf(
@@ -50,6 +53,7 @@ object Palette {
         listOf(Color(0xFFEDF7F5), Color(0xFFDCEEEA), Color(0xFFCCE3EA)),
         listOf(Color(0xFFFFF1EE), Color(0xFFFBE0DA), Color(0xFFF5D0CC)),
         listOf(Color(0xFFF4F4F6), Color(0xFFE8E8EC), Color(0xFFDCDCE2)),
+        listOf(Color(0xFFF2F0FF), Color(0xFFE6E8FA), Color(0xFFDDF1F5)),
     )
 }
 
@@ -61,7 +65,16 @@ data class AppStyle(
     val animations: Boolean,
     val dark: Boolean,
     val isTv: Boolean,
+    /** Ende des Akzentverlaufs. Gleich [accent] = einfarbig (alle Themen außer Glas). */
+    val accentEnd: Color = accent,
+    /** Zweiter Farbfleck im Hintergrund. */
+    val glow2: Color = accent,
 ) {
+    val gradient: Boolean get() = accentEnd != accent
+    /** Verlauf für Flächen mit weißer Schrift (Chips, Leisten-Kapsel): dunkleres Cyan für Kontrast. */
+    val accentFillBrush: Brush get() = if (gradient) Brush.horizontalGradient(listOf(accent, Color(0xFF1E8FC8))) else androidx.compose.ui.graphics.SolidColor(accent)
+    val accentBrush: Brush get() = if (gradient) Brush.horizontalGradient(listOf(accent, accentEnd)) else androidx.compose.ui.graphics.SolidColor(accent)
+
     val onSurface: Color get() = if (dark) Color.White else Color(0xFF0D1220)
     val onSurfaceDim: Color get() = if (dark) Color(0xB3FFFFFF) else Color(0xB30D1220)
     val card: Color get() = if (dark) Color(0x1FFFFFFF) else Color(0xCCFFFFFF)
@@ -89,7 +102,12 @@ fun AppTheme(settings: AppSettings, isTv: Boolean, content: @Composable () -> Un
     val bgIndex = preset?.background ?: settings.background.coerceIn(0, Palette.darkBackgrounds.lastIndex)
     val accent = Palette.accents[accentIndex]
     val bg = if (dark) Palette.darkBackgrounds[bgIndex] else Palette.lightBackgrounds[bgIndex]
-    val style = AppStyle(accent, bg, settings.glass.coerceIn(1, 3), settings.animations, dark, isTv)
+    val glas = accentIndex == 6
+    val style = AppStyle(
+        accent, bg, settings.glass.coerceIn(1, 3), settings.animations, dark, isTv,
+        accentEnd = if (glas) Color(0xFF22D3EE) else accent,
+        glow2 = if (glas) Color(0xFF0E9AB8) else accent,
+    )
 
     val scheme = if (dark) {
         darkColorScheme(
@@ -132,7 +150,7 @@ fun AppBackground(modifier: Modifier = Modifier, content: @Composable () -> Unit
                 )
                 drawCircle(
                     brush = Brush.radialGradient(
-                        listOf(style.accent.copy(alpha = a * 0.7f), Color.Transparent),
+                        listOf(style.glow2.copy(alpha = a * if (style.gradient) 1.1f else 0.7f), Color.Transparent),
                         center = Offset(size.width * 0.95f, size.height * 0.85f),
                         radius = size.minDimension * 0.8f,
                     ),

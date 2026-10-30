@@ -174,6 +174,12 @@ class LiveViewModel(app: Application) :
     override fun itemsFlow(profileId: Long, category: String): Flow<List<ChannelEntity>> =
         repo.channels(profileId, category)
 
+    /** Zuletzt gesehene Sender für "Weiterschauen" oben in Live TV. */
+    val recent: StateFlow<List<ChannelEntity>> = profileId.filterNotNull()
+        .flatMapLatest { repo.channels(it, Cat.RECENT) }
+        .map { it.take(2) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     /** Wahr, solange der Player offen ist und die Liste danach wieder zum Sender zurückkehren soll. */
     var returnPending = false
         private set

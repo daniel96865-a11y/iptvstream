@@ -298,7 +298,7 @@ private fun HomeScreen(
                     label = "tab",
                 ) { t ->
                     when (t) {
-                        Tab.LIVE -> LiveScreen(liveVm, mainVm, s, bottomPad, onPlay)
+                        Tab.LIVE -> LiveScreen(liveVm, mainVm, s, bottomPad, onPlay, onSearch = { tab = Tab.SEARCH })
                         Tab.MOVIES -> MoviesScreen(moviesVm, s, bottomPad, onMovie)
                         Tab.SERIES -> SeriesScreen(seriesVm, s, bottomPad, onSeries)
                         Tab.SEARCH -> SearchScreen(searchVm, s, bottomPad, onPlay, onMovie, onSeries)
@@ -357,8 +357,8 @@ internal fun BottomBar(selected: Tab, onSelect: (Tab) -> Unit) {
                 .fillMaxSize()
                 .clip(shape)
                 .background(s.backgroundColors[0], shape)
-                .background(Brush.verticalGradient(listOf(GlassBlue.copy(alpha = 0.14f), GlassBlue.copy(alpha = 0.05f))), shape)
-                .border(1.dp, Brush.linearGradient(listOf(GlassBlue.copy(alpha = 0.45f), GlassBlue.copy(alpha = 0.08f))), shape)
+                .background(Brush.verticalGradient(listOf(glassTint.copy(alpha = 0.14f), glassTint.copy(alpha = 0.05f))), shape)
+                .border(1.dp, Brush.linearGradient(listOf(glassTint.copy(alpha = 0.45f), glassTint.copy(alpha = 0.08f))), shape)
                 .pointerInput(tabs.size) {
                     fun indexAt(x: Float): Int {
                         var edge = edgePx
@@ -402,7 +402,7 @@ internal fun BottomBar(selected: Tab, onSelect: (Tab) -> Unit) {
                             .width(width)
                             .fillMaxHeight()
                             .clip(RoundedCornerShape(24.dp))
-                            .then(if (isSel) Modifier.background(Brush.verticalGradient(listOf(s.accent.copy(alpha = 0.92f), s.accent)), RoundedCornerShape(24.dp)) else Modifier)
+                            .then(if (isSel) Modifier.background(if (s.gradient) s.accentFillBrush else Brush.verticalGradient(listOf(s.accent.copy(alpha = 0.92f), s.accent)), RoundedCornerShape(24.dp)) else Modifier)
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,

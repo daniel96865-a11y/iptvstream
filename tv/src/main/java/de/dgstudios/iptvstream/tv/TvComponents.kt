@@ -1,5 +1,6 @@
 package de.dgstudios.iptvstream.tv
 
+import de.dgstudios.iptvstream.core.ui.AccentBar
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -300,10 +301,9 @@ fun TvStatusLine(sync: SyncState, epg: EpgState) {
         if (sync.running || epg.running) {
             Spacer(Modifier.height(4.dp))
             if (progress != null) {
-                LinearProgressIndicator(
+                AccentBar(
                     progress = { progress.coerceIn(0f, 1f) },
                     modifier = Modifier.fillMaxWidth().height(4.dp),
-                    color = s.accent,
                     trackColor = Color.White.copy(alpha = 0.15f),
                 )
             } else {

@@ -40,8 +40,8 @@ data class SettingsSection(
 object SettingsSchema {
     private val onOff = listOf(Option("on", "Ein"), Option("off", "Aus"))
 
-    val accentNames = listOf("Blau", "Violett", "Türkis", "Grün", "Orange", "Rot")
-    val backgroundNames = listOf("Mitternacht", "Ozean", "Aurora", "Sonnenuntergang", "Graphit")
+    val accentNames = listOf("Blau", "Violett", "Türkis", "Grün", "Orange", "Rot", "Violett-Cyan")
+    val backgroundNames = listOf("Mitternacht", "Ozean", "Aurora", "Sonnenuntergang", "Graphit", "Glas")
 
     val sections: List<SettingsSection> = listOf(
         SettingsSection(
@@ -50,6 +50,7 @@ object SettingsSchema {
                 ChoiceDef(
                     "color_theme", "Farbthema",
                     listOf(
+                        Option("glas", "Glas & Verlauf"),
                         Option("custom", "Individuell"),
                         Option("blue", "Mitternacht-Blau"),
                         Option("violet", "Royal-Violett"),
@@ -59,7 +60,7 @@ object SettingsSchema {
                         Option("coral", "Koralle"),
                         Option("graphite", "Graphit-Rot"),
                     ),
-                    "custom",
+                    "glas",
                     "Abgestimmte Farben für Hintergrund und Glasflächen",
                 ),
                 ChoiceDef("accent", "Akzentfarbe", accentNames.mapIndexed { i, n -> Option(i.toString(), n) }, "0"),

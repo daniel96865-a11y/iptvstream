@@ -1,5 +1,7 @@
 package de.dgstudios.iptvstream.tv
 
+import androidx.compose.foundation.border
+import de.dgstudios.iptvstream.core.ui.AccentBar
 import android.view.KeyEvent as AKey
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -423,11 +425,20 @@ private fun ControlsBar(
     Box(
         Modifier
             .fillMaxWidth()
-            .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xE6000000))))
-            .padding(horizontal = 48.dp)
-            .padding(top = 60.dp, bottom = 36.dp),
+            .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xB3000000))))
+            .padding(horizontal = 40.dp)
+            .padding(top = 60.dp, bottom = 28.dp),
     ) {
-        Column(Modifier.fillMaxWidth()) {
+        // Glas-Leiste wie im Design „Glas & Verlauf“: dunkle, fast deckende Fläche (kein echter Blur,
+        // das wäre auf alten Fire-TV-Sticks zu teuer), heller Rand, Schrift bleibt gut lesbar.
+        val panel = RoundedCornerShape(28.dp)
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .background(Brush.verticalGradient(listOf(Color(0xD91A1733), Color(0xE60E1424))), panel)
+                .border(1.dp, Brush.linearGradient(listOf(Color(0x66DCD6FF), Color(0x14DCD6FF))), panel)
+                .padding(horizontal = 32.dp, vertical = 24.dp),
+        ) {
             if (isLive && !ui.catchingUp) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if ((item?.number ?: 0) > 0) {
@@ -445,10 +456,9 @@ private fun ControlsBar(
                         "${formatClock(now.start)}–${formatClock(now.stop)}  ${now.title}",
                         color = Color.White, fontSize = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
-                    LinearProgressIndicator(
+                    AccentBar(
                         progress = { nn?.progress(tick) ?: 0f },
                         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp).height(5.dp),
-                        color = s.accent,
                         trackColor = Color.White.copy(alpha = 0.25f),
                     )
                     val next = nn?.next
@@ -477,10 +487,9 @@ private fun ControlsBar(
                 if (!sub.isNullOrBlank()) Text(sub, color = Color(0xCCFFFFFF), fontSize = 19.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(10.dp))
                 val fraction = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
-                LinearProgressIndicator(
+                AccentBar(
                     progress = { fraction },
                     modifier = Modifier.fillMaxWidth().height(6.dp),
-                    color = s.accent,
                     trackColor = Color.White.copy(alpha = 0.25f),
                 )
                 Spacer(Modifier.height(6.dp))
@@ -497,10 +506,9 @@ private fun ControlsBar(
                 if (!sub.isNullOrBlank()) Text(sub, color = Color(0xCCFFFFFF), fontSize = 19.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(10.dp))
                 val fraction = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
-                LinearProgressIndicator(
+                AccentBar(
                     progress = { fraction },
                     modifier = Modifier.fillMaxWidth().height(6.dp),
-                    color = s.accent,
                     trackColor = Color.White.copy(alpha = 0.25f),
                 )
                 Spacer(Modifier.height(6.dp))

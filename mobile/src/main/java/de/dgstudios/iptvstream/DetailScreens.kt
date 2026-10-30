@@ -1,5 +1,6 @@
 package de.dgstudios.iptvstream
 
+import de.dgstudios.iptvstream.core.ui.AccentBar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -362,10 +363,9 @@ private fun EpisodeRow(ep: EpisodeInfo, pos: Pair<Long, Long>?, hasProgress: Boo
                 Text(runtime, color = s.onSurfaceDim, fontSize = 12.sp)
             }
             if (fraction > 0f) {
-                LinearProgressIndicator(
+                AccentBar(
                     progress = { fraction },
                     modifier = Modifier.fillMaxWidth().padding(top = 6.dp).height(3.dp).clip(RoundedCornerShape(2.dp)),
-                    color = s.accent,
                     trackColor = Color.White.copy(alpha = 0.14f),
                 )
             }

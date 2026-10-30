@@ -1,5 +1,6 @@
 package de.dgstudios.iptvstream.tv
 
+import de.dgstudios.iptvstream.core.ui.AccentBar
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -751,10 +752,9 @@ private fun ChannelRow(
             if (now != null) {
                 Text(now.title, color = s.onSurfaceDim, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 val fraction = animatedProgress(nn?.progress(tick) ?: 0f)
-                LinearProgressIndicator(
+                AccentBar(
                     progress = { fraction },
                     modifier = Modifier.fillMaxWidth().padding(top = 4.dp).height(3.dp),
-                    color = s.accent,
                     trackColor = Color.White.copy(alpha = 0.15f),
                 )
             }
