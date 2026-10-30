@@ -1,7 +1,7 @@
 {
-  "versionCode": 60,
-  "versionName": "1.0.58",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.58/iptvstream-mobile.apk",
-  "sha256": "495753ddc358f5d40b254137ca285fcdb5975e1b55ffaa37f18a0c4edd0bea0a",
-  "changelog": "• Sender hängen nicht mehr nach ein paar Minuten: WLAN bleibt während der Wiedergabe wach."
+  "versionCode": 61,
+  "versionName": "1.0.59",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.59/iptvstream-mobile.apk",
+  "sha256": "7b611ec8d8cdde3803971e7e58410c0c503f1c0957935d97d387036132332b08",
+  "changelog": "• Neues Design „Glas & Verlauf“: violett-türkiser Hintergrund und Karten aus Glas.\n• Fortschritt, Chips und die untere Leiste haben einen Verlauf von Violett zu Türkis.\n• Live TV zeigt Suche und Weiterschauen direkt oben.\n• Am Fernseher ist die Infoleiste jetzt ein Glas-Panel."
 }
