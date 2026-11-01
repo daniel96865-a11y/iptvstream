@@ -1,0 +1,4 @@
+Flüssigeres Hoch- und Runterblättern am Fernseher: Die Liste gleitet jetzt weich mit, statt zu springen.
+Über und unter dem ausgewählten Sender bleibt immer ein Eintrag sichtbar.
+Gilt für Sender, Kategorien, Filme und Serien.
+Sonst ist alles unverändert.

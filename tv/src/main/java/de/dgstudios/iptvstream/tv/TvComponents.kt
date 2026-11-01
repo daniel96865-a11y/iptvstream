@@ -52,6 +52,8 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -664,4 +666,92 @@ suspend fun androidx.compose.foundation.lazy.LazyListState.ensureVisible(index: 
 
 suspend fun androidx.compose.foundation.lazy.grid.LazyGridState.ensureVisible(index: Int) {
     if (layoutInfo.visibleItemsInfo.none { it.index == index }) scrollToItem((index - 4).coerceAtLeast(0))
+}
+
+/** Folgt dem Fokus weich: immer nur die neueste Bewegung zählt, schnelle Tastendrücke stauen sich nicht. */
+class ScrollFollow {
+    private var job: kotlinx.coroutines.Job? = null
+
+    fun list(scope: kotlinx.coroutines.CoroutineScope, state: androidx.compose.foundation.lazy.LazyListState, index: Int, animate: Boolean) {
+        job?.cancel()
+        job = scope.launch {
+            withFrameNanos { }
+            val d = state.followDelta(index) ?: return@launch
+            state.glide(d, animate)
+        }
+    }
+
+    fun grid(scope: kotlinx.coroutines.CoroutineScope, state: androidx.compose.foundation.lazy.grid.LazyGridState, index: Int, animate: Boolean) {
+        job?.cancel()
+        job = scope.launch {
+            withFrameNanos { }
+            val d = state.followDelta(index) ?: return@launch
+            state.glide(d, animate)
+        }
+    }
+}
+
+private suspend fun androidx.compose.foundation.gestures.ScrollableState.glide(delta: Float, animate: Boolean) {
+    if (kotlin.math.abs(delta) < 1f) return
+    if (animate) {
+        animateScrollBy(delta, androidx.compose.animation.core.tween(170, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+    } else {
+        scrollBy(delta)
+    }
+}
+
+/** Abstand, damit über bzw. unter dem Fokus noch ein Eintrag zu sehen ist. */
+private fun edgeDelta(offset: Int, size: Int, spacing: Int, start: Int, end: Int): Float? {
+    val viewport = end - start
+    val peek = minOf(size + spacing, ((viewport - size) / 2).coerceAtLeast(0))
+    val top = offset - start - peek
+    if (top < 0) return top.toFloat()
+    val bottom = offset + size + peek - end
+    if (bottom > 0) return bottom.toFloat()
+    return null
+}
+
+fun androidx.compose.foundation.lazy.LazyListState.followDelta(index: Int): Float? {
+    val info = layoutInfo
+    val item = info.visibleItemsInfo.find { it.index == index } ?: return null
+    return edgeDelta(item.offset, item.size, info.mainAxisItemSpacing, info.viewportStartOffset, info.viewportEndOffset)
+}
+
+fun androidx.compose.foundation.lazy.grid.LazyGridState.followDelta(index: Int): Float? {
+    val info = layoutInfo
+    val item = info.visibleItemsInfo.find { it.index == index } ?: return null
+    return edgeDelta(item.offset.y, item.size.height, info.mainAxisItemSpacing, info.viewportStartOffset, info.viewportEndOffset)
+}
+
+/** Bringt einen noch unsichtbaren Nachbarn weich herein statt die Liste springen zu lassen. */
+suspend fun androidx.compose.foundation.lazy.LazyListState.slideInNeighbor(target: Int, animate: Boolean): Boolean {
+    val info = layoutInfo
+    if (info.visibleItemsInfo.any { it.index == target }) return true
+    val first = info.visibleItemsInfo.firstOrNull() ?: return false
+    val last = info.visibleItemsInfo.last()
+    val step = (last.size + info.mainAxisItemSpacing).toFloat()
+    val delta = when (target) {
+        last.index + 1 -> (last.offset + last.size + info.mainAxisItemSpacing + step - info.viewportEndOffset).coerceAtLeast(step / 2)
+        first.index - 1 -> -(info.viewportStartOffset - first.offset + step).coerceAtLeast(step / 2)
+        else -> return false
+    }
+    glide(delta, animate)
+    return layoutInfo.visibleItemsInfo.any { it.index == target }
+}
+
+suspend fun androidx.compose.foundation.lazy.grid.LazyGridState.slideInNeighbor(target: Int, animate: Boolean): Boolean {
+    val info = layoutInfo
+    if (info.visibleItemsInfo.any { it.index == target }) return true
+    val first = info.visibleItemsInfo.firstOrNull() ?: return false
+    val last = info.visibleItemsInfo.last()
+    val step = (last.size.height + info.mainAxisItemSpacing).toFloat()
+    val delta = when {
+        target > last.index && target <= last.index + 2 * maxOf(1, last.column + 1) ->
+            (last.offset.y + last.size.height + info.mainAxisItemSpacing + step - info.viewportEndOffset).coerceAtLeast(step / 2)
+        target < first.index && target >= first.index - 2 * maxOf(1, last.column + 1) ->
+            -(info.viewportStartOffset - first.offset.y + step).coerceAtLeast(step / 2)
+        else -> return false
+    }
+    glide(delta, animate)
+    return layoutInfo.visibleItemsInfo.any { it.index == target }
 }

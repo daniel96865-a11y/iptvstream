@@ -389,6 +389,8 @@ fun TvLiveScreen(
     var railOpen by remember { mutableStateOf(!returning) }
     var railHold by remember { mutableStateOf(false) }
     val move = remember { MoveGate() }
+    val follow = remember { ScrollFollow() }
+    val anim = LocalAppStyle.current.animations
     val escapeRef = rememberUpdatedState(onEscapeUp)
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -506,13 +508,14 @@ fun TvLiveScreen(
                 }
                 return@launch
             }
-            if (listState.layoutInfo.visibleItemsInfo.none { it.index == target }) {
+            if (listState.layoutInfo.visibleItemsInfo.none { it.index == target } && !listState.slideInNeighbor(target, anim)) {
                 listState.scrollToItem(target)
             }
             if (!listReg.focus(target)) {
                 listState.scrollToItem(target)
                 if (!listReg.focus(target) && delta < 0) onEscapeUp()
             }
+            follow.list(scope, listState, target, anim)
         }
     }
 
@@ -525,11 +528,12 @@ fun TvLiveScreen(
             }
             railHold = true
             try {
-                catListState.ensureVisible(target)
+                if (!catListState.slideInNeighbor(target, anim)) catListState.ensureVisible(target)
                 if (!catReg.focus(target)) {
                     catListState.scrollToItem(target)
                     if (!catReg.focus(target)) onEscapeUp()
                 }
+                follow.list(scope, catListState, target, anim)
             } finally {
                 railHold = false
             }

@@ -140,6 +140,8 @@ private fun <T> PosterBrowse(
     var railOpen by remember { mutableStateOf(true) }
     var railHold by remember { mutableStateOf(false) }
     val move = remember { MoveGate() }
+    val follow = remember { ScrollFollow() }
+    val anim = LocalAppStyle.current.animations
     val escapeRef = rememberUpdatedState(onEscapeUp)
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -260,7 +262,12 @@ private fun <T> PosterBrowse(
                 return@launch
             }
             if (target > last) return@launch
-            if (!focusGridIndex(target) && deltaRows < 0) onEscapeUp()
+            gridState.slideInNeighbor(target, anim)
+            if (!focusGridIndex(target)) {
+                if (deltaRows < 0) onEscapeUp()
+            } else {
+                follow.grid(scope, gridState, target, anim)
+            }
         }
     }
 
@@ -295,11 +302,12 @@ private fun <T> PosterBrowse(
             }
             railHold = true
             try {
-                catListState.ensureVisible(target)
+                if (!catListState.slideInNeighbor(target, anim)) catListState.ensureVisible(target)
                 if (!catReg.focus(target)) {
                     catListState.scrollToItem(target)
                     if (!catReg.focus(target)) onEscapeUp()
                 }
+                follow.list(scope, catListState, target, anim)
             } finally {
                 railHold = false
             }
