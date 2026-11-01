@@ -1,7 +1,7 @@
 {
-  "versionCode": 62,
-  "versionName": "1.0.60",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.60/iptvstream-mobile.apk",
-  "sha256": "460c5e6fc750c6f57ec10f12c0e07e7fcd2d229fe3efca662edf9d33274b5dfa",
-  "changelog": "• Flüssigeres Hoch- und Runterblättern am Fernseher: Die Liste gleitet jetzt weich mit, statt zu springen.\n• Über und unter dem ausgewählten Sender bleibt immer ein Eintrag sichtbar.\n• Gilt für Sender, Kategorien, Filme und Serien.\n• Sonst ist alles unverändert."
+  "versionCode": 63,
+  "versionName": "1.0.61",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.61/iptvstream-mobile.apk",
+  "sha256": "8847f51030329c5252a54e0145ac0b175529f8043e309017ba6cdb953d3aee9e",
+  "changelog": "• Handy: Die Suche und „Weiterschauen“ oben in Live TV klappen beim Runterscrollen wieder ein und beim Hochscrollen wieder aus, genau wie die untere Leiste.\n• Mehr Platz für die Senderliste beim Scrollen.\n• Das flüssige Scrollen am Fernseher bleibt unverändert."
 }
