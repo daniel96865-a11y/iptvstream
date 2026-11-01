@@ -405,6 +405,7 @@ fun LiveScreen(
     bottomPad: Dp,
     onPlay: () -> Unit,
     onSearch: () -> Unit = {},
+    topBarVisible: Boolean = true,
 ) {
     val recent by vm.recent.collectAsStateWithLifecycle()
     val categories by vm.categories.collectAsStateWithLifecycle()
@@ -417,9 +418,16 @@ fun LiveScreen(
 
     Column(Modifier.fillMaxSize()) {
         ScreenHeader("Live TV", if (items.isNotEmpty()) "${items.size} Sender" else null)
-        LiveTopBar(recent, onSearch) { ch ->
-            vm.play(ch)
-            onPlay()
+        // Suche + „Weiterschauen“ klappen beim Runterscrollen ein und beim Hochscrollen wieder aus (wie die untere Leiste).
+        androidx.compose.animation.AnimatedVisibility(
+            visible = topBarVisible,
+            enter = if (settings.animations) androidx.compose.animation.expandVertically(androidx.compose.animation.core.tween(220)) + androidx.compose.animation.fadeIn() else androidx.compose.animation.EnterTransition.None,
+            exit = if (settings.animations) androidx.compose.animation.shrinkVertically(androidx.compose.animation.core.tween(220)) + androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(180)) else androidx.compose.animation.ExitTransition.None,
+        ) {
+            LiveTopBar(recent, onSearch) { ch ->
+                vm.play(ch)
+                onPlay()
+            }
         }
         CategoryPicker(
             categories,
