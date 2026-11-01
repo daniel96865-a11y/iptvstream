@@ -1,0 +1,3 @@
+Handy: Die Suche und „Weiterschauen“ oben in Live TV klappen beim Runterscrollen wieder ein und beim Hochscrollen wieder aus, genau wie die untere Leiste.
+Mehr Platz für die Senderliste beim Scrollen.
+Das flüssige Scrollen am Fernseher bleibt unverändert.

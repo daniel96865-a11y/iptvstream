@@ -298,7 +298,7 @@ private fun HomeScreen(
                     label = "tab",
                 ) { t ->
                     when (t) {
-                        Tab.LIVE -> LiveScreen(liveVm, mainVm, s, bottomPad, onPlay, onSearch = { tab = Tab.SEARCH })
+                        Tab.LIVE -> LiveScreen(liveVm, mainVm, s, bottomPad, onPlay, onSearch = { tab = Tab.SEARCH }, topBarVisible = barVisible.value)
                         Tab.MOVIES -> MoviesScreen(moviesVm, s, bottomPad, onMovie)
                         Tab.SERIES -> SeriesScreen(seriesVm, s, bottomPad, onSeries)
                         Tab.SEARCH -> SearchScreen(searchVm, s, bottomPad, onPlay, onMovie, onSeries)
