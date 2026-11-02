@@ -155,9 +155,27 @@ class LanPairingServer(
                 }
                 try {
                     client.soTimeout = 8_000
-                    handle(client, ready)
+                    val watchdog = Thread({
+                        try {
+                            Thread.sleep(CONNECTION_DEADLINE_MS)
+                            client.close()
+                        } catch (_: InterruptedException) {
+                        } catch (_: IOException) {
+                        }
+                    }, "iptv-pair-deadline").apply { isDaemon = true; start() }
+                    try {
+                        handle(client, ready)
+                    } finally {
+                        watchdog.interrupt()
+                    }
                 } catch (e: IOException) {
                     // Verbindung abgebrochen. Inhalt der Anfrage wird nicht protokolliert.
+                } catch (e: Exception) {
+                    // Eine kaputte Anfrage darf den Server nie beenden.
+                    try {
+                        if (!client.isClosed) write(client, 400, "text/plain; charset=UTF-8", "Anfrage ungültig.".toByteArray(Charsets.UTF_8))
+                    } catch (_: Exception) {
+                    }
                 } finally {
                     try {
                         client.close()
@@ -337,6 +355,8 @@ class LanPairingServer(
     )
 
     private companion object {
+        /** Gesamtzeit pro Verbindung, damit ein langsamer Client den Server nicht blockiert. */
+        const val CONNECTION_DEADLINE_MS = 15_000L
         const val MAX_FAILURES = 8
         val PROBE_OK = """{"ok":true}""".toByteArray(Charsets.UTF_8)
         val WHO = "iptvstream".toByteArray(Charsets.UTF_8)

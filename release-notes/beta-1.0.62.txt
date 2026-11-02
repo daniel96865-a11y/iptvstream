@@ -1,0 +1,9 @@
+Testversion 1.0.62 (noch kein offizielles Update)
+Fernseher stürzt nicht mehr ab, wenn ein anderes Gerät im WLAN eine kaputte Anfrage an die Handy-Übertragung schickt.
+Ein langsames Gerät kann die Handy-Übertragung nicht mehr blockieren.
+Senderliste bleibt erhalten, wenn der Anbieter eine leere oder kaputte Antwort schickt.
+M3U: Eine Wartungs- oder Anmeldeseite statt Playlist ersetzt die Sender nicht mehr.
+Suche findet % und _ jetzt wörtlich.
+Geht der Schlüssel fürs Passwort verloren, wird kein falsches Passwort mehr benutzt – einfach neu eingeben.
+Chromecast bleibt im Release-Build sicher erhalten.
+Intern: Tests laufen jetzt vor jedem Release automatisch.

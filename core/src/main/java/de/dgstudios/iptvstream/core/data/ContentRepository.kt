@@ -34,6 +34,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.BufferedReader
+import java.io.IOException
 import java.io.InputStreamReader
 import java.util.UUID
 
@@ -192,10 +193,11 @@ class ContentRepository(
         val q = query.trim()
         if (q.length < 2) return SearchResults()
         val c = db.content()
+        val e = de.dgstudios.iptvstream.core.util.SqlLike.escape(q)
         return SearchResults(
-            channels = c.searchChannels(profileId, q, 60),
-            movies = c.searchMovies(profileId, q, 60),
-            series = c.searchSeries(profileId, q, 60),
+            channels = c.searchChannels(profileId, e, 60),
+            movies = c.searchMovies(profileId, e, 60),
+            series = c.searchSeries(profileId, e, 60),
         )
     }
 
@@ -606,6 +608,7 @@ class ContentRepository(
                 }
             }
             if (batch.isNotEmpty()) c.upsertChannels(ArrayList(batch))
+            if (count == 0) throw IOException("Der Server hat keine Einträge geliefert. Alte Liste bleibt erhalten.")
             c.pruneChannels(p.id, token)
             c.pruneCategories(p.id, CatType.LIVE, token)
         } catch (e: CancellationException) {
@@ -648,6 +651,7 @@ class ContentRepository(
                 }
             }
             if (batch.isNotEmpty()) c.upsertMovies(ArrayList(batch))
+            if (count == 0) throw IOException("Der Server hat keine Einträge geliefert. Alte Liste bleibt erhalten.")
             c.pruneMovies(p.id, token)
             c.pruneCategories(p.id, CatType.MOVIE, token)
         } catch (e: CancellationException) {
@@ -690,6 +694,7 @@ class ContentRepository(
                 }
             }
             if (batch.isNotEmpty()) c.upsertSeries(ArrayList(batch))
+            if (count == 0) throw IOException("Der Server hat keine Einträge geliefert. Alte Liste bleibt erhalten.")
             c.pruneSeries(p.id, token)
             c.pruneCategories(p.id, CatType.SERIES, token)
         } catch (e: CancellationException) {
@@ -718,8 +723,14 @@ class ContentRepository(
         withContext(Dispatchers.IO) {
             http.get(p.url).use { body ->
                 BufferedReader(InputStreamReader(body.byteStream(), Charsets.UTF_8), 64 * 1024).use { br ->
+                    br.mark(256 * 1024)
+                    if (!M3uParser.looksLikePlaylist(br)) {
+                        throw IOException("Die Adresse liefert keine gültige Playlist. Alte Liste bleibt erhalten.")
+                    }
+                    br.reset()
                     val parser = M3uParser()
                     for (e in parser.entries(br)) {
+                        if (Urls.httpUrl(e.url) == null) continue
                         counter++
                         val lower = e.url.lowercase()
                         val id = UUID.nameUUIDFromBytes(e.url.toByteArray()).toString().replace("-", "")
@@ -776,6 +787,9 @@ class ContentRepository(
                 }
             }
         }
+        if (counter == 0) {
+            throw IOException("Die Playlist enthält keine gültigen Sender. Alte Liste bleibt erhalten.")
+        }
         if (channels.isNotEmpty()) c.upsertChannels(ArrayList(channels))
         if (movies.isNotEmpty()) c.upsertMovies(ArrayList(movies))
         c.pruneChannels(p.id, token)
@@ -801,7 +815,7 @@ class ContentRepository(
 
         val epgFromHeader = foundEpg
         if (!epgFromHeader.isNullOrBlank() && p.epgUrl.isBlank()) {
-            db.profiles().update(ProfileCrypto.toStorage(p.copy(epgUrl = epgFromHeader)))
+            db.profiles().setEpgUrlIfBlank(p.id, epgFromHeader)
         }
     }
 

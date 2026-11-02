@@ -17,6 +17,7 @@ object ProfileCrypto {
     private const val ALIAS = "iptvstream-profile-password"
     private const val TRANSFORMATION = "AES/GCM/NoPadding"
 
+    @Synchronized
     private fun key(): SecretKey {
         val store = java.security.KeyStore.getInstance(KEYSTORE).apply { load(null) }
         val existing = store.getKey(ALIAS, null) as? SecretKey
@@ -51,9 +52,9 @@ object ProfileCrypto {
             cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, iv))
             String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8)
         } catch (_: Exception) {
-            // Bei einem verlorenen Keystore-Schlüssel nichts überschreiben; der Benutzer
-            // kann das Profil weiterhin neu speichern und damit neu verschlüsseln.
-            value
+            // Verlorener Keystore-Schlüssel: nicht den verschlüsselten Text als Passwort
+            // verwenden. Leeres Passwort -> der Benutzer gibt es neu ein.
+            ""
         }
     }
 

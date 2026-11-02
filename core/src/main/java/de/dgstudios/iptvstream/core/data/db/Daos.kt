@@ -30,6 +30,9 @@ interface ProfileDao {
     @Query("UPDATE profiles SET lastSync = :t WHERE id = :id")
     suspend fun setSync(id: Long, t: Long)
 
+    @Query("UPDATE profiles SET epgUrl = :url WHERE id = :id AND epgUrl = ''")
+    suspend fun setEpgUrlIfBlank(id: Long, url: String)
+
     @Query("UPDATE profiles SET lastEpgSync = :t WHERE id = :id")
     suspend fun setEpgSync(id: Long, t: Long)
 }
@@ -82,7 +85,7 @@ interface ContentDao {
     @Query("SELECT * FROM channels WHERE profileId = :p ORDER BY num, name LIMIT 1")
     suspend fun firstChannel(p: Long): ChannelEntity?
 
-    @Query("SELECT * FROM channels WHERE profileId = :p AND name LIKE '%' || :q || '%' ORDER BY num LIMIT :limit")
+    @Query("SELECT * FROM channels WHERE profileId = :p AND name LIKE '%' || :q || '%' ESCAPE '\\' ORDER BY num LIMIT :limit")
     suspend fun searchChannels(p: Long, q: String, limit: Int): List<ChannelEntity>
 
     @Query("SELECT streamId, name, epgKey FROM channels WHERE profileId = :p")
@@ -121,7 +124,7 @@ interface ContentDao {
     @Query("SELECT * FROM movies WHERE profileId = :p AND streamId = :id LIMIT 1")
     suspend fun movie(p: Long, id: String): MovieEntity?
 
-    @Query("SELECT * FROM movies WHERE profileId = :p AND name LIKE '%' || :q || '%' ORDER BY name LIMIT :limit")
+    @Query("SELECT * FROM movies WHERE profileId = :p AND name LIKE '%' || :q || '%' ESCAPE '\\' ORDER BY name LIMIT :limit")
     suspend fun searchMovies(p: Long, q: String, limit: Int): List<MovieEntity>
 
     // ---- Serien ----
@@ -155,7 +158,7 @@ interface ContentDao {
     @Query("SELECT * FROM series WHERE profileId = :p AND seriesId = :id LIMIT 1")
     suspend fun series(p: Long, id: String): SeriesEntity?
 
-    @Query("SELECT * FROM series WHERE profileId = :p AND name LIKE '%' || :q || '%' ORDER BY name LIMIT :limit")
+    @Query("SELECT * FROM series WHERE profileId = :p AND name LIKE '%' || :q || '%' ESCAPE '\\' ORDER BY name LIMIT :limit")
     suspend fun searchSeries(p: Long, q: String, limit: Int): List<SeriesEntity>
 
     // ---- Aufräumen ----

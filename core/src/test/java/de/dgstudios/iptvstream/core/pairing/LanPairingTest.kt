@@ -319,6 +319,32 @@ class LanPairingTest {
         assertFalse(LanPairingClient.probe("1.1.1.1", 80, "ABCDEF"))
     }
 
+    @Test
+    fun parseFormToleratesBrokenPercentEncoding() {
+        assertEquals("", LanPairing.parseForm("token=%")["token"])
+        assertEquals("", LanPairing.parseForm("token=%zz")["token"])
+        assertEquals("a b", LanPairing.parseForm("x=a+b&token=%zz")["x"])
+        assertNull(LanPairing.urlDecodeOrNull("%"))
+        assertNull(LanPairing.urlDecodeOrNull("%zz"))
+    }
+
+    @Test
+    fun brokenPercentRequestDoesNotKillServer() {
+        val server = LanPairingServer(submit = { null }, bindHost = "127.0.0.1", preferredPort = 0)
+        try {
+            val offer = server.start() ?: error("Server startet nicht")
+            for (bad in listOf("%", "%zz")) {
+                val status = httpStatus(offer.host, offer.port, "GET /?token=$bad HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                assertTrue(status == 400 || status == 404)
+            }
+            val page = httpBody(offer.host, offer.port, "GET /?token=${offer.token} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+            assertTrue(page.contains("IPTVstream"))
+        } finally {
+            server.stop()
+            server.join()
+        }
+    }
+
     private fun sample(password: String = "geheim") = ProfileEntity(
         name = "Wohnzimmer",
         type = ProfileType.XTREAM,

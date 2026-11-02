@@ -524,7 +524,14 @@ object LanPairing {
 
     private fun hasControlChar(s: String): Boolean = s.any { it < ' ' || it == '\u007f' }
 
-    private fun urlDecode(s: String): String = URLDecoder.decode(s, "UTF-8")
+    /** Ungültige %-Folgen (z. B. "%" oder "%zz") ergeben null statt einer Exception. */
+    internal fun urlDecodeOrNull(s: String): String? = try {
+        URLDecoder.decode(s, "UTF-8")
+    } catch (_: IllegalArgumentException) {
+        null
+    }
+
+    private fun urlDecode(s: String): String = urlDecodeOrNull(s) ?: ""
 
     private fun html(s: String): String = buildString(s.length + 8) {
         for (c in s) {
