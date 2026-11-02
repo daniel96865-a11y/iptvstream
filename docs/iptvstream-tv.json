@@ -1,7 +1,7 @@
 {
-  "versionCode": 63,
-  "versionName": "1.0.61",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.61/iptvstream-tv.apk",
-  "sha256": "8cd2b60826d4bb43faa6d6eec830a7e16f44a7d45e18e51a7f89384883bc1d34",
-  "changelog": "• Handy: Die Suche und „Weiterschauen“ oben in Live TV klappen beim Runterscrollen wieder ein und beim Hochscrollen wieder aus, genau wie die untere Leiste.\n• Mehr Platz für die Senderliste beim Scrollen.\n• Das flüssige Scrollen am Fernseher bleibt unverändert."
+  "versionCode": 64,
+  "versionName": "1.0.62",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.62/iptvstream-tv.apk",
+  "sha256": "362d00c17a30579b3c48e3fc846aa6d0a2eb3fe8c2d3ce298297c4e943d5fd14",
+  "changelog": "• Fernseher stürzt nicht mehr ab, wenn ein anderes Gerät im WLAN eine kaputte Anfrage an die Handy-Übertragung schickt.\n• Ein langsames Gerät kann die Handy-Übertragung nicht mehr blockieren.\n• Senderliste bleibt erhalten, wenn der Anbieter eine leere oder kaputte Antwort schickt.\n• M3U: Eine Wartungs- oder Anmeldeseite statt Playlist ersetzt die Sender nicht mehr.\n• Suche findet % und _ jetzt wörtlich.\n• Geht der Schlüssel fürs Passwort verloren, wird kein falsches Passwort mehr benutzt – einfach neu eingeben.\n• Chromecast bleibt im Release-Build sicher erhalten.\n• Intern: Tests laufen jetzt vor jedem Release automatisch."
 }
