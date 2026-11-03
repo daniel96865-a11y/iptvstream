@@ -142,8 +142,11 @@ abstract class BrowseViewModel<T>(
     }
 
     fun onScroll(index: Int, offset: Int) {
+        val changed = index != scrollIndex
         scrollIndex = index
         scrollOffset = offset
+        // Nur bei neuer Zeile speichern/vorladen, nicht in jedem Frame des Scrollens.
+        if (!changed) return
         persist()
         afterScroll(index)
     }

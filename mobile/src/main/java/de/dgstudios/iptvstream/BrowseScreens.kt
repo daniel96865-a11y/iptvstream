@@ -1,5 +1,16 @@
 package de.dgstudios.iptvstream
 
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
+import kotlin.math.roundToInt
 import androidx.compose.material.icons.rounded.Search
 import de.dgstudios.iptvstream.core.ui.AccentBar
 import androidx.compose.foundation.background
@@ -416,13 +427,36 @@ fun LiveScreen(
     val sync by mainVm.sync.collectAsStateWithLifecycle()
     val tick by rememberClockTick(10_000)
 
-    Column(Modifier.fillMaxSize()) {
+    val topMax = remember { mutableIntStateOf(0) }
+    val topCollapse = remember { mutableFloatStateOf(0f) }
+    val topConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                val max = topMax.intValue.toFloat()
+                if (max <= 0f || available.y == 0f) return Offset.Zero
+                val old = topCollapse.floatValue
+                val new = (old - available.y).coerceIn(0f, max)
+                topCollapse.floatValue = new
+                return Offset(0f, old - new)
+            }
+        }
+    }
+
+    Column(Modifier.fillMaxSize().nestedScroll(topConnection)) {
         ScreenHeader("Live TV", if (items.isNotEmpty()) "${items.size} Sender" else null)
         // Suche + „Weiterschauen“ klappen beim Runterscrollen ein und beim Hochscrollen wieder aus (wie die untere Leiste).
-        androidx.compose.animation.AnimatedVisibility(
-            visible = topBarVisible,
-            enter = if (settings.animations) androidx.compose.animation.expandVertically(androidx.compose.animation.core.tween(220)) + androidx.compose.animation.fadeIn() else androidx.compose.animation.EnterTransition.None,
-            exit = if (settings.animations) androidx.compose.animation.shrinkVertically(androidx.compose.animation.core.tween(220)) + androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(180)) else androidx.compose.animation.ExitTransition.None,
+        // Suche + „Weiterschauen“ klappen beim Runterscrollen fingergenau ein und beim Hochscrollen wieder aus.
+        // Die Leiste verbraucht dabei den Scrollweg selbst, so springt die Liste nicht mehr.
+        Box(
+            Modifier
+                .clipToBounds()
+                .layout { m, c ->
+                    val p = m.measure(c.copy(minHeight = 0, maxHeight = Constraints.Infinity))
+                    topMax.intValue = p.height
+                    val h = (p.height - topCollapse.floatValue.coerceAtMost(p.height.toFloat())).roundToInt().coerceAtLeast(0)
+                    layout(p.width, h) { p.placeRelative(0, h - p.height) }
+                }
+                .graphicsLayer { alpha = if (topMax.intValue > 0) 1f - topCollapse.floatValue / topMax.intValue else 1f },
         ) {
             LiveTopBar(recent, onSearch) { ch ->
                 vm.play(ch)
