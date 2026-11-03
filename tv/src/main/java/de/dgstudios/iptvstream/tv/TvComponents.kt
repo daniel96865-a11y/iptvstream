@@ -122,7 +122,7 @@ fun Modifier.tvFocus(
             scaleY = scale
         }
         .clip(shape)
-        .background(bg, shape)
+        .background(animatedBg(bg, s.animations), shape)
         .then(
             when {
                 focused -> Modifier.border(3.dp, androidx.compose.ui.graphics.lerp(s.accent, Color.White, 0.55f), shape)
@@ -668,36 +668,74 @@ suspend fun androidx.compose.foundation.lazy.grid.LazyGridState.ensureVisible(in
     if (layoutInfo.visibleItemsInfo.none { it.index == index }) scrollToItem((index - 4).coerceAtLeast(0))
 }
 
-/** Folgt dem Fokus weich: immer nur die neueste Bewegung zählt, schnelle Tastendrücke stauen sich nicht. */
+/**
+ * Folgt dem Fokus weich: immer nur die neueste Bewegung zählt, schnelle Tastendrücke stauen sich nicht.
+ * Einzelner Druck: ruhige Gleitbewegung. Gehaltene Taste: kurze Schritte, die nahtlos anschließen.
+ */
 class ScrollFollow {
     private var job: kotlinx.coroutines.Job? = null
+    private var lastNanos = 0L
 
-    fun list(scope: kotlinx.coroutines.CoroutineScope, state: androidx.compose.foundation.lazy.LazyListState, index: Int, animate: Boolean) {
+    private fun spec(): androidx.compose.animation.core.AnimationSpec<Float> {
+        val now = System.nanoTime()
+        val fast = job?.isActive == true || now - lastNanos < 260_000_000L
+        lastNanos = now
+        return if (fast) {
+            androidx.compose.animation.core.tween(120, easing = androidx.compose.animation.core.LinearOutSlowInEasing)
+        } else {
+            androidx.compose.animation.core.tween(240, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+        }
+    }
+
+    /** [pivot]: Fokus ruhig bei etwa einem Drittel der Höhe halten (Senderliste, Kategorien). */
+    fun list(scope: kotlinx.coroutines.CoroutineScope, state: androidx.compose.foundation.lazy.LazyListState, index: Int, animate: Boolean, pivot: Boolean = true) {
+        val sp = spec()
         job?.cancel()
         job = scope.launch {
             withFrameNanos { }
-            val d = state.followDelta(index) ?: return@launch
-            state.glide(d, animate)
+            val d = (if (pivot) state.pivotDelta(index) else null) ?: state.followDelta(index) ?: return@launch
+            state.glide(d, animate, sp)
         }
     }
 
     fun grid(scope: kotlinx.coroutines.CoroutineScope, state: androidx.compose.foundation.lazy.grid.LazyGridState, index: Int, animate: Boolean) {
+        val sp = spec()
         job?.cancel()
         job = scope.launch {
             withFrameNanos { }
             val d = state.followDelta(index) ?: return@launch
-            state.glide(d, animate)
+            state.glide(d, animate, sp)
         }
     }
 }
 
-private suspend fun androidx.compose.foundation.gestures.ScrollableState.glide(delta: Float, animate: Boolean) {
+/** Schaltet das eingebaute, konkurrierende Mitscrollen beim Fokuswechsel ab; [ScrollFollow] übernimmt. */
+@OptIn(ExperimentalFoundationApi::class)
+val NoAutoScroll: androidx.compose.foundation.gestures.BringIntoViewSpec = object : androidx.compose.foundation.gestures.BringIntoViewSpec {
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float = 0f
+}
+
+/** Abstand, um den Fokus bei ~35 % der Höhe zu halten (Anfang/Ende begrenzen das Scrollen selbst). */
+fun androidx.compose.foundation.lazy.LazyListState.pivotDelta(index: Int): Float? {
+    val info = layoutInfo
+    val item = info.visibleItemsInfo.find { it.index == index } ?: return null
+    val viewport = info.viewportEndOffset - info.viewportStartOffset
+    if (viewport <= item.size * 3) return null
+    val want = info.viewportStartOffset + viewport * 0.35f
+    val d = item.offset - want
+    if (d < 0 && !canScrollBackward) return null
+    if (d > 0 && !canScrollForward) return null
+    return d
+}
+
+private suspend fun androidx.compose.foundation.gestures.ScrollableState.glide(
+    delta: Float,
+    animate: Boolean,
+    spec: androidx.compose.animation.core.AnimationSpec<Float> =
+        androidx.compose.animation.core.tween(200, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+) {
     if (kotlin.math.abs(delta) < 1f) return
-    if (animate) {
-        animateScrollBy(delta, androidx.compose.animation.core.tween(170, easing = androidx.compose.animation.core.FastOutSlowInEasing))
-    } else {
-        scrollBy(delta)
-    }
+    if (animate) animateScrollBy(delta, spec) else scrollBy(delta)
 }
 
 /** Abstand, damit über bzw. unter dem Fokus noch ein Eintrag zu sehen ist. */
@@ -755,3 +793,7 @@ suspend fun androidx.compose.foundation.lazy.grid.LazyGridState.slideInNeighbor(
     glide(delta, animate)
     return layoutInfo.visibleItemsInfo.any { it.index == target }
 }
+
+@Composable
+private fun animatedBg(target: Color, enabled: Boolean): Color =
+    androidx.compose.animation.animateColorAsState(target, if (enabled) tween(140) else tween(0), label = "focusBg").value

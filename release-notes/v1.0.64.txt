@@ -1,0 +1,6 @@
+IPTVstream 1.0.64
+
+- TV: Senderliste, Kategorien und Filme/Serien gleiten beim Drücken der Fernbedienung jetzt weich mit, statt Zeile für Zeile zu springen. Der Fokus bleibt ruhig im oberen Drittel.
+- TV: Beim Gedrückthalten der Taste läuft die Liste flüssig mit, ohne Verzögerung.
+- TV: Fokus-Hervorhebung blendet sanft über.
+- Handy: Obere Leiste in Live TV klappt beim Scrollen fingergenau ein, die Liste springt nicht mehr.

@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package de.dgstudios.iptvstream.tv
 
 import de.dgstudios.iptvstream.core.ui.AccentBar
@@ -117,6 +119,7 @@ fun TvCategoryList(
     modifier: Modifier = Modifier,
 ) {
     val s = LocalAppStyle.current
+    androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides NoAutoScroll) {
     LazyColumn(
         state = listState,
         modifier = modifier.width(240.dp).fillMaxHeight(),
@@ -154,6 +157,7 @@ fun TvCategoryList(
                 )
             }
         }
+    }
     }
 }
 
@@ -611,6 +615,7 @@ fun TvLiveScreen(
                 else -> TvEmpty("Keine Sender", "Inhalte werden geladen oder die Kategorie ist leer.")
             }
         } else {
+            androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides NoAutoScroll) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
@@ -636,6 +641,7 @@ fun TvLiveScreen(
                         onMenu = { menuFor = ch },
                     )
                 }
+            }
             }
         }
     }

@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package de.dgstudios.iptvstream.tv
 
 import de.dgstudios.iptvstream.core.ui.AccentBar
@@ -359,6 +361,7 @@ private fun <T> PosterBrowse(
                 else -> TvEmpty("Keine Einträge", "Inhalte werden geladen oder die Kategorie ist leer.")
             }
         } else {
+            androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides NoAutoScroll) {
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(138.dp),
                 state = gridState,
@@ -380,6 +383,7 @@ private fun <T> PosterBrowse(
                         onClick = { onOpen(p.id) },
                     )
                 }
+            }
             }
         }
     }
