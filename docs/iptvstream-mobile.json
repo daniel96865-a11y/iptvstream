@@ -1,7 +1,7 @@
 {
-  "versionCode": 66,
-  "versionName": "1.0.64",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.64/iptvstream-mobile.apk",
-  "sha256": "e1abf02424be6dda014ae5447d5f9cc2547990fda384bc951ec0d3c6a6af243d",
-  "changelog": "• IPTVstream 1.0.64\n• - TV: Senderliste, Kategorien und Filme/Serien gleiten beim Drücken der Fernbedienung jetzt weich mit, statt Zeile für Zeile zu springen. Der Fokus bleibt ruhig im oberen Drittel.\n• - TV: Beim Gedrückthalten der Taste läuft die Liste flüssig mit, ohne Verzögerung.\n• - TV: Fokus-Hervorhebung blendet sanft über.\n• - Handy: Obere Leiste in Live TV klappt beim Scrollen fingergenau ein, die Liste springt nicht mehr."
+  "versionCode": 67,
+  "versionName": "1.0.65",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.65/iptvstream-mobile.apk",
+  "sha256": "3f326fe105bbab0e28cbc3b487d7524ce1242f17b93e8b22855833a5babf0ab1",
+  "changelog": "• IPTVstream 1.0.65\n• - Player auf den neuesten stabilen Stand gebracht (Media3/ExoPlayer 1.9.4, FFmpeg-Ton 1.9). Bringt viele Fehlerbehebungen für HLS, TS und Ton.\n• - Player spielt jetzt auch MPEG-DASH-Streams (.mpd).\n• - Live: Fällt der Sender immer wieder hinter das Live-Fenster, verbindet der Player mit kurzer Pause neu, statt ständig sofort neu zu laden.\n• - Alles andere bleibt wie gewohnt: Puffer-Einstellungen, Zappen, EPG, Chromecast und die TV-Bedienung."
 }
