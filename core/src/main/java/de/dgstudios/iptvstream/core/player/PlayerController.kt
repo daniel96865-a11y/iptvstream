@@ -200,6 +200,8 @@ class PlayerController(
     /** Der Anbieter hat die Verbindung beendet; der Rest des Puffers läuft noch. */
     @Volatile private var eofPending = false
     private var reconnectAttempts = 0
+    /** Wie oft der Player hinter das Live-Fenster gefallen ist, seit er zuletzt stabil lief. */
+    private var behindLiveWindowCount = 0
     /** Einmal .ts gegen .m3u8 tauschen, wenn der Live-Stream so nicht existiert. */
     private var triedOtherLiveContainer = false
     private var reconnectJob: Job? = null
@@ -335,6 +337,7 @@ class PlayerController(
         silentChecked = false
         selectedAudioId = null
         reconnectAttempts = 0
+        behindLiveWindowCount = 0
         stall.reset()
         frames.reset()
         dropWindowSince = 0L
@@ -765,9 +768,15 @@ class PlayerController(
         diag.issue(describe(error))
 
         // Live-Fenster überholt: einfach zum Live-Rand springen.
+        // Passiert das immer wieder (Anbieter-Fenster zu kurz), greift die normale Wiederverbindung
+        // mit Wartezeit, statt endlos sofort neu zu laden.
         if (code == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
-            player.seekToDefaultPosition()
-            player.prepare()
+            behindLiveWindowCount++
+            if (behindLiveWindowCount <= MAX_BEHIND_LIVE_WINDOW || !tryReconnect()) {
+                player.seekToDefaultPosition()
+                player.prepare()
+                player.playWhenReady = true
+            }
             return
         }
 
@@ -1126,7 +1135,10 @@ class PlayerController(
                     // Stabil gelaufen: Wiederverbindungszähler zurücksetzen.
                     // Nur zählen, wenn die Wiedergabe auch vorankommt, sonst endet die Wiederverbindung nie.
                     val moving = stall.idleMs(now) < 3_000L && frames.idleMs(now) < 3_000L
-                    if (moving && now - playingSince > 10_000) reconnectAttempts = 0
+                    if (moving && now - playingSince > 10_000) {
+                        reconnectAttempts = 0
+                        behindLiveWindowCount = 0
+                    }
                     // Bild ohne Ton erkennen: Audiospuren vorhanden, aber keine wird abgespielt.
                     if (!silentChecked && !audioDisabledByUs && now - playingSince > 4_000) {
                         silentChecked = true
@@ -1163,6 +1175,7 @@ class PlayerController(
 
     private companion object {
         const val MAX_RECONNECTS = 8
+        const val MAX_BEHIND_LIVE_WINDOW = 3
         const val FROZEN_FRAMES_MS = 8_000L
         const val EOF_RECONNECT_BUFFER_MS = 5_000L
         const val BUFFER_STUCK_MS = 10_000L

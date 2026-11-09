@@ -1,0 +1,6 @@
+IPTVstream 1.0.65
+
+- Player auf den neuesten stabilen Stand gebracht (Media3/ExoPlayer 1.9.4, FFmpeg-Ton 1.9). Bringt viele Fehlerbehebungen für HLS, TS und Ton.
+- Player spielt jetzt auch MPEG-DASH-Streams (.mpd).
+- Live: Fällt der Sender immer wieder hinter das Live-Fenster, verbindet der Player mit kurzer Pause neu, statt ständig sofort neu zu laden.
+- Alles andere bleibt wie gewohnt: Puffer-Einstellungen, Zappen, EPG, Chromecast und die TV-Bedienung.
