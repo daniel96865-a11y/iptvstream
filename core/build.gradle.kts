@@ -46,7 +46,7 @@ android {
 }
 
 dependencies {
-    api(platform("androidx.compose:compose-bom:2024.12.01"))
+    api(platform("androidx.compose:compose-bom:2025.02.00"))
     api("androidx.compose.ui:ui")
     api("androidx.compose.ui:ui-graphics")
     api("androidx.compose.foundation:foundation")
@@ -58,7 +58,7 @@ dependencies {
     api("androidx.activity:activity-compose:1.10.1")
     api("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     api("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
-    api("androidx.navigation:navigation-compose:2.8.5")
+    api("androidx.navigation:navigation-compose:2.8.9")
 
     api("androidx.media3:media3-exoplayer:1.9.4")
     api("androidx.media3:media3-exoplayer-hls:1.9.4")
