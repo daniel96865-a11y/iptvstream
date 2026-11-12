@@ -54,8 +54,8 @@ dependencies {
     api("androidx.compose.material3:material3")
     api("androidx.compose.material:material-icons-extended")
 
-    api("androidx.core:core-ktx:1.15.0")
-    api("androidx.activity:activity-compose:1.9.3")
+    api("androidx.core:core-ktx:1.16.0")
+    api("androidx.activity:activity-compose:1.10.1")
     api("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     api("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     api("androidx.navigation:navigation-compose:2.8.5")
@@ -69,16 +69,16 @@ dependencies {
     // Vorgebautes Media3-FFmpeg-Audio (arm64-v8a, armeabi-v7a; AC3/E-AC3/MP2/DTS). JNI passt zu 1.9.x.
     api("org.jellyfin.media3:media3-ffmpeg-decoder:1.9.0+1")
 
-    api("androidx.room:room-runtime:2.6.1")
-    api("androidx.room:room-ktx:2.6.1")
-    ksp("androidx.room:room-compiler:2.6.1")
+    api("androidx.room:room-runtime:2.8.5")
+    api("androidx.room:room-ktx:2.8.5")
+    ksp("androidx.room:room-compiler:2.8.5")
 
-    api("androidx.datastore:datastore-preferences:1.1.1")
-    implementation("androidx.work:work-runtime-ktx:2.7.1")
+    api("androidx.datastore:datastore-preferences:1.2.1")
+    implementation("androidx.work:work-runtime-ktx:2.12.0")
     api("io.coil-kt:coil-compose:2.7.0")
-    api("com.squareup.retrofit2:retrofit:2.11.0")
-    api("com.squareup.okhttp3:okhttp:4.12.0")
-    api("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    api("com.squareup.retrofit2:retrofit:2.12.0")
+    api("com.squareup.okhttp3:okhttp:4.12.1")
+    api("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
     testImplementation("junit:junit:4.13.2")
 }

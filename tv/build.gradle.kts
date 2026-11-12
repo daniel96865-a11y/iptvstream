@@ -99,5 +99,5 @@ android {
 
 dependencies {
     implementation(project(":core"))
-    implementation("com.google.zxing:core:3.5.3")
+    implementation("com.google.zxing:core:3.5.4")
 }
