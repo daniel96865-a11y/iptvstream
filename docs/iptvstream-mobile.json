@@ -1,7 +1,7 @@
 {
-  "versionCode": 67,
-  "versionName": "1.0.65",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.65/iptvstream-mobile.apk",
-  "sha256": "3f326fe105bbab0e28cbc3b487d7524ce1242f17b93e8b22855833a5babf0ab1",
-  "changelog": "• IPTVstream 1.0.65\n• - Player auf den neuesten stabilen Stand gebracht (Media3/ExoPlayer 1.9.4, FFmpeg-Ton 1.9). Bringt viele Fehlerbehebungen für HLS, TS und Ton.\n• - Player spielt jetzt auch MPEG-DASH-Streams (.mpd).\n• - Live: Fällt der Sender immer wieder hinter das Live-Fenster, verbindet der Player mit kurzer Pause neu, statt ständig sofort neu zu laden.\n• - Alles andere bleibt wie gewohnt: Puffer-Einstellungen, Zappen, EPG, Chromecast und die TV-Bedienung."
+  "versionCode": 68,
+  "versionName": "1.0.66",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.66/iptvstream-mobile.apk",
+  "sha256": "38913a315a5ed4dd8b4a4a2ffca27c6224904763e1fef0a268fde459eb159477",
+  "changelog": "• IPTVstream 1.0.66\n• - Bibliotheken auf den neuesten kompatiblen Stand gebracht (Compose, Room-Datenbank, Hintergrund-Aufgaben, Netzwerk, Chromecast). Bringt Fehlerbehebungen und mehr Stabilität.\n• - Chromecast-Anbindung aktualisiert (Cast 22.2, MediaRouter 1.8.1).\n• - Bedienung, Player, Puffer-Einstellungen, EPG und TV-Fernbedienung bleiben wie gewohnt."
 }
