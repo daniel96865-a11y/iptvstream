@@ -39,8 +39,8 @@ android {
         applicationId = "de.dgstudios.iptvstream"
         minSdk = 24
         targetSdk = 35
-        versionCode = 67
-        versionName = "1.0.65"
+        versionCode = 68
+        versionName = "1.0.66"
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a")
         }
@@ -103,6 +103,6 @@ dependencies {
     implementation(project(":core"))
     implementation("androidx.glance:glance-appwidget:1.2.0")
     // Chromecast-Sender (Handy → TV): Standard-Empfänger, eigene Auswahl im Glas-Look.
-    implementation("com.google.android.gms:play-services-cast-framework:21.4.0")
-    implementation("androidx.mediarouter:mediarouter:1.7.0")
+    implementation("com.google.android.gms:play-services-cast-framework:22.2.0")
+    implementation("androidx.mediarouter:mediarouter:1.8.1")
 }

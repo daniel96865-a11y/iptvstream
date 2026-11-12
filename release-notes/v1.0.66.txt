@@ -1,0 +1,5 @@
+IPTVstream 1.0.66
+
+- Bibliotheken auf den neuesten kompatiblen Stand gebracht (Compose, Room-Datenbank, Hintergrund-Aufgaben, Netzwerk, Chromecast). Bringt Fehlerbehebungen und mehr Stabilität.
+- Chromecast-Anbindung aktualisiert (Cast 22.2, MediaRouter 1.8.1).
+- Bedienung, Player, Puffer-Einstellungen, EPG und TV-Fernbedienung bleiben wie gewohnt.

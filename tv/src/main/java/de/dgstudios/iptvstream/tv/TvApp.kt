@@ -296,7 +296,7 @@ private fun TvHome(
             Spacer(Modifier.height(10.dp))
             TvStatusLine(sync, epg)
             Box(Modifier.weight(1f)) {
-                val escapeToTab = {
+                val escapeToTab: () -> Unit = {
                     try {
                         tabRequesters[tab.ordinal].requestFocus()
                     } catch (_: IllegalStateException) {
