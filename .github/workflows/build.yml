@@ -136,6 +136,8 @@ jobs:
         SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
         SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+        # Sentry-DSN nur aus dem Repo-Secret, nie im Quelltext.
+        SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
       run: |
         set -euo pipefail
         for name in SIGNING_KEYSTORE_BASE64 SIGNING_STORE_PASSWORD SIGNING_KEY_PASSWORD SIGNING_KEY_ALIAS; do
@@ -152,6 +154,8 @@ jobs:
         SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
         SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+        # Sentry-DSN nur aus dem Repo-Secret, nie im Quelltext.
+        SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
       run: ./gradlew --no-daemon :mobile:assembleRelease :tv:assembleRelease
 
     - name: APKs einsammeln

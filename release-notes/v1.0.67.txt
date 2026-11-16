@@ -1,0 +1,4 @@
+IPTVstream 1.0.67
+
+- Absturz- und Fehlerberichte: Wenn die App abstürzt oder ein Fehler auftritt, wird ein anonymer technischer Bericht gesendet, damit Fehler schneller behoben werden können. Keine Zugangsdaten, keine persönlichen Daten.
+- Bedienung, Player, EPG und TV-Fernbedienung bleiben wie gewohnt.

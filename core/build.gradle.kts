@@ -1,8 +1,23 @@
+import java.util.Properties
+
 plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp")
+}
+
+/**
+ * Sentry-DSN nur aus Umgebung (CI-Secret SENTRY_DSN), ~/.gradle/gradle.properties oder der
+ * nicht eingecheckten local.properties. Nie im Repo. Ohne DSN bleibt Sentry aus.
+ */
+val sentryDsn: String = run {
+    val local = Properties().apply {
+        val f = rootProject.file("local.properties")
+        if (f.isFile) f.inputStream().use { load(it) }
+    }
+    (System.getenv("SENTRY_DSN") ?: providers.gradleProperty("SENTRY_DSN").orNull ?: local.getProperty("SENTRY_DSN"))
+        .orEmpty().trim()
 }
 
 android {
@@ -14,6 +29,7 @@ android {
         // auf denen putIfAbsent und der Keystore-Schlüssel ohnehin fehlen würden.
         minSdk = 24
         consumerProguardFiles("consumer-rules.pro")
+        buildConfigField("String", "SENTRY_DSN", "\"${sentryDsn.replace("\"", "")}\"")
     }
 
     compileOptions {
@@ -33,6 +49,7 @@ android {
     sourceSets["main"].assets.srcDir(rootProject.file("release-notes"))
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     lint {
         abortOnError = true
@@ -74,6 +91,8 @@ dependencies {
     ksp("androidx.room:room-compiler:2.8.5")
 
     api("androidx.datastore:datastore-preferences:1.2.1")
+    // Absturz-/Fehlermeldungen an Sentry (nur Core: kein NDK, kein Session Replay).
+    implementation("io.sentry:sentry-android-core:8.64.0")
     implementation("androidx.work:work-runtime-ktx:2.12.0")
     api("io.coil-kt:coil-compose:2.7.0")
     api("com.squareup.retrofit2:retrofit:2.12.0")
