@@ -59,6 +59,7 @@ class IptvApp : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
+        CrashReporting.init(this)
         container = AppContainer(this)
         EpgAutoRefresh.install(this, container)
     }
