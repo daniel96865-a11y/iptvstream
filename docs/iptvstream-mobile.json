@@ -1,7 +1,7 @@
 {
-  "versionCode": 68,
-  "versionName": "1.0.66",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.66/iptvstream-mobile.apk",
-  "sha256": "38913a315a5ed4dd8b4a4a2ffca27c6224904763e1fef0a268fde459eb159477",
-  "changelog": "• IPTVstream 1.0.66\n• - Bibliotheken auf den neuesten kompatiblen Stand gebracht (Compose, Room-Datenbank, Hintergrund-Aufgaben, Netzwerk, Chromecast). Bringt Fehlerbehebungen und mehr Stabilität.\n• - Chromecast-Anbindung aktualisiert (Cast 22.2, MediaRouter 1.8.1).\n• - Bedienung, Player, Puffer-Einstellungen, EPG und TV-Fernbedienung bleiben wie gewohnt."
+  "versionCode": 69,
+  "versionName": "1.0.67",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.67/iptvstream-mobile.apk",
+  "sha256": "6c08de04daaeee448f97e521ec8d0ecc4584556d48379fd0c27a6dea5e108e35",
+  "changelog": "• IPTVstream 1.0.67\n• - Absturz- und Fehlerberichte: Wenn die App abstürzt oder ein Fehler auftritt, wird ein anonymer technischer Bericht gesendet, damit Fehler schneller behoben werden können. Keine Zugangsdaten, keine persönlichen Daten.\n• - Bedienung, Player, EPG und TV-Fernbedienung bleiben wie gewohnt."
 }
