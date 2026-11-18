@@ -206,14 +206,16 @@ private fun TvPlayerContent(vm: PlayerViewModel, ctrl: PlayerController, ui: Pla
                 true
             }
             code == AKey.KEYCODE_DPAD_CENTER || code == AKey.KEYCODE_ENTER || code == AKey.KEYCODE_NUMPAD_ENTER -> {
-                when (TvOkKey.action(numEntry.text.isNotEmpty(), rep, infoVisible = mode == PMode.CONTROLS)) {
-                    OkAction.COMMIT_NUMBER -> numEntry.commit()
-                    OkAction.SHOW_INFO -> show()
-                    OkAction.TOGGLE_PLAY -> {
+                if (numEntry.text.isNotEmpty()) {
+                    numEntry.commit()
+                } else if (rep == 0) {
+                    if (liveEdge) {
+                        mode = if (mode == PMode.CONTROLS) PMode.HIDDEN else PMode.CONTROLS
+                    } else {
                         ctrl.togglePlay()
-                        show()
+                        mode = PMode.CONTROLS
                     }
-                    OkAction.NONE -> Unit
+                    interaction++
                 }
                 true
             }
