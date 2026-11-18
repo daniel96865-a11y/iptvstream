@@ -1,0 +1,5 @@
+IPTVstream 1.0.69
+
+TV: Das erste OK auf der Fernbedienung zeigt nur die Infoleiste mit Sender, laufender Sendung und Steuerung. Erst ein zweites OK pausiert oder spielt weiter.
+Die Play/Pause-Taste der Fernbedienung pausiert weiterhin sofort.
+Die Verbesserungen gegen Hänger aus 1.0.68 bleiben erhalten.
