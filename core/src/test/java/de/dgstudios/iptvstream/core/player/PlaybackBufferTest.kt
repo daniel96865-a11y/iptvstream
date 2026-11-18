@@ -31,4 +31,11 @@ class PlaybackBufferTest {
         assertEquals("13 / 40 s", PlaybackBuffer.label(12_500, 40_000))
         assertEquals("15 / 15 s", PlaybackBuffer.label(20_000, 15_000))
     }
+
+    @Test
+    fun liveStartNeedsRealHeadroom() {
+        assertEquals(2_500 to 4_000, PlaybackBuffer.liveStart("small"))
+        assertEquals(4_000 to 6_000, PlaybackBuffer.liveStart("medium"))
+        assertEquals(6_000 to 10_000, PlaybackBuffer.liveStart("large"))
+    }
 }
