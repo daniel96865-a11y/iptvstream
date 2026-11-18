@@ -1,7 +1,7 @@
 {
-  "versionCode": 69,
-  "versionName": "1.0.67",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.67/iptvstream-mobile.apk",
-  "sha256": "6c08de04daaeee448f97e521ec8d0ecc4584556d48379fd0c27a6dea5e108e35",
-  "changelog": "• IPTVstream 1.0.67\n• - Absturz- und Fehlerberichte: Wenn die App abstürzt oder ein Fehler auftritt, wird ein anonymer technischer Bericht gesendet, damit Fehler schneller behoben werden können. Keine Zugangsdaten, keine persönlichen Daten.\n• - Bedienung, Player, EPG und TV-Fernbedienung bleiben wie gewohnt."
+  "versionCode": 70,
+  "versionName": "1.0.68",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.68/iptvstream-mobile.apk",
+  "sha256": "d81eebf69605fe22690b3a3cb3af3dd69f1b34981cd6d953afe2ec6dfb222395",
+  "changelog": "• IPTVstream 1.0.68\n• Live-Sender starten mit mehr Vorlauf im Puffer und spielen nach einem Hänger erst mit genug Reserve weiter. Dadurch gibt es weniger Hänger.\n• Kein unnötiger Neustart oder Sprung an den Live-Rand mehr (vor allem bei m3u8/HLS).\n• Kein grundloser Tonspurwechsel mehr: Hängt der Strom, verbindet die App neu, statt Tonspur oder Ton umzuschalten."
 }
