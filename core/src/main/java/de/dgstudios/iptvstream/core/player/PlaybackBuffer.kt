@@ -52,4 +52,15 @@ object PlaybackBuffer {
     }
 
     private fun seconds(ms: Long): Long = (ms.coerceAtLeast(0L) + 500L) / 1000L
+
+    /**
+     * Live: so viel Vorlauf muss da sein, bevor das Bild (wieder) startet: (Start, nach Hänger).
+     * Ein Live-Strom kommt nur in Echtzeit nach. Startet der Player schon bei 1 s, bleibt der
+     * Vorlauf dauerhaft bei etwa 1 s und jeder kleine Netz-Wackler führt zum nächsten Hänger.
+     */
+    fun liveStart(setting: String): Pair<Int, Int> = when (setting) {
+        "small" -> 2_500 to 4_000
+        "large" -> 6_000 to 10_000
+        else -> 4_000 to 6_000
+    }
 }

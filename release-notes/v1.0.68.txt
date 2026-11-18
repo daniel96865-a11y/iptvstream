@@ -1,0 +1,5 @@
+IPTVstream 1.0.68
+
+Live-Sender starten mit mehr Vorlauf im Puffer und spielen nach einem Hänger erst mit genug Reserve weiter. Dadurch gibt es weniger Hänger.
+Kein unnötiger Neustart oder Sprung an den Live-Rand mehr (vor allem bei m3u8/HLS).
+Kein grundloser Tonspurwechsel mehr: Hängt der Strom, verbindet die App neu, statt Tonspur oder Ton umzuschalten.

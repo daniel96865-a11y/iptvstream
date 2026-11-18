@@ -197,6 +197,8 @@ class PlayerController(
     private val frames: StallDetector by lazy { StallDetector(frozenFramesMs) }
     private var bufferingSince = 0L
     @Volatile private var seamlessLive = false
+    /** Live-Rand: Player-Thread liest das für den Startvorlauf ([LiveAwareLoadControl]). */
+    @Volatile private var liveMode = false
     /** Der Anbieter hat die Verbindung beendet; der Rest des Puffers läuft noch. */
     @Volatile private var eofPending = false
     private var reconnectAttempts = 0
@@ -273,11 +275,17 @@ class PlayerController(
         val capped = PlaybackBuffer.capBytes(wantedBytes, memoryClass)
         val bytes = if (compat) minOf(capped, CompatMode.BUFFER_BYTES) else capped
         liveBufferMaxMs = maxMs.toLong()
-        val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(minMs, maxMs, 1_000, 2_500)
-            .setTargetBufferBytes(bytes)
-            .setPrioritizeTimeOverSizeThresholds(true)
-            .build()
+        val (liveStartMs, liveAfterRebufferMs) = PlaybackBuffer.liveStart(settings.buffer)
+        val loadControl = LiveAwareLoadControl(
+            DefaultLoadControl.Builder()
+                .setBufferDurationsMs(minMs, maxMs, 1_000, 2_500)
+                .setTargetBufferBytes(bytes)
+                .setPrioritizeTimeOverSizeThresholds(true)
+                .build(),
+            liveStartMs = liveStartMs,
+            liveAfterRebufferMs = liveAfterRebufferMs,
+            isLive = { liveMode },
+        )
 
         var params = trackSelector.buildUponParameters().setMaxAudioChannelCount(maxChannels)
         if (settings.audioLang != "auto") params = params.setPreferredAudioLanguage(settings.audioLang)
@@ -362,6 +370,7 @@ class PlayerController(
         }
         current = item
         val live = liveEdge(item)
+        liveMode = live
         eofPending = false
         seamlessLive = live && settings.seamless && !Urls.isHls(item.url)
         diag.format = if (Urls.isHls(item.url)) "HLS" else "TS"
@@ -708,7 +717,12 @@ class PlayerController(
             mediaLoadData: androidx.media3.exoplayer.source.MediaLoadData,
         ) {
             // Bei einem Live-.ts-Stream endet das Laden nur, wenn der Server die Verbindung schließt.
-            if (liveEdge(current)) {
+            // Bei HLS endet jedes Segment und jede Playlist-Abfrage normal: das ist kein Anbieter-Ende
+            // und darf keinen Neustart auslösen.
+            val item = current
+            if (liveEdge(item) && item != null && !Urls.isHls(item.url) &&
+                mediaLoadData.dataType == C.DATA_TYPE_MEDIA
+            ) {
                 eofPending = true
                 diag.event(
                     "Laden beendet: ${loadEventInfo.bytesLoaded / 1024} KB in ${loadEventInfo.loadDurationMs / 1000} s, " +
@@ -877,8 +891,10 @@ class PlayerController(
      */
     private fun onStalled() {
         if (released || inBackground) return
+        // Nur wenn Daten im Puffer liegen und trotzdem nichts vorangeht, ist die Tonausgabe verdächtig.
+        // Bei fast leerem Puffer liegt es am Strom: neu verbinden statt die Tonspur zu wechseln.
         val audioActive = !audioDisabledByUs && !fallback.gaveUp && player.audioFormat != null
-        if (audioActive) {
+        if (audioActive && player.totalBufferedDuration >= STALL_AUDIO_SUSPECT_BUFFER_MS) {
             audioFallback("Wiedergabe hängt")
             return
         }
@@ -1180,6 +1196,7 @@ class PlayerController(
         const val EOF_RECONNECT_BUFFER_MS = 5_000L
         const val BUFFER_STUCK_MS = 10_000L
         const val STREAM_READ_TIMEOUT_S = 15L
+        const val STALL_AUDIO_SUSPECT_BUFFER_MS = 2_000L
     }
 }
 
