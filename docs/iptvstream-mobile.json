@@ -1,7 +1,7 @@
 {
-  "versionCode": 70,
-  "versionName": "1.0.68",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.68/iptvstream-mobile.apk",
-  "sha256": "d81eebf69605fe22690b3a3cb3af3dd69f1b34981cd6d953afe2ec6dfb222395",
-  "changelog": "• IPTVstream 1.0.68\n• Live-Sender starten mit mehr Vorlauf im Puffer und spielen nach einem Hänger erst mit genug Reserve weiter. Dadurch gibt es weniger Hänger.\n• Kein unnötiger Neustart oder Sprung an den Live-Rand mehr (vor allem bei m3u8/HLS).\n• Kein grundloser Tonspurwechsel mehr: Hängt der Strom, verbindet die App neu, statt Tonspur oder Ton umzuschalten."
+  "versionCode": 75,
+  "versionName": "1.0.73",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.73/iptvstream-mobile.apk",
+  "sha256": "0bd1398f34833cb4c58226291cc240824323125053510d71815b223c34fb257b",
+  "changelog": "• IPTVstream 1.0.73\n• Live-Sender: Bricht der Anbieter die Verbindung ab oder hängt der Strom, verbindet die App still und schnell neu, statt mit Fehler 1003 abzubrechen. Das Bild bleibt dabei stehen statt schwarz zu werden.\n• Neu (Beta): eingebauter Browser mit Werbeblocker (EasyList, EasyList Germany, Peter Lowe) für Handy und TV, am TV mit Mauszeiger per Fernbedienung.\n• Browser: http-Seiten, Adressen im Heimnetz (z. B. 192.168.1.1:8080) und gemischte Inhalte funktionieren; bei unsicheren Zertifikaten kommt eine Nachfrage.\n• Browser: Knopf ✕ bzw. „✕ IPTV“ schließt sofort, Zurück lang halten ebenfalls. Die letzte Seite bleibt gemerkt, auch nach Neustart."
 }
