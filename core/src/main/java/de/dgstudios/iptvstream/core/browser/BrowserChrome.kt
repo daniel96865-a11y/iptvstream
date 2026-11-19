@@ -43,6 +43,14 @@ class BrowserChrome(private val ctx: Context, val tv: Boolean) {
         // Handy: kompakt wie Chrome, eine Zeile ~52 dp (40-dp-Knöpfe + 6 dp oben/unten).
         if (tv) setPadding(dp(8), dp(6), dp(8), dp(6)) else setPadding(dp(4), dp(6), dp(4), dp(6))
     }
+    /** Browser schließen, zurück zu IPTV (Handy: ✕, TV: „✕ IPTV“). */
+    val close = button(if (tv) "✕  IPTV" else "✕", "Browser schließen, zurück zu IPTV").apply {
+        if (tv) {
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(dp(16), 0, dp(18), 0)
+        }
+    }
     val back = button("←", "Zurück")
     val forward = button("→", "Vor")
     val reload = button("⟳", "Neu laden")
@@ -97,6 +105,7 @@ class BrowserChrome(private val ctx: Context, val tv: Boolean) {
         val gap = dp(6)
         fun lp(w: Int = ViewGroup.LayoutParams.WRAP_CONTENT, weight: Float = 0f) =
             LinearLayout.LayoutParams(w, ViewGroup.LayoutParams.WRAP_CONTENT, weight).apply { marginEnd = gap }
+        toolbar.addView(close, lp())
         toolbar.addView(back, lp())
         // Handy: Vor und Neu laden stehen im ⋮-Menü, damit die Adressleiste Platz hat.
         if (tv) {
@@ -143,9 +152,16 @@ class BrowserChrome(private val ctx: Context, val tv: Boolean) {
 
     /** WebView unter Startseite und Zeiger einhängen. */
     fun attachWeb(web: View) {
+        attached?.let { if (it !== web) webFrame.removeView(it) }
+        (web.parent as? ViewGroup)?.removeView(web)
         webFrame.addView(web, 0, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        if (tv) webFrame.addView(cursor, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        attached = web
+        if (tv && cursor.parent == null) webFrame.addView(cursor, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        startPage.bringToFront()
+        if (tv) cursor.bringToFront()
     }
+
+    private var attached: View? = null
 
     fun setBlocked(n: Int) {
         blocked.text = "🛡 $n"

@@ -23,6 +23,25 @@ object BrowserJs {
 })();
 """
 
+    /**
+     * In jedem Frame: auf „__dgPause“ alle Videos/Töne anhalten und an eingebettete Frames weitergeben
+     * (Browser schließen soll nichts im Hintergrund weiterspielen lassen).
+     */
+    const val PAUSE_LISTENER = """
+(function(){
+  if (window.__dgPauseL) return;
+  window.__dgPauseL = 1;
+  window.__dgPauseAll = function(){
+    try { document.querySelectorAll('video,audio').forEach(function(m){ try { m.pause(); } catch (e) {} }); } catch (e) {}
+    try { for (var i = 0; i < window.frames.length; i++) { try { window.frames[i].postMessage('__dgPause', '*'); } catch (e) {} } } catch (e) {}
+  };
+  window.addEventListener('message', function(ev){ if (ev && ev.data === '__dgPause') window.__dgPauseAll(); }, true);
+})();
+"""
+
+    /** Hauptseite: alles anhalten (auch wenn das Skript nicht früh eingehängt werden konnte). */
+    const val PAUSE_ALL = PAUSE_LISTENER + "window.__dgPauseAll && window.__dgPauseAll();"
+
     const val AUTO_FULLSCREEN = """
 (function(){
   if (window.__dgFs) return;

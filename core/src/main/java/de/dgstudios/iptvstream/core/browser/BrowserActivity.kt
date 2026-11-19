@@ -77,13 +77,9 @@ class BrowserActivity : ComponentActivity() {
             isAppearanceLightStatusBars = false
             isAppearanceLightNavigationBars = false
         }
-        web = WebView(this)
-        ui.attachWeb(web)
         setContentView(ui.root)
-        ui.startPage.bringToFront()
-        if (tv) ui.cursor.bringToFront()
-
-        setupWeb()
+        current = this
+        val reused = bindWeb()
         setupChrome()
         refreshStatus()
         FilterLists.ensure(this, container.okHttp) { runOnUiThread { refreshStatus() } }
@@ -93,28 +89,78 @@ class BrowserActivity : ComponentActivity() {
         })
 
         val start = intent.dataString
-        if (BrowserUrl.isWeb(start)) open(start!!) else focusAddress(showKeyboard = !tv)
+        when {
+            BrowserUrl.isWeb(start) -> open(start!!)
+            // Browser lief noch im Hintergrund: Seite ist sofort da, nichts neu laden.
+            reused && BrowserUrl.isWeb(web.url) -> showPage()
+            // Nach App-Neustart: letzte Seite samt Verlauf wiederherstellen.
+            !reused && BrowserSession.restore(this, web) -> showPage()
+            else -> showStart()
+        }
+    }
+
+    /** WebView aus dem Hintergrund holen oder neu anlegen und einrichten. true = wiederverwendet. */
+    private fun bindWeb(): Boolean {
+        val (w, reused) = BrowserHolder.obtain(this)
+        web = w
+        ui.attachWeb(web)
+        setupWeb(fresh = !reused)
+        return reused
+    }
+
+    private fun showPage() {
+        ui.startPage.visibility = View.GONE
+        pageHost = web.url?.let { FilterEngine.hostOf(it.lowercase()) }
+        setAddress(web.url)
+        updateNav()
+        web.requestFocus()
+    }
+
+    private fun showStart() {
+        ui.startPage.visibility = View.VISIBLE
+        ui.address.setText("")
+        updateNav()
+        focusAddress(showKeyboard = !tv)
+    }
+
+    /** Browser sofort schließen und zum IPTV-Bildschirm zurück, von dem er geöffnet wurde. */
+    private fun closeBrowser() {
+        if (customView != null) exitCustomView()
+        hideKeyboard()
+        finish()
+    }
+
+    /** „Startseite“: gemerkte Seite und Verlauf verwerfen, leere Startseite zeigen. */
+    private fun resetToStart() {
+        if (customView != null) exitCustomView()
+        BrowserSession.clear(this)
+        BrowserHolder.discard()
+        bindWeb()
+        web.onResume()
+        web.resumeTimers()
+        showStart()
     }
 
     // ------------------------------------------------------------ WebView
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun setupWeb() {
+    private fun setupWeb(fresh: Boolean) {
         BrowserWebSettings.apply(web)
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, true)
         web.setBackgroundColor(BrowserChrome.BG)
         web.isFocusable = true
         web.isFocusableInTouchMode = true
-        web.addJavascriptInterface(Bridge(), "DGBridge")
+        if (fresh) web.addJavascriptInterface(Bridge(), "DGBridge")
         web.setOnTouchListener { _, e ->
             if (e.actionMasked == MotionEvent.ACTION_DOWN) lastTap = System.currentTimeMillis()
             false
         }
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
-            WebViewCompat.addDocumentStartJavaScript(web, BrowserJs.HIDE + BrowserJs.AUTO_FULLSCREEN, setOf("*"))
-            injectedEarly = true
+        if (fresh && WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            WebViewCompat.addDocumentStartJavaScript(web, BrowserJs.HIDE + BrowserJs.AUTO_FULLSCREEN + BrowserJs.PAUSE_LISTENER, setOf("*"))
+            BrowserHolder.injectedEarly = true
         }
+        injectedEarly = BrowserHolder.injectedEarly
         web.setDownloadListener { url, _, _, _, _ ->
             toast("Downloads sind im Browser nicht möglich.")
             if (!tv) runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
@@ -205,6 +251,16 @@ class BrowserActivity : ComponentActivity() {
                 .show()
         }
 
+        override fun onRenderProcessGone(view: WebView, detail: android.webkit.RenderProcessGoneDetail): Boolean {
+            // Seitenprozess beendet (z. B. Speicher knapp im Hintergrund): WebView ersetzen statt App-Absturz.
+            if (view !== web) return true
+            BrowserHolder.discard()
+            if (isFinishing || isDestroyed) return true
+            bindWeb()
+            if (BrowserSession.restore(this@BrowserActivity, web)) showPage() else showStart()
+            return true
+        }
+
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
             pageHost = url?.let { FilterEngine.hostOf(it.lowercase()) }
             blockedOnPage.set(0)
@@ -227,6 +283,8 @@ class BrowserActivity : ComponentActivity() {
         }
 
         override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
+            // Letzte Adresse sofort merken (Verlauf kommt beim Schließen dazu).
+            if (BrowserUrl.isWeb(url)) prefs.lastUrl = url!!
             pageHost = url?.let { FilterEngine.hostOf(it.lowercase()) }
             setAddress(url)
             updateNav()
@@ -295,45 +353,56 @@ class BrowserActivity : ComponentActivity() {
         }
     }
 
-    /** Für die Seitenskripte (alle Methoden harmlos, keine Daten der App). */
-    private inner class Bridge {
+    /**
+     * Für die Seitenskripte (alle Methoden harmlos, keine Daten der App).
+     * Die WebView überlebt die Aktivität: darum immer an die gerade offene Aktivität weitergeben.
+     */
+    private class Bridge {
+        private fun act(): BrowserActivity? = current
+
         @JavascriptInterface
         fun css(host: String?): String {
-            if (!prefs.adblock) return ""
+            val a = act() ?: return ""
+            if (!a.prefs.adblock) return ""
             val e = FilterLists.await(1_500) ?: return ""
             return e.genericCss + "\n" + e.siteCss(host)
         }
 
         @JavascriptInterface
-        fun autoFs(src: String?): Boolean = prefs.autoFullscreen
+        fun autoFs(src: String?): Boolean = act()?.prefs?.autoFullscreen ?: false
 
         @JavascriptInterface
-        fun recentTap(ms: Int): Boolean = System.currentTimeMillis() - lastTap < ms.coerceIn(0, 30_000)
+        fun recentTap(ms: Int): Boolean = System.currentTimeMillis() - (act()?.lastTap ?: 0L) < ms.coerceIn(0, 30_000)
 
         @JavascriptInterface
         fun pageFs(on: Boolean) {
-            runOnUiThread {
-                pageFullscreen = on
-                ui.toolbar.visibility = if (on) View.GONE else View.VISIBLE
-                immersive(on)
-                if (!tv) requestedOrientation = if (on) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            }
+            val a = act() ?: return
+            a.runOnUiThread { a.setPageFullscreen(on) }
         }
 
         @JavascriptInterface
         fun fsVideo(w: Int, h: Int) {
-            if (tv) return
-            runOnUiThread {
-                if (customView != null || pageFullscreen) {
-                    requestedOrientation = if (h > w) ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            val a = act() ?: return
+            if (a.tv) return
+            a.runOnUiThread {
+                if (a.customView != null || a.pageFullscreen) {
+                    a.requestedOrientation = if (h > w) ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                 }
             }
         }
     }
 
+    private fun setPageFullscreen(on: Boolean) {
+        pageFullscreen = on
+        ui.toolbar.visibility = if (on) View.GONE else View.VISIBLE
+        immersive(on)
+        if (!tv) requestedOrientation = if (on) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+    }
+
     // ------------------------------------------------------------ Leiste
 
     private fun setupChrome() {
+        ui.close.setOnClickListener { closeBrowser() }
         ui.back.setOnClickListener { if (web.canGoBack()) web.goBack() }
         ui.forward.setOnClickListener { if (web.canGoForward()) web.goForward() }
         ui.reload.setOnClickListener { if (web.url != null) web.reload() }
@@ -406,38 +475,41 @@ class BrowserActivity : ComponentActivity() {
             showPhoneMenu()
             return
         }
-        val items = arrayOf("Werbeblocker", "Angetipptes Video sofort im Vollbild")
-        val checked = booleanArrayOf(prefs.adblock, prefs.autoFullscreen)
+        // TV: einfache Liste, mit der Fernbedienung gut zu bedienen.
+        val items = arrayOf(
+            "Browser schließen (zurück zu IPTV)",
+            "Startseite",
+            "Werbeblocker: " + if (prefs.adblock) "an" else "aus",
+            "Angetipptes Video sofort im Vollbild: " + if (prefs.autoFullscreen) "an" else "aus",
+            "Filterlisten aktualisieren",
+            "Browserdaten löschen",
+        )
         AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
             .setTitle("Browser · Beta")
-            .setMultiChoiceItems(items, checked) { _, which, on ->
+            .setItems(items) { _, which ->
                 when (which) {
-                    0 -> {
-                        prefs.adblock = on
-                        refreshStatus()
-                        if (web.url != null) web.reload()
-                    }
-                    1 -> prefs.autoFullscreen = on
+                    0 -> closeBrowser()
+                    1 -> resetToStart()
+                    2 -> toggleAdblock()
+                    3 -> toggleAutoFs()
+                    4 -> updateLists()
+                    5 -> clearData()
                 }
             }
-            .setNeutralButton("Filterlisten aktualisieren") { _, _ ->
-                toast("Filterlisten werden geladen …")
-                FilterLists.update(this, container.okHttp) { ok ->
-                    runOnUiThread {
-                        refreshStatus()
-                        toast(if (ok) "Filterlisten aktualisiert" else "Aktualisierung fehlgeschlagen – eingebaute Liste bleibt aktiv")
-                    }
-                }
-            }
-            .setNegativeButton("Browserdaten löschen") { _, _ ->
-                web.clearCache(true)
-                web.clearHistory()
-                CookieManager.getInstance().removeAllCookies(null)
-                WebStorage.getInstance().deleteAllData()
-                toast("Cookies, Verlauf und Zwischenspeicher gelöscht")
-            }
-            .setPositiveButton("Fertig", null)
+            .setNegativeButton("Fertig", null)
             .show()
+    }
+
+    private fun toggleAdblock() {
+        prefs.adblock = !prefs.adblock
+        refreshStatus()
+        toast(if (prefs.adblock) "Werbeblocker an" else "Werbeblocker aus")
+        if (web.url != null) web.reload()
+    }
+
+    private fun toggleAutoFs() {
+        prefs.autoFullscreen = !prefs.autoFullscreen
+        toast(if (prefs.autoFullscreen) "Videos gehen sofort ins Vollbild" else "Kein automatisches Vollbild")
     }
 
     /** Handy: kompaktes Menü am ⋮ mit Vor/Neu laden (die stehen dort nicht in der Leiste). */
@@ -446,26 +518,22 @@ class BrowserActivity : ComponentActivity() {
         val m = pm.menu
         m.add(0, 1, 0, "Vor").isEnabled = web.canGoForward()
         m.add(0, 2, 1, "Neu laden").isEnabled = web.url != null
-        m.add(0, 3, 2, "Werbeblocker").apply { isCheckable = true; isChecked = prefs.adblock }
-        m.add(0, 4, 3, "Video sofort im Vollbild").apply { isCheckable = true; isChecked = prefs.autoFullscreen }
-        m.add(0, 5, 4, "Filterlisten aktualisieren")
-        m.add(0, 6, 5, "Browserdaten löschen")
+        m.add(0, 8, 2, "Startseite")
+        m.add(0, 3, 3, "Werbeblocker").apply { isCheckable = true; isChecked = prefs.adblock }
+        m.add(0, 4, 4, "Video sofort im Vollbild").apply { isCheckable = true; isChecked = prefs.autoFullscreen }
+        m.add(0, 5, 5, "Filterlisten aktualisieren")
+        m.add(0, 6, 6, "Browserdaten löschen")
+        m.add(0, 7, 7, "Browser schließen")
         pm.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 1 -> if (web.canGoForward()) web.goForward()
                 2 -> web.reload()
-                3 -> {
-                    prefs.adblock = !prefs.adblock
-                    refreshStatus()
-                    toast(if (prefs.adblock) "Werbeblocker an" else "Werbeblocker aus")
-                    if (web.url != null) web.reload()
-                }
-                4 -> {
-                    prefs.autoFullscreen = !prefs.autoFullscreen
-                    toast(if (prefs.autoFullscreen) "Videos gehen sofort ins Vollbild" else "Kein automatisches Vollbild")
-                }
+                3 -> toggleAdblock()
+                4 -> toggleAutoFs()
                 5 -> updateLists()
                 6 -> clearData()
+                7 -> closeBrowser()
+                8 -> resetToStart()
             }
             true
         }
@@ -487,7 +555,9 @@ class BrowserActivity : ComponentActivity() {
         web.clearHistory()
         CookieManager.getInstance().removeAllCookies(null)
         WebStorage.getInstance().deleteAllData()
-        toast("Cookies, Verlauf und Zwischenspeicher gelöscht")
+        // Gemerkte Seite gehört dazu: zurück zur leeren Startseite.
+        resetToStart()
+        toast("Cookies, Verlauf, gemerkte Seite und Zwischenspeicher gelöscht")
     }
 
     // ------------------------------------------------------------ Zurück & Vollbild
@@ -528,8 +598,43 @@ class BrowserActivity : ComponentActivity() {
     // ------------------------------------------------------------ Fernbedienung (TV)
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.keyCode == KeyEvent.KEYCODE_BACK && handleBackKey(event)) return true
         if (tv && handleTvKey(event)) return true
         return super.dispatchKeyEvent(event)
+    }
+
+    private var backDownAt = 0L
+    private var backClosed = false
+    private var backTracking = false
+
+    /** Zurück-Taste (Fernbedienung, Hardware-Taste): kurz = Seite zurück, lang = Browser schließen. */
+    private fun handleBackKey(e: KeyEvent): Boolean {
+        val down = e.action == KeyEvent.ACTION_DOWN
+        if (down && e.repeatCount == 0) {
+            backDownAt = e.downTime
+            backClosed = false
+            backTracking = true
+        }
+        // Loslassen ohne eigenes Drücken (z. B. aus einem Dialog heraus): dem System überlassen.
+        if (!backTracking) return false
+        val action = BackKey.decide(
+            down = down,
+            repeatCount = e.repeatCount,
+            heldMs = e.eventTime - backDownAt,
+            longFlag = e.isLongPress,
+            closed = backClosed,
+            canceled = e.isCanceled,
+        )
+        if (!down) backTracking = false
+        when (action) {
+            BackKey.Action.CLOSE -> {
+                backClosed = true
+                closeBrowser()
+            }
+            BackKey.Action.BACK -> goBack()
+            BackKey.Action.NONE -> Unit
+        }
+        return true
     }
 
     private fun handleTvKey(e: KeyEvent): Boolean {
@@ -620,21 +725,35 @@ class BrowserActivity : ComponentActivity() {
     // ------------------------------------------------------------ Lebenszyklus
 
     override fun onPause() {
+        // Verlassen (egal wie): Seite und Verlauf merken, nichts im Hintergrund weiterspielen.
+        BrowserSession.save(this, web)
+        web.evaluateJavascript(BrowserJs.PAUSE_ALL, null)
         web.onPause()
+        web.pauseTimers()
         super.onPause()
     }
 
     override fun onResume() {
         super.onResume()
+        current = this
+        web.resumeTimers()
         web.onResume()
     }
 
     override fun onDestroy() {
         customCallback?.onCustomViewHidden()
-        web.stopLoading()
-        web.removeJavascriptInterface("DGBridge")
-        (web.parent as? android.view.ViewGroup)?.removeView(web)
-        web.destroy()
+        sslDialog?.dismiss()
+        if (current === this) current = null
+        if (BrowserHolder.web === web) {
+            // WebView bleibt für das nächste Öffnen erhalten (pausiert, ohne Fenster).
+            BrowserHolder.release(this)
+        } else {
+            runCatching {
+                web.stopLoading()
+                (web.parent as? android.view.ViewGroup)?.removeView(web)
+                web.destroy()
+            }
+        }
         super.onDestroy()
     }
 
@@ -644,6 +763,9 @@ class BrowserActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_TV = "tv"
+
+        /** Gerade offene Browser-Aktivität (für die JS-Brücke der weiterlebenden WebView). */
+        @Volatile private var current: BrowserActivity? = null
 
         /** Fehler, bei denen nach einem https-Versuch auf http gewechselt wird (nicht bei „Host unbekannt“). */
         val FALLBACK_ERRORS = setOf(

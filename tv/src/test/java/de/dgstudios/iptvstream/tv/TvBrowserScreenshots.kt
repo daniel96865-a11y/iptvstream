@@ -70,4 +70,16 @@ class TvBrowserScreenshots {
         ui.address.requestFocus()
         paparazzi.snapshot(ui.root)
     }
+
+    @Test
+    fun browserLeisteSchliessenFokussiert() {
+        val ui = BrowserChrome(paparazzi.context, tv = true)
+        ui.attachWeb(android.view.View(paparazzi.context).apply { setBackgroundColor(0xFFEEEEEE.toInt()) })
+        ui.startPage.visibility = android.view.View.GONE
+        ui.address.setText("http://192.168.1.20:8080/web/")
+        ui.setBlocked(3)
+        ui.close.isFocusableInTouchMode = true
+        ui.close.requestFocus()
+        paparazzi.snapshot(ui.root)
+    }
 }
