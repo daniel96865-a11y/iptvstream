@@ -42,6 +42,52 @@ object BrowserJs {
     /** Hauptseite: alles anhalten (auch wenn das Skript nicht früh eingehängt werden konnte). */
     const val PAUSE_ALL = PAUSE_LISTENER + "window.__dgPauseAll && window.__dgPauseAll();"
 
+    /** Fokussiertes Element (auch in gleich-originigen iframes). */
+    private const val ACTIVE = """
+function __dgActive(){
+  var d = document, a = d.activeElement;
+  try { while (a && a.tagName === 'IFRAME' && a.contentDocument) { d = a.contentDocument; a = d.activeElement; } } catch (e) {}
+  return a;
+}
+function __dgEditable(a){
+  if (!a) return false;
+  if (a.isContentEditable) return true;
+  var t = (a.tagName || '').toLowerCase();
+  if (t === 'textarea') return !a.readOnly && !a.disabled;
+  if (t !== 'input') return false;
+  var ty = (a.type || 'text').toLowerCase();
+  return ['text','search','email','url','tel','password','number',''].indexOf(ty) >= 0 && !a.readOnly && !a.disabled;
+}
+"""
+
+    /** „edit“, wenn nach dem Klick ein Eingabefeld den Fokus hat, sonst „none“. */
+    const val ACTIVE_INPUT = "(function(){$ACTIVE return __dgEditable(__dgActive()) ? 'edit' : 'none';})()"
+
+    /** Aktueller Text im fokussierten Feld. */
+    const val ACTIVE_VALUE = "(function(){$ACTIVE var a = __dgActive(); if (!__dgEditable(a)) return ''; return a.isContentEditable ? (a.innerText || '') : (a.value || '');})()"
+
+    /** Text ins fokussierte Feld schreiben (wie getippt), optional absenden. */
+    fun setActiveValue(text: String, submit: Boolean): String {
+        val q = org.json.JSONObject.quote(text)
+        return """(function(){$ACTIVE
+  var a = __dgActive(); if (!__dgEditable(a)) return;
+  if (a.isContentEditable) { a.focus(); document.execCommand('selectAll', false, null); document.execCommand('insertText', false, $q); }
+  else {
+    var proto = a.tagName.toLowerCase() === 'textarea' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    var set = Object.getOwnPropertyDescriptor(proto, 'value').set; set.call(a, $q);
+    a.dispatchEvent(new Event('input', {bubbles: true}));
+    a.dispatchEvent(new Event('change', {bubbles: true}));
+  }
+  if ($submit) {
+    var o = {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true};
+    var go = a.dispatchEvent(new KeyboardEvent('keydown', o));
+    a.dispatchEvent(new KeyboardEvent('keypress', o));
+    a.dispatchEvent(new KeyboardEvent('keyup', o));
+    if (go && a.form) { try { a.form.requestSubmit ? a.form.requestSubmit() : a.form.submit(); } catch (e) {} }
+  }
+})();"""
+    }
+
     const val AUTO_FULLSCREEN = """
 (function(){
   if (window.__dgFs) return;

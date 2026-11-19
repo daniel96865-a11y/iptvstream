@@ -30,12 +30,12 @@ import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
-import de.dgstudios.iptvstream.core.container
 import java.io.ByteArrayInputStream
 import java.text.DateFormat
 import java.util.Date
@@ -82,7 +82,7 @@ class BrowserActivity : ComponentActivity() {
         val reused = bindWeb()
         setupChrome()
         refreshStatus()
-        FilterLists.ensure(this, container.okHttp) { runOnUiThread { refreshStatus() } }
+        FilterLists.ensure(this, http()) { runOnUiThread { refreshStatus() } }
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = goBack()
@@ -113,10 +113,12 @@ class BrowserActivity : ComponentActivity() {
         pageHost = web.url?.let { FilterEngine.hostOf(it.lowercase()) }
         setAddress(web.url)
         updateNav()
+        toolbarMode = false
         web.requestFocus()
     }
 
     private fun showStart() {
+        toolbarMode = true
         ui.startPage.visibility = View.VISIBLE
         ui.address.setText("")
         updateNav()
@@ -124,6 +126,10 @@ class BrowserActivity : ComponentActivity() {
     }
 
     /** Browser sofort schließen und zum IPTV-Bildschirm zurück, von dem er geöffnet wurde. */
+    /** HTTP-Client der App (in Tests ohne IptvApp ein eigener). */
+    private fun http(): okhttp3.OkHttpClient =
+        (application as? de.dgstudios.iptvstream.core.IptvApp)?.container?.okHttp ?: fallbackHttp
+
     private fun closeBrowser() {
         if (customView != null) exitCustomView()
         hideKeyboard()
@@ -411,8 +417,19 @@ class BrowserActivity : ComponentActivity() {
         ui.address.setOnFocusChangeListener { v, has ->
             if (has) v.post { if (ui.address.hasFocus()) ui.address.selectAll() }
         }
-        ui.address.setOnClickListener { ui.address.selectAll() }
+        // Klick (Tipp oder OK) markiert alles und öffnet die Tastatur. Vorher verhinderte der eigene Klick-Handler,
+        // dass Android am TV bei OK die Tastatur öffnet.
+        ui.address.setOnClickListener { openAddressInput() }
         ui.address.setOnEditorActionListener { _, actionId, ev ->
+            // Enter von einer echten Fernbedienung/Tastatur ohne offene Bildschirmtastatur = Tastatur öffnen,
+            // nicht die alte Adresse neu laden. Enter von der Bildschirmtastatur = Los.
+            val hardwareEnter = ev != null && ev.keyCode != KeyEvent.KEYCODE_UNKNOWN && TvRemote.isOk(ev.keyCode) &&
+                ev.deviceId != android.view.KeyCharacterMap.VIRTUAL_KEYBOARD &&
+                (ev.flags and KeyEvent.FLAG_SOFT_KEYBOARD) == 0 && !imeVisible()
+            if (tv && hardwareEnter) {
+                if (ev!!.action == KeyEvent.ACTION_DOWN) openAddressInput()
+                return@setOnEditorActionListener true
+            }
             val go = actionId == EditorInfo.IME_ACTION_GO || actionId == EditorInfo.IME_ACTION_DONE ||
                 (ev != null && ev.keyCode == KeyEvent.KEYCODE_ENTER && ev.action == KeyEvent.ACTION_DOWN)
             if (go) {
@@ -431,6 +448,7 @@ class BrowserActivity : ComponentActivity() {
         hideKeyboard()
         ui.startPage.visibility = View.GONE
         web.loadUrl(url)
+        toolbarMode = false
         web.requestFocus()
     }
 
@@ -446,11 +464,7 @@ class BrowserActivity : ComponentActivity() {
 
     private fun focusAddress(showKeyboard: Boolean) {
         ui.address.requestFocus()
-        if (showKeyboard) {
-            ui.address.post {
-                getSystemService(InputMethodManager::class.java)?.showSoftInput(ui.address, InputMethodManager.SHOW_IMPLICIT)
-            }
-        }
+        if (showKeyboard) showKeyboard(ui.address)
     }
 
     private fun hideKeyboard() {
@@ -479,6 +493,7 @@ class BrowserActivity : ComponentActivity() {
         val items = arrayOf(
             "Browser schließen (zurück zu IPTV)",
             "Startseite",
+            "Adresse eingeben",
             "Werbeblocker: " + if (prefs.adblock) "an" else "aus",
             "Angetipptes Video sofort im Vollbild: " + if (prefs.autoFullscreen) "an" else "aus",
             "Filterlisten aktualisieren",
@@ -490,10 +505,11 @@ class BrowserActivity : ComponentActivity() {
                 when (which) {
                     0 -> closeBrowser()
                     1 -> resetToStart()
-                    2 -> toggleAdblock()
-                    3 -> toggleAutoFs()
-                    4 -> updateLists()
-                    5 -> clearData()
+                    2 -> showAddressDialog()
+                    3 -> toggleAdblock()
+                    4 -> toggleAutoFs()
+                    5 -> updateLists()
+                    6 -> clearData()
                 }
             }
             .setNegativeButton("Fertig", null)
@@ -542,7 +558,7 @@ class BrowserActivity : ComponentActivity() {
 
     private fun updateLists() {
         toast("Filterlisten werden geladen …")
-        FilterLists.update(this, container.okHttp) { ok ->
+        FilterLists.update(this, http()) { ok ->
             runOnUiThread {
                 refreshStatus()
                 toast(if (ok) "Filterlisten aktualisiert" else "Aktualisierung fehlgeschlagen – eingebaute Liste bleibt aktiv")
@@ -566,7 +582,7 @@ class BrowserActivity : ComponentActivity() {
         when {
             customView != null -> exitCustomView()
             pageFullscreen -> web.evaluateJavascript("window.__dgFsExit && window.__dgFsExit()", null)
-            tv && ui.toolbar.hasFocus() && web.url != null -> web.requestFocus()
+            tv && toolbarMode && web.url != null && ui.startPage.visibility != View.VISIBLE -> enterPointer()
             web.canGoBack() -> web.goBack()
             else -> finish()
         }
@@ -639,76 +655,280 @@ class BrowserActivity : ComponentActivity() {
         return true
     }
 
+    private val remote = TvRemote.Tracker()
+    private val accel = TvRemote.Accel()
+
+    /**
+     * Fernbedienung am TV. Funktioniert unabhängig davon, woher die Tasten kommen (Stick, HDMI-CEC,
+     * Handy-App): keine Quellen-Filter, Einzeldrücke ohne Wiederholung bewegen den Zeiger, und ein
+     * „Losgelassen“ ohne „Gedrückt“ (manche CEC-Fernbedienungen) zählt als Tastendruck.
+     */
     private fun handleTvKey(e: KeyEvent): Boolean {
         val code = e.keyCode
         val down = e.action == KeyEvent.ACTION_DOWN
         if (code == KeyEvent.KEYCODE_MENU) {
-            if (down && e.repeatCount == 0) showMenu()
+            if (remote.shouldAct(code, e.action, e.repeatCount, clickOnce = true)) showMenu()
             return true
         }
         // Vollbild-Video: Tasten an das Video geben.
         if (customView != null || pageFullscreen) {
-            val k = when (code) {
-                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> "toggle"
-                KeyEvent.KEYCODE_MEDIA_PLAY -> "play"
-                KeyEvent.KEYCODE_MEDIA_PAUSE -> "pause"
-                KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> "fwd"
-                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MEDIA_REWIND -> "back"
+            val k = when {
+                TvRemote.isOk(code) || code == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> "toggle"
+                code == KeyEvent.KEYCODE_MEDIA_PLAY -> "play"
+                code == KeyEvent.KEYCODE_MEDIA_PAUSE -> "pause"
+                code == KeyEvent.KEYCODE_DPAD_RIGHT || code == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> "fwd"
+                code == KeyEvent.KEYCODE_DPAD_LEFT || code == KeyEvent.KEYCODE_MEDIA_REWIND -> "back"
                 else -> null
-            } ?: return false
-            if (down) web.evaluateJavascript("window.__dgKey && window.__dgKey('$k')", null)
-            return true
-        }
-        val inToolbar = ui.toolbar.hasFocus()
-        if (inToolbar && code == KeyEvent.KEYCODE_DPAD_DOWN) {
-            if (down) {
-                hideKeyboard()
-                web.requestFocus()
+            }
+            if (k == null) {
+                remote.track(code, e.action)
+                return false
+            }
+            if (remote.shouldAct(code, e.action, e.repeatCount, clickOnce = TvRemote.isOk(code))) {
+                web.evaluateJavascript("window.__dgKey && window.__dgKey('$k')", null)
             }
             return true
         }
-        if (!web.hasFocus() || ui.startPage.visibility == View.VISIBLE) {
-            if (!inToolbar && ui.startPage.visibility == View.VISIBLE && down && code == KeyEvent.KEYCODE_DPAD_CENTER) {
-                focusAddress(true)
+        val cmd = TvRemote.command(code)
+        if (cmd == TvRemote.Cmd.NONE) {
+            if (code == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE && pointerMode()) {
+                if (remote.shouldAct(code, e.action, e.repeatCount, clickOnce = true)) {
+                    web.evaluateJavascript("window.__dgKey && window.__dgKey('toggle')", null)
+                }
+                return true
+            }
+            remote.track(code, e.action)
+            return false
+        }
+        val act = remote.shouldAct(code, e.action, e.repeatCount, clickOnce = cmd == TvRemote.Cmd.CLICK)
+
+        if (!pointerMode()) {
+            // Leiste/Startseite: normale Fokus-Steuerung, aber OK selbst auslösen (CEC liefert teils nur „losgelassen“,
+            // und die Adressleiste soll die Tastatur öffnen).
+            val focused = focusedView()
+            val inToolbar = focused != null && isInToolbar(focused)
+            when (cmd) {
+                TvRemote.Cmd.CLICK -> {
+                    // Tastatur offen: Enter gehört der Eingabe („Los“), nicht neu öffnen.
+                    if (focused === ui.address && imeVisible()) {
+                        remote.track(code, e.action)
+                        return false
+                    }
+                    if (act) {
+                        when {
+                            focused === ui.address || !inToolbar -> openAddressInput()
+                            else -> focused!!.performClick()
+                        }
+                    }
+                    return true
+                }
+                TvRemote.Cmd.DOWN -> if (ui.startPage.visibility != View.VISIBLE && web.url != null) {
+                    if (act) enterPointer()
+                    return true
+                }
+                else -> Unit
+            }
+            if (!inToolbar) {
+                if (act) enterToolbar()
+                return true
+            }
+            // Pfeil nur als „losgelassen“ angekommen: Fokus selbst weitergeben (sonst macht das System es beim Drücken).
+            if (act && !down) {
+                val dir = when (cmd) {
+                    TvRemote.Cmd.LEFT -> View.FOCUS_LEFT
+                    TvRemote.Cmd.RIGHT -> View.FOCUS_RIGHT
+                    TvRemote.Cmd.UP -> View.FOCUS_UP
+                    else -> View.FOCUS_DOWN
+                }
+                focused?.focusSearch(dir)?.requestFocus()
                 return true
             }
             return false
         }
-        when (code) {
-            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                if (!down) return true
-                val dx = when (code) { KeyEvent.KEYCODE_DPAD_LEFT -> -1; KeyEvent.KEYCODE_DPAD_RIGHT -> 1; else -> 0 }
-                val dy = when (code) { KeyEvent.KEYCODE_DPAD_UP -> -1; KeyEvent.KEYCODE_DPAD_DOWN -> 1; else -> 0 }
-                val c = ui.cursor
-                val density = resources.displayMetrics.density
-                val step = CursorNav.stepPx(14f * density, e.repeatCount)
-                val s = CursorNav.move(
-                    c.cx, c.cy, dx, dy, step, c.width.toFloat(), c.height.toFloat(), 36f * density,
-                    pageAtTop = !web.canScrollVertically(-1),
-                )
-                when (s.kind) {
-                    CursorNav.Kind.TO_TOOLBAR -> ui.address.requestFocus()
-                    CursorNav.Kind.MOVE -> c.moveTo(s.x, s.y)
-                    CursorNav.Kind.SCROLL -> {
-                        c.moveTo(s.x, s.y)
-                        web.evaluateJavascript(BrowserJs.scrollAt(s.x / density, s.y / density, (s.scrollDy / density).toInt()), null)
-                    }
-                }
-                return true
-            }
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                if (down && e.repeatCount == 0) tapAtCursor()
-                return true
-            }
-            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
-                if (down) web.evaluateJavascript("window.__dgKey && window.__dgKey('toggle')", null)
-                return true
-            }
+
+        // Zeiger-Modus: Seite ist offen und der Fokus liegt nicht in der Leiste.
+        if (!act) return true
+        if (!web.hasFocus()) web.requestFocus()
+        // Ein Knopf der Leiste hält noch den Fokus (WebView nimmt ihn nicht): Leiste nicht versehentlich bedienen.
+        when (cmd) {
+            TvRemote.Cmd.CLICK -> tapAtCursor()
+            else -> moveCursor(cmd, e)
+        }
+        return true
+    }
+
+    // Für Tests
+    internal fun cursorPosition(): Pair<Float, Float> = ui.cursor.cx to ui.cursor.cy
+    internal fun addressField(): View = ui.address
+    internal fun closeButton(): View = ui.close
+    internal var lastTapForTest = 0
+        private set
+
+    /** Zeiger aktiv: eine Seite ist offen und der Fokus liegt nicht in der Leiste. */
+    private fun pointerMode(): Boolean =
+        tv && !toolbarMode && ui.startPage.visibility != View.VISIBLE && web.url != null
+
+    /**
+     * TV: true = Fernbedienung bedient die Leiste, false = den Zeiger auf der Seite.
+     * Bewusst ein eigener Zustand statt „wer hat gerade den Fokus“: Android setzt den Fokus beim Start
+     * gern selbst auf den ersten Knopf der Leiste (seit 1.0.73 ✕ IPTV), dann reagierte der Zeiger nicht mehr.
+     */
+    private var toolbarMode = true
+
+    private fun enterPointer() {
+        toolbarMode = false
+        hideKeyboard()
+        web.requestFocus()
+    }
+
+    private fun enterToolbar(focus: View = ui.address) {
+        toolbarMode = true
+        focus.requestFocus()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus && pointerMode() && !web.hasFocus()) web.requestFocus()
+    }
+
+    private fun focusedView(): View? = currentFocus ?: ui.root.findFocus()
+
+    private fun isInToolbar(v: View): Boolean {
+        var p: View? = v
+        while (p != null) {
+            if (p === ui.toolbar) return true
+            p = p.parent as? View
         }
         return false
     }
 
+    private fun moveCursor(cmd: TvRemote.Cmd, e: KeyEvent) {
+        val dx = when (cmd) { TvRemote.Cmd.LEFT -> -1; TvRemote.Cmd.RIGHT -> 1; else -> 0 }
+        val dy = when (cmd) { TvRemote.Cmd.UP -> -1; TvRemote.Cmd.DOWN -> 1; else -> 0 }
+        val c = ui.cursor
+        val density = resources.displayMetrics.density
+        val level = accel.level(SystemClock.uptimeMillis(), e.repeatCount)
+        val step = CursorNav.stepPx(CURSOR_STEP_DP * density, level)
+        val s = CursorNav.move(
+            c.cx, c.cy, dx, dy, step, c.width.toFloat(), c.height.toFloat(), 36f * density,
+            pageAtTop = !web.canScrollVertically(-1),
+        )
+        when (s.kind) {
+            CursorNav.Kind.TO_TOOLBAR -> enterToolbar()
+            CursorNav.Kind.MOVE -> c.moveTo(s.x, s.y)
+            CursorNav.Kind.SCROLL -> {
+                c.moveTo(s.x, s.y)
+                web.evaluateJavascript(BrowserJs.scrollAt(s.x / density, s.y / density, (s.scrollDy / density).toInt()), null)
+            }
+        }
+    }
+
+    // ------------------------------------------------------------ Tastatur
+
+    private fun imeVisible(): Boolean =
+        ViewCompat.getRootWindowInsets(ui.root)?.isVisible(WindowInsetsCompat.Type.ime()) == true
+
+    /** Bildschirmtastatur für eine View öffnen (am TV ausdrücklich, SHOW_IMPLICIT wird dort oft ignoriert). */
+    private fun showKeyboard(v: View) {
+        v.requestFocus()
+        v.post {
+            getSystemService(InputMethodManager::class.java)?.showSoftInput(v, 0)
+            WindowInsetsControllerCompat(window, v).show(WindowInsetsCompat.Type.ime())
+        }
+    }
+
+    /** OK auf der Adressleiste: alles markieren und Tastatur öffnen; erscheint keine, Eingabe-Dialog. */
+    private fun openAddressInput() {
+        toolbarMode = true
+        ui.address.requestFocus()
+        ui.address.selectAll()
+        showKeyboard(ui.address)
+        if (tv) {
+            ui.address.postDelayed({
+                if (!isFinishing && ui.address.hasFocus() && !imeVisible()) showAddressDialog()
+            }, KEYBOARD_FALLBACK_MS)
+        }
+    }
+
+    private var inputDialog: AlertDialog? = null
+
+    /** Ersatz, falls die Tastatur für die Adressleiste nicht aufgeht. */
+    private fun showAddressDialog() {
+        if (inputDialog?.isShowing == true) return
+        textDialog("Adresse oder Suche", ui.address.text.toString(), uri = true) { text ->
+            ui.address.setText(text)
+            val target = BrowserUrl.target(text) ?: return@textDialog
+            pendingFallback = target.fallback?.let { target.url to it }
+            open(target.url)
+        }
+    }
+
+    /** Einfacher Eingabe-Dialog mit Tastatur. */
+    private fun textDialog(title: String, value: String, uri: Boolean, submitLabel: String? = null, onSubmit: ((String) -> Unit)? = null, onDone: (String) -> Unit) {
+        val field = android.widget.EditText(this).apply {
+            setText(value)
+            setSelectAllOnFocus(true)
+            setSingleLine(true)
+            inputType = if (uri) android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
+            else android.text.InputType.TYPE_CLASS_TEXT
+            imeOptions = EditorInfo.IME_ACTION_DONE or EditorInfo.IME_FLAG_NO_EXTRACT_UI
+        }
+        val pad = (20 * resources.displayMetrics.density).toInt()
+        val box = android.widget.FrameLayout(this).apply {
+            setPadding(pad, pad / 2, pad, 0)
+            addView(field)
+        }
+        val b = AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle(title)
+            .setView(box)
+            .setPositiveButton("OK") { _, _ -> onDone(field.text.toString()) }
+            .setNegativeButton("Abbrechen", null)
+        if (submitLabel != null && onSubmit != null) b.setNeutralButton(submitLabel) { _, _ -> onSubmit(field.text.toString()) }
+        val d = b.create()
+        d.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
+        field.setOnEditorActionListener { _, id, _ ->
+            if (id == EditorInfo.IME_ACTION_DONE || id == EditorInfo.IME_ACTION_GO) {
+                onDone(field.text.toString())
+                d.dismiss()
+                true
+            } else {
+                false
+            }
+        }
+        d.setOnShowListener {
+            field.requestFocus()
+            field.post { getSystemService(InputMethodManager::class.java)?.showSoftInput(field, 0) }
+        }
+        inputDialog = d
+        d.show()
+    }
+
+    /** Nach einem Klick am TV: Liegt der Fokus in einem Web-Eingabefeld, Tastatur sicher öffnen, sonst Dialog. */
+    private fun checkWebInput() {
+        web.postDelayed({
+            if (isFinishing) return@postDelayed
+            web.evaluateJavascript(BrowserJs.ACTIVE_INPUT) { res ->
+                val info = res?.trim('"') ?: ""
+                if (!info.startsWith("edit")) return@evaluateJavascript
+                web.requestFocus()
+                showKeyboard(web)
+                web.postDelayed({
+                    if (!isFinishing && !imeVisible() && inputDialog?.isShowing != true) {
+                        web.evaluateJavascript(BrowserJs.ACTIVE_VALUE) { v ->
+                            val current = runCatching { org.json.JSONArray("[$v]").optString(0) }.getOrDefault("")
+                            textDialog(
+                                "Text eingeben", current, uri = false, submitLabel = "Senden",
+                                onSubmit = { t -> web.evaluateJavascript(BrowserJs.setActiveValue(t, submit = true), null) },
+                            ) { t -> web.evaluateJavascript(BrowserJs.setActiveValue(t, submit = false), null) }
+                        }
+                    }
+                }, KEYBOARD_FALLBACK_MS)
+            }
+        }, 250)
+    }
+
     private fun tapAtCursor() {
+        lastTapForTest++
         val c = ui.cursor
         c.flash()
         lastTap = System.currentTimeMillis()
@@ -722,6 +942,7 @@ class BrowserActivity : ComponentActivity() {
         web.dispatchTouchEvent(upEv)
         downEv.recycle()
         upEv.recycle()
+        checkWebInput()
     }
 
     // ------------------------------------------------------------ Lebenszyklus
@@ -768,8 +989,15 @@ class BrowserActivity : ComponentActivity() {
 
         /** Gerade offene Browser-Aktivität (für die JS-Brücke der weiterlebenden WebView). */
         @Volatile private var current: BrowserActivity? = null
+        private val fallbackHttp by lazy { okhttp3.OkHttpClient() }
 
         /** Fehler, bei denen nach einem https-Versuch auf http gewechselt wird (nicht bei „Host unbekannt“). */
+        /** Zeiger-Schritt pro Tastendruck (wird bei schnellen Drücken/Halten größer). */
+        const val CURSOR_STEP_DP = 22f
+
+        /** So lange auf die Bildschirmtastatur warten, bevor der Eingabe-Dialog kommt. */
+        const val KEYBOARD_FALLBACK_MS = 1_200L
+
         val FALLBACK_ERRORS = setOf(
             WebViewClient.ERROR_CONNECT,
             WebViewClient.ERROR_TIMEOUT,
