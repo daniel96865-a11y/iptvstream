@@ -308,6 +308,8 @@ fun VideoSurface(
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     useController = false
+                    // Bei Neuverbindung das letzte Bild stehen lassen statt schwarz.
+                    setKeepContentOnPlayerReset(true)
                     setShutterBackgroundColor(android.graphics.Color.BLACK)
                     keepScreenOn = true
                 }

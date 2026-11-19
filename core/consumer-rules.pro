@@ -9,3 +9,6 @@
 -keep class androidx.media3.decoder.ffmpeg.FfmpegAudioRenderer { *; }
 -keep class androidx.media3.decoder.ffmpeg.FfmpegLibrary { *; }
 -keep class androidx.media3.decoder.ffmpeg.FfmpegAudioDecoder { *; }
+
+# Eingebauter Browser: Seitenskripte rufen diese Methoden über DGBridge auf.
+-keepclassmembers class * { @android.webkit.JavascriptInterface <methods>; }

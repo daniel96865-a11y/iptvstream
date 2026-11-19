@@ -5,6 +5,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("app.cash.paparazzi")
 }
 
 fun signingProp(name: String): String? =
@@ -37,8 +38,8 @@ android {
         applicationId = "de.dgstudios.iptvstream.tv"
         minSdk = 24
         targetSdk = 35
-        versionCode = 70
-        versionName = "1.0.68"
+        versionCode = 75
+        versionName = "1.0.73"
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a")
         }
@@ -100,4 +101,5 @@ android {
 dependencies {
     implementation(project(":core"))
     implementation("com.google.zxing:core:3.5.4")
+    testImplementation("junit:junit:4.13.2")
 }

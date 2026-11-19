@@ -9,6 +9,14 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <application>
+        <!-- Eingebauter Browser (Beta). Drehen ohne Neustart, damit die Seite nicht neu lädt. -->
+        <activity
+            android:name="de.dgstudios.iptvstream.core.browser.BrowserActivity"
+            android:exported="false"
+            android:label="Browser"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar"
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density" />
         <!-- Sentry wird in IptvApp per Code gestartet (nur mit DSN, ohne Nutzerdaten). -->
         <meta-data android:name="io.sentry.auto-init" android:value="false" />
         <provider

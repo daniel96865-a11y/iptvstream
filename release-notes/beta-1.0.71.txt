@@ -1,0 +1,5 @@
+Testversion 1.0.71 (Vorabversion zum Testen, noch kein offizielles Update)
+Browser am Handy: Die Leiste liegt jetzt unter der Statusleiste und nicht mehr darunter versteckt. Unten bleibt Platz für die Navigationsleiste, und die Tastatur verdeckt nichts mehr.
+Kompakte Leiste wie in Chrome: Zurück, Adressleiste, Werbeblocker-Zähler und ⋮. „Vor“ und „Neu laden“ stehen jetzt im ⋮-Menü.
+Kleinere Schrift auf der Startseite. Die Adressleiste wird nicht mehr abgeschnitten.
+Der TV-Browser ist unverändert. Sonst wie Testversion 1.0.70 (Browser Beta mit Werbeblocker).
