@@ -597,6 +597,8 @@ class BrowserActivity : ComponentActivity() {
 
     // ------------------------------------------------------------ Fernbedienung (TV)
 
+    // Fehlalarm von Lint: Überschreiben von Activity.dispatchKeyEvent ist öffentliche API.
+    @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.keyCode == KeyEvent.KEYCODE_BACK && handleBackKey(event)) return true
         if (tv && handleTvKey(event)) return true
