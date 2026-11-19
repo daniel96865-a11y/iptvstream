@@ -20,6 +20,8 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 
 /**
  * Oberfläche des Browsers ohne WebView (damit sie auch im Screenshot-Test auf der JVM gebaut werden kann):
@@ -31,13 +33,15 @@ class BrowserChrome(private val ctx: Context, val tv: Boolean) {
     fun dp(v: Float): Int = (v * density * scale).toInt()
     fun dp(v: Int): Int = dp(v.toFloat())
 
-    val root = FrameLayout(ctx).apply { setBackgroundColor(BG) }
+    // Hintergrund = Leistenfarbe: so sieht der Bereich hinter Status- und Navigationsleiste ruhig aus.
+    val root = FrameLayout(ctx).apply { setBackgroundColor(BAR) }
     val content = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
     val toolbar = LinearLayout(ctx).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         setBackgroundColor(BAR)
-        setPadding(dp(8), dp(6), dp(8), dp(6))
+        // Handy: kompakt wie Chrome, eine Zeile ~52 dp (40-dp-Knöpfe + 6 dp oben/unten).
+        if (tv) setPadding(dp(8), dp(6), dp(8), dp(6)) else setPadding(dp(4), dp(6), dp(4), dp(6))
     }
     val back = button("←", "Zurück")
     val forward = button("→", "Vor")
@@ -45,14 +49,17 @@ class BrowserChrome(private val ctx: Context, val tv: Boolean) {
     val address = EditText(ctx).apply {
         setSingleLine(true)
         setSelectAllOnFocus(true)
-        hint = "Suchen oder Adresse eingeben"
+        hint = if (tv) "Suchen oder Adresse eingeben" else "Suche oder Adresse"
         inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
         imeOptions = EditorInfo.IME_ACTION_GO or EditorInfo.IME_FLAG_NO_EXTRACT_UI
         setTextColor(Color.WHITE)
         setHintTextColor(0x99FFFFFF.toInt())
         setTextSize(TypedValue.COMPLEX_UNIT_SP, if (tv) 18f else 15f)
         background = focusable(FIELD, dp(22).toFloat())
-        setPadding(dp(16), dp(8), dp(16), dp(8))
+        if (tv) setPadding(dp(16), dp(8), dp(16), dp(8)) else setPadding(dp(14), dp(6), dp(12), dp(6))
+        if (!tv) minHeight = dp(40)
+        ellipsize = null
+        setHorizontallyScrolling(true)
         isFocusable = true
         isFocusableInTouchMode = true
     }
@@ -91,8 +98,11 @@ class BrowserChrome(private val ctx: Context, val tv: Boolean) {
         fun lp(w: Int = ViewGroup.LayoutParams.WRAP_CONTENT, weight: Float = 0f) =
             LinearLayout.LayoutParams(w, ViewGroup.LayoutParams.WRAP_CONTENT, weight).apply { marginEnd = gap }
         toolbar.addView(back, lp())
-        toolbar.addView(forward, lp())
-        toolbar.addView(reload, lp())
+        // Handy: Vor und Neu laden stehen im ⋮-Menü, damit die Adressleiste Platz hat.
+        if (tv) {
+            toolbar.addView(forward, lp())
+            toolbar.addView(reload, lp())
+        }
         toolbar.addView(address, lp(0, 1f))
         // Am Handy ist die Leiste schmal: Beta steht dort auf der Startseite und im Menü.
         if (tv) toolbar.addView(badge, lp())
@@ -105,6 +115,30 @@ class BrowserChrome(private val ctx: Context, val tv: Boolean) {
         root.addView(content, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         root.addView(fullscreen, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         setBlocked(0)
+    }
+
+    /**
+     * Ränder für Status-/Navigationsleiste, Kamera-Aussparung und Tastatur (Android 15 zeichnet randlos).
+     * Im Vollbild ([immersive]) nur die Aussparung freihalten.
+     */
+    var immersive = false
+        set(v) {
+            field = v
+            ViewCompat.requestApplyInsets(root)
+        }
+
+    fun applyInsets(insets: WindowInsetsCompat) {
+        val cutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout())
+        val bars = if (immersive) cutout else insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+        val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+        content.setPadding(bars.left, bars.top, bars.right, maxOf(bars.bottom, ime.bottom))
+    }
+
+    init {
+        ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
+            applyInsets(insets)
+            insets
+        }
     }
 
     /** WebView unter Startseite und Zeiger einhängen. */
@@ -126,7 +160,7 @@ class BrowserChrome(private val ctx: Context, val tv: Boolean) {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setBackgroundColor(BG)
-            setPadding(dp(32), dp(24), dp(32), dp(24))
+            if (tv) setPadding(dp(32), dp(24), dp(32), dp(24)) else setPadding(dp(24), dp(16), dp(24), dp(16))
         }
         val row = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -135,7 +169,7 @@ class BrowserChrome(private val ctx: Context, val tv: Boolean) {
         startTitle.apply {
             text = "Browser"
             setTextColor(Color.WHITE)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, if (tv) 40f else 30f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, if (tv) 40f else 24f)
             typeface = Typeface.DEFAULT_BOLD
         }
         row.addView(startTitle)
@@ -143,7 +177,7 @@ class BrowserChrome(private val ctx: Context, val tv: Boolean) {
             TextView(ctx).apply {
                 text = "Beta"
                 setTextColor(Color.BLACK)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, if (tv) 15f else 12f)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, if (tv) 15f else 11f)
                 typeface = Typeface.DEFAULT_BOLD
                 background = GradientDrawable().apply { setColor(ACCENT); cornerRadius = dp(10).toFloat() }
                 setPadding(dp(8), dp(2), dp(8), dp(2))
@@ -159,16 +193,16 @@ class BrowserChrome(private val ctx: Context, val tv: Boolean) {
         }.also {
             col.addView(it, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(top) })
         }
-        line("Adresse oder Suchbegriff oben eingeben.\nGesucht wird über DuckDuckGo.", 15f, 0xDDFFFFFF.toInt(), 14)
+        line("Adresse oder Suchbegriff oben eingeben.\nGesucht wird über DuckDuckGo.", if (tv) 15f else 14f, 0xDDFFFFFF.toInt(), if (tv) 14 else 10)
         if (tv) {
             line("Fernbedienung: Pfeiltasten bewegen den Zeiger, OK klickt, am Rand wird gescrollt.\nZurück geht eine Seite zurück, Menü-Taste öffnet die Einstellungen.", 13f, 0x99FFFFFF.toInt(), 18)
         }
         startStatus.apply {
             gravity = Gravity.CENTER
             setTextColor(ACCENT)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, if (tv) 15f else 13f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, if (tv) 15f else 12f)
         }
-        col.addView(startStatus, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(22) })
+        col.addView(startStatus, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(if (tv) 22 else 16) })
         return col
     }
 
@@ -177,9 +211,16 @@ class BrowserChrome(private val ctx: Context, val tv: Boolean) {
         contentDescription = description
         gravity = Gravity.CENTER
         setTextColor(Color.WHITE)
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, if (tv) 22f else 20f)
-        minWidth = dp(42)
-        minHeight = dp(42)
+        // Handy: Symbol ~24 dp groß, Tippfläche 40 dp.
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, if (tv) 22f else 18f)
+        if (tv) {
+            minWidth = dp(42)
+            minHeight = dp(42)
+        } else {
+            minWidth = dp(40)
+            minHeight = dp(40)
+            setPadding(0, 0, 0, 0)
+        }
         background = focusable(FIELD, dp(21).toFloat())
         isFocusable = true
         isClickable = true

@@ -64,6 +64,12 @@ class BrowserActivity : ComponentActivity() {
         tv = intent.getBooleanExtra(EXTRA_TV, false)
         prefs = BrowserPrefs(this)
         ui = BrowserChrome(this, tv)
+        // Randlos (Android 15 erzwingt das ohnehin); die Leisten-Abstände setzt BrowserChrome.applyInsets.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            isAppearanceLightStatusBars = false
+            isAppearanceLightNavigationBars = false
+        }
         web = WebView(this)
         ui.attachWeb(web)
         setContentView(ui.root)
@@ -347,6 +353,10 @@ class BrowserActivity : ComponentActivity() {
     }
 
     private fun showMenu() {
+        if (!tv) {
+            showPhoneMenu()
+            return
+        }
         val items = arrayOf("Werbeblocker", "Angetipptes Video sofort im Vollbild")
         val checked = booleanArrayOf(prefs.adblock, prefs.autoFullscreen)
         AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
@@ -381,6 +391,56 @@ class BrowserActivity : ComponentActivity() {
             .show()
     }
 
+    /** Handy: kompaktes Menü am ⋮ mit Vor/Neu laden (die stehen dort nicht in der Leiste). */
+    private fun showPhoneMenu() {
+        val pm = android.widget.PopupMenu(this, ui.menu)
+        val m = pm.menu
+        m.add(0, 1, 0, "Vor").isEnabled = web.canGoForward()
+        m.add(0, 2, 1, "Neu laden").isEnabled = web.url != null
+        m.add(0, 3, 2, "Werbeblocker").apply { isCheckable = true; isChecked = prefs.adblock }
+        m.add(0, 4, 3, "Video sofort im Vollbild").apply { isCheckable = true; isChecked = prefs.autoFullscreen }
+        m.add(0, 5, 4, "Filterlisten aktualisieren")
+        m.add(0, 6, 5, "Browserdaten löschen")
+        pm.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                1 -> if (web.canGoForward()) web.goForward()
+                2 -> web.reload()
+                3 -> {
+                    prefs.adblock = !prefs.adblock
+                    refreshStatus()
+                    toast(if (prefs.adblock) "Werbeblocker an" else "Werbeblocker aus")
+                    if (web.url != null) web.reload()
+                }
+                4 -> {
+                    prefs.autoFullscreen = !prefs.autoFullscreen
+                    toast(if (prefs.autoFullscreen) "Videos gehen sofort ins Vollbild" else "Kein automatisches Vollbild")
+                }
+                5 -> updateLists()
+                6 -> clearData()
+            }
+            true
+        }
+        pm.show()
+    }
+
+    private fun updateLists() {
+        toast("Filterlisten werden geladen …")
+        FilterLists.update(this, container.okHttp) { ok ->
+            runOnUiThread {
+                refreshStatus()
+                toast(if (ok) "Filterlisten aktualisiert" else "Aktualisierung fehlgeschlagen – eingebaute Liste bleibt aktiv")
+            }
+        }
+    }
+
+    private fun clearData() {
+        web.clearCache(true)
+        web.clearHistory()
+        CookieManager.getInstance().removeAllCookies(null)
+        WebStorage.getInstance().deleteAllData()
+        toast("Cookies, Verlauf und Zwischenspeicher gelöscht")
+    }
+
     // ------------------------------------------------------------ Zurück & Vollbild
 
     private fun goBack() {
@@ -406,7 +466,7 @@ class BrowserActivity : ComponentActivity() {
     }
 
     private fun immersive(on: Boolean) {
-        WindowCompat.setDecorFitsSystemWindows(window, !on)
+        ui.immersive = on
         val c = WindowInsetsControllerCompat(window, window.decorView)
         if (on) {
             c.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
