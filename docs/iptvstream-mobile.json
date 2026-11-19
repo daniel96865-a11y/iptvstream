@@ -1,7 +1,7 @@
 {
-  "versionCode": 75,
-  "versionName": "1.0.73",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.73/iptvstream-mobile.apk",
-  "sha256": "0bd1398f34833cb4c58226291cc240824323125053510d71815b223c34fb257b",
-  "changelog": "• IPTVstream 1.0.73\n• Live-Sender: Bricht der Anbieter die Verbindung ab oder hängt der Strom, verbindet die App still und schnell neu, statt mit Fehler 1003 abzubrechen. Das Bild bleibt dabei stehen statt schwarz zu werden.\n• Neu (Beta): eingebauter Browser mit Werbeblocker (EasyList, EasyList Germany, Peter Lowe) für Handy und TV, am TV mit Mauszeiger per Fernbedienung.\n• Browser: http-Seiten, Adressen im Heimnetz (z. B. 192.168.1.1:8080) und gemischte Inhalte funktionieren; bei unsicheren Zertifikaten kommt eine Nachfrage.\n• Browser: Knopf ✕ bzw. „✕ IPTV“ schließt sofort, Zurück lang halten ebenfalls. Die letzte Seite bleibt gemerkt, auch nach Neustart."
+  "versionCode": 76,
+  "versionName": "1.0.74",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.74/iptvstream-mobile.apk",
+  "sha256": "1c5e871cb0f4f97424b0c05d36e7a4596e62adda4441de93905bc2df5dffabe0",
+  "changelog": "• IPTVstream 1.0.74\n• TV-Browser: Der Mauszeiger lässt sich wieder mit den Pfeiltasten bewegen – mit der Stick-Fernbedienung, der normalen TV-Fernbedienung (HDMI-CEC) und Handy-Fernbedienungs-Apps. Schnelles Drücken beschleunigt, am Rand wird gescrollt, OK klickt.\n• TV-Browser: OK auf der Adressleiste oder in einem Eingabefeld einer Webseite öffnet die Bildschirmtastatur. Geht keine auf, erscheint ein Eingabefenster. Im Menü gibt es zusätzlich „Adresse eingeben“."
 }
