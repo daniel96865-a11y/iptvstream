@@ -1,0 +1,6 @@
+IPTVstream 1.0.73
+
+Live-Sender: Bricht der Anbieter die Verbindung ab oder hängt der Strom, verbindet die App still und schnell neu, statt mit Fehler 1003 abzubrechen. Das Bild bleibt dabei stehen statt schwarz zu werden.
+Neu (Beta): eingebauter Browser mit Werbeblocker (EasyList, EasyList Germany, Peter Lowe) für Handy und TV, am TV mit Mauszeiger per Fernbedienung.
+Browser: http-Seiten, Adressen im Heimnetz (z. B. 192.168.1.1:8080) und gemischte Inhalte funktionieren; bei unsicheren Zertifikaten kommt eine Nachfrage.
+Browser: Knopf ✕ bzw. „✕ IPTV“ schließt sofort, Zurück lang halten ebenfalls. Die letzte Seite bleibt gemerkt, auch nach Neustart.
