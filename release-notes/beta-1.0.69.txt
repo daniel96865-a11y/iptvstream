@@ -1,0 +1,5 @@
+Testversion 1.0.69 (Vorabversion zum Testen, noch kein offizielles Update)
+Live-Sender: Kein Fehlerdialog „Wiedergabefehler (1003)“ mehr, wenn der Player nach einem Verbindungsende kurz hängt. Die App verbindet still und schnell neu (mehrere Versuche); erst danach kommt eine Meldung.
+Neue Verbindungsversuche bei Live-Sendern mit kurzer Pause (1–3 s), die ersten beiden ohne Einblendung.
+Beim Neuverbinden bleibt das letzte Bild stehen, statt schwarz zu werden.
+Die Verbesserungen gegen Hänger aus 1.0.68 bleiben erhalten.

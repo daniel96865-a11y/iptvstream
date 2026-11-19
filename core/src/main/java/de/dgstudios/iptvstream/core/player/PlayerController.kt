@@ -295,6 +295,9 @@ class PlayerController(
         player = ExoPlayer.Builder(context, AppRenderersFactory(context, settings.passthrough, videoDecoders, audioDecoders))
             .setTrackSelector(trackSelector)
             .setLoadControl(loadControl)
+            // Media3 (seit 1.9) bricht mit ERROR_CODE_TIMEOUT ab, wenn die Position 10 s steht. Unsere eigenen
+            // Wächter (Hänger 6 s, Standbild 8 s, Puffer 10 s) sollen zuerst greifen und neu verbinden.
+            .setStuckPlayingDetectionTimeoutMs(STUCK_PLAYING_TIMEOUT_MS)
             .setMediaSourceFactory(mediaSourceFactory)
             .setHandleAudioBecomingNoisy(true)
             .setAudioAttributes(
@@ -820,7 +823,10 @@ class PlayerController(
         }
 
         val networkRelated = code in 2000..2004
-        if ((networkRelated || parseRelated) && tryReconnect()) return
+        // ERROR_CODE_TIMEOUT: Player „hängt“ laut Media3 (StuckPlayerException), z. B. nach einem
+        // Neustart, wenn der Anbieter die Verbindung geschlossen hat. Still neu verbinden statt Fehlerdialog.
+        val stuckTimeout = code == PlaybackException.ERROR_CODE_TIMEOUT
+        if ((networkRelated || parseRelated || stuckTimeout) && tryReconnect()) return
 
         _state.update {
             it.copy(loading = false, playing = false, error = "${friendlyError(code)}\n${diagnosisLine()}")
@@ -1034,11 +1040,14 @@ class PlayerController(
         if (reconnectAttempts >= MAX_RECONNECTS) return false
         reconnectAttempts++
         diag.event("Neuverbindung $reconnectAttempts, Puffer ${player.totalBufferedDuration / 1000} s, ${diag.lastIssue ?: "ohne Fehler"}")
-        val wait = (1000L shl (reconnectAttempts - 1)).coerceAtMost(8000L)
-        notice(
-            "Verbindung unterbrochen – neuer Versuch $reconnectAttempts/$MAX_RECONNECTS …\n${diagnosisLine()}",
-            wait + 3_500,
-        )
+        val live = liveEdge(current)
+        val wait = ReconnectBackoff.waitMs(reconnectAttempts, live)
+        if (ReconnectBackoff.showNotice(reconnectAttempts, live)) {
+            notice(
+                "Verbindung unterbrochen – neuer Versuch $reconnectAttempts/$MAX_RECONNECTS …\n${diagnosisLine()}",
+                wait + 3_500,
+            )
+        }
         _state.update { it.copy(loading = true) }
         reconnectJob?.cancel()
         reconnectJob = scope.launch {
@@ -1197,6 +1206,7 @@ class PlayerController(
         const val BUFFER_STUCK_MS = 10_000L
         const val STREAM_READ_TIMEOUT_S = 15L
         const val STALL_AUDIO_SUSPECT_BUFFER_MS = 2_000L
+        const val STUCK_PLAYING_TIMEOUT_MS = 30_000
     }
 }
 
