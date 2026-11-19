@@ -1,0 +1,4 @@
+IPTVstream 1.0.74
+
+TV-Browser: Der Mauszeiger lässt sich wieder mit den Pfeiltasten bewegen – mit der Stick-Fernbedienung, der normalen TV-Fernbedienung (HDMI-CEC) und Handy-Fernbedienungs-Apps. Schnelles Drücken beschleunigt, am Rand wird gescrollt, OK klickt.
+TV-Browser: OK auf der Adressleiste oder in einem Eingabefeld einer Webseite öffnet die Bildschirmtastatur. Geht keine auf, erscheint ein Eingabefenster. Im Menü gibt es zusätzlich „Adresse eingeben“.
