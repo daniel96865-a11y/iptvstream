@@ -95,6 +95,13 @@ class FilterEngineTest {
         assertFalse(e.shouldBlock("https://www.wikipedia.org/static/logo.png", "www.wikipedia.org"))
         assertFalse(e.shouldBlock("https://duckduckgo.com/dist/app.js", "duckduckgo.com"))
         assertFalse(e.shouldBlock("https://www.tagesschau.de/resources/assets/js/main.js", "www.tagesschau.de"))
+        // http und LAN werden nicht pauschal blockiert (weder Navigation noch Inhalte)
+        for (u in listOf("http://neverssl.com/", "http://192.168.1.1/", "http://192.168.178.20:8080/web/index.html", "http://fritz.box/", "http://example.com:8080/")) {
+            assertFalse(u, e.shouldBlockPopup(u, "duckduckgo.com"))
+            assertFalse(u, e.shouldBlockPopup(u, null))
+        }
+        assertFalse(e.shouldBlock("http://192.168.1.10:8080/live/stream.m3u8", "example.org"))
+        assertFalse(e.shouldBlock("http://neverssl.com/style.css", "neverssl.com"))
         // Geschwindigkeit: 2000 Prüfungen deutlich unter 1 s
         val urls = listOf(
             "https://www.tagesschau.de/multimedia/video/index.html?x=1",
@@ -116,12 +123,41 @@ class BrowserUrlTest {
     fun resolvesAddressesAndSearches() {
         assertEquals("https://example.org", BrowserUrl.resolve("example.org"))
         assertEquals("https://example.org/a?b=1", BrowserUrl.resolve("example.org/a?b=1"))
-        assertEquals("http://192.168.1.10:8080", BrowserUrl.resolve("192.168.1.10:8080"))
         assertEquals("https://x.de/", BrowserUrl.resolve(" https://x.de/ "))
         assertEquals("https://duckduckgo.com/?q=wetter+morgen", BrowserUrl.resolve("wetter morgen"))
         assertTrue(BrowserUrl.resolve("javascript:alert(1)")!!.startsWith(BrowserUrl.SEARCH))
         assertEquals(null, BrowserUrl.resolve("file:///sdcard/x"))
         assertEquals(null, BrowserUrl.resolve("   "))
+    }
+
+    @Test
+    fun explicitHttpIsNeverRewritten() {
+        assertEquals(BrowserUrl.Target("http://example.com/x"), BrowserUrl.target("http://example.com/x"))
+        assertEquals(BrowserUrl.Target("HTTP://Example.com"), BrowserUrl.target("HTTP://Example.com"))
+        assertEquals(BrowserUrl.Target("http://192.168.1.20:8080/web/"), BrowserUrl.target("http://192.168.1.20:8080/web/"))
+    }
+
+    @Test
+    fun lanAddressesOpenWithHttp() {
+        assertEquals(BrowserUrl.Target("http://192.168.1.1"), BrowserUrl.target("192.168.1.1"))
+        assertEquals(BrowserUrl.Target("http://192.168.178.10:8080/status"), BrowserUrl.target("192.168.178.10:8080/status"))
+        assertEquals(BrowserUrl.Target("http://localhost:3000"), BrowserUrl.target("localhost:3000"))
+        assertEquals(BrowserUrl.Target("http://nas:5000"), BrowserUrl.target("nas:5000"))
+        assertEquals(BrowserUrl.Target("http://fritz.box"), BrowserUrl.target("fritz.box"))
+        assertEquals(BrowserUrl.Target("http://drucker.local/"), BrowserUrl.target("drucker.local/"))
+        assertEquals(BrowserUrl.Target("http://[fe80::1]:8080"), BrowserUrl.target("[fe80::1]:8080"))
+    }
+
+    @Test
+    fun domainsTryHttpsThenHttp() {
+        assertEquals(BrowserUrl.Target("https://example.com:8080", "http://example.com:8080"), BrowserUrl.target("example.com:8080"))
+        assertEquals(BrowserUrl.Target("https://neverssl.com", "http://neverssl.com"), BrowserUrl.target("neverssl.com"))
+    }
+
+    @Test
+    fun sameUrl() {
+        assertTrue(BrowserUrl.same("https://a.de/", "HTTPS://a.de"))
+        assertFalse(BrowserUrl.same("https://a.de", "http://a.de"))
     }
 }
 

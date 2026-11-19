@@ -21,7 +21,9 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
-import android.webkit.WebSettings
+import android.net.http.SslError
+import android.webkit.SslErrorHandler
+import android.webkit.WebResourceError
 import android.webkit.WebStorage
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -57,6 +59,11 @@ class BrowserActivity : ComponentActivity() {
     private var customCallback: WebChromeClient.CustomViewCallback? = null
     private var pageFullscreen = false
     private var injectedEarly = false
+    /** Eingabe ohne Schema: https wird versucht; schlägt es fehl, diese http-Adresse laden. */
+    private var pendingFallback: Pair<String, String>? = null
+    /** Hosts, deren unsicheres Zertifikat der Nutzer in dieser Sitzung bestätigt hat. */
+    private val trustedHosts = HashSet<String>()
+    private var sslDialog: AlertDialog? = null
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -93,22 +100,7 @@ class BrowserActivity : ComponentActivity() {
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWeb() {
-        web.settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-            mediaPlaybackRequiresUserGesture = false
-            loadWithOverviewMode = true
-            useWideViewPort = true
-            builtInZoomControls = true
-            displayZoomControls = false
-            setSupportZoom(true)
-            // Popups: nur nach einem Tipp und nur, wenn das Ziel keine Werbung ist (onCreateWindow).
-            javaScriptCanOpenWindowsAutomatically = false
-            setSupportMultipleWindows(true)
-            mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
-            allowFileAccess = false
-            allowContentAccess = false
-        }
+        BrowserWebSettings.apply(web)
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, true)
         web.setBackgroundColor(BrowserChrome.BG)
@@ -162,6 +154,57 @@ class BrowserActivity : ComponentActivity() {
             return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
         }
 
+        override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
+            if (!request.isForMainFrame) return
+            val failed = request.url.toString()
+            val fb = pendingFallback
+            if (fb != null && BrowserUrl.same(fb.first, failed) && error.errorCode in FALLBACK_ERRORS) {
+                pendingFallback = null
+                toast("https nicht erreichbar – öffne http")
+                view.loadUrl(fb.second)
+            }
+        }
+
+        override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
+            val url = error.url ?: ""
+            val host = FilterEngine.hostOf(url.lowercase()) ?: ""
+            val fb = pendingFallback
+            if (fb != null && FilterEngine.hostOf(fb.first.lowercase()) == host) {
+                // https war nur ein Versuch (Eingabe ohne Schema): nicht nachfragen, sondern http nehmen.
+                handler.cancel()
+                pendingFallback = null
+                toast("https-Zertifikat ungültig – öffne http")
+                view.loadUrl(fb.second)
+                return
+            }
+            if (host in trustedHosts) {
+                handler.proceed()
+                return
+            }
+            if (sslDialog?.isShowing == true || isFinishing) {
+                handler.cancel()
+                return
+            }
+            val why = when (error.primaryError) {
+                SslError.SSL_UNTRUSTED -> "Das Zertifikat stammt nicht von einer anerkannten Stelle (z. B. selbst signiert)."
+                SslError.SSL_EXPIRED -> "Das Zertifikat ist abgelaufen."
+                SslError.SSL_IDMISMATCH -> "Das Zertifikat gehört zu einer anderen Adresse."
+                SslError.SSL_NOTYETVALID -> "Das Zertifikat ist noch nicht gültig."
+                SslError.SSL_DATE_INVALID -> "Das Datum des Zertifikats ist ungültig."
+                else -> "Das Zertifikat ist ungültig."
+            }
+            sslDialog = AlertDialog.Builder(this@BrowserActivity, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Unsichere Verbindung")
+                .setMessage("$host\n\n$why\n\nNur öffnen, wenn du dem Gerät vertraust (z. B. Router oder NAS im Heimnetz).")
+                .setPositiveButton("Zurück") { _, _ -> handler.cancel() }
+                .setNegativeButton("Trotzdem öffnen") { _, _ ->
+                    trustedHosts.add(host)
+                    handler.proceed()
+                }
+                .setOnCancelListener { handler.cancel() }
+                .show()
+        }
+
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
             pageHost = url?.let { FilterEngine.hostOf(it.lowercase()) }
             blockedOnPage.set(0)
@@ -175,6 +218,9 @@ class BrowserActivity : ComponentActivity() {
         }
 
         override fun onPageFinished(view: WebView, url: String?) {
+            // Seite ist da: kein Rückfall mehr nötig (außer es war genau die fehlgeschlagene https-Seite).
+            val fb = pendingFallback
+            if (fb != null && url != null && !BrowserUrl.same(fb.first, url) && url != "about:blank") pendingFallback = null
             if (!injectedEarly) view.evaluateJavascript(BrowserJs.HIDE + BrowserJs.AUTO_FULLSCREEN, null)
             setAddress(url)
             updateNav()
@@ -301,8 +347,11 @@ class BrowserActivity : ComponentActivity() {
             val go = actionId == EditorInfo.IME_ACTION_GO || actionId == EditorInfo.IME_ACTION_DONE ||
                 (ev != null && ev.keyCode == KeyEvent.KEYCODE_ENTER && ev.action == KeyEvent.ACTION_DOWN)
             if (go) {
-                val target = BrowserUrl.resolve(ui.address.text.toString())
-                if (target != null) open(target)
+                val target = BrowserUrl.target(ui.address.text.toString())
+                if (target != null) {
+                    pendingFallback = target.fallback?.let { target.url to it }
+                    open(target.url)
+                }
             }
             go
         }
@@ -595,6 +644,16 @@ class BrowserActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_TV = "tv"
+
+        /** Fehler, bei denen nach einem https-Versuch auf http gewechselt wird (nicht bei „Host unbekannt“). */
+        val FALLBACK_ERRORS = setOf(
+            WebViewClient.ERROR_CONNECT,
+            WebViewClient.ERROR_TIMEOUT,
+            WebViewClient.ERROR_FAILED_SSL_HANDSHAKE,
+            WebViewClient.ERROR_IO,
+            WebViewClient.ERROR_UNKNOWN,
+            WebViewClient.ERROR_REDIRECT_LOOP,
+        )
 
         fun start(ctx: Context, tv: Boolean) {
             ctx.startActivity(Intent(ctx, BrowserActivity::class.java).putExtra(EXTRA_TV, tv))
