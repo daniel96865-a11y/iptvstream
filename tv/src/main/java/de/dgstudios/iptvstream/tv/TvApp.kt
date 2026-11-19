@@ -8,6 +8,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,6 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.LiveTv
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Search
@@ -266,6 +269,8 @@ private fun TvHome(
             Row(
                 Modifier
                     .padding(end = 110.dp)
+                    // „Browser“ passt nicht mehr neben die fünf Tabs: die Leiste rollt mit dem Fokus.
+                    .horizontalScroll(rememberScrollState())
                     .onFocusChanged { inTabs = it.hasFocus }
                     .focusProperties { enter = { tabRequesters[tab.ordinal] } }
                     .focusGroup()
@@ -292,6 +297,8 @@ private fun TvHome(
                         onFocus = { tab = t },
                     )
                 }
+                val context = LocalContext.current
+                BrowserButton { de.dgstudios.iptvstream.core.browser.BrowserActivity.start(context, tv = true) }
             }
             Spacer(Modifier.height(10.dp))
             TvStatusLine(sync, epg)
@@ -329,8 +336,35 @@ private fun TvHome(
     }
 }
 
+/** Menüpunkt „Browser“ (Beta) neben den Tabs: öffnet den eingebauten Browser, wechselt keinen Tab. */
 @Composable
-private fun TabButton(t: TvTab, selected: Boolean, requester: FocusRequester, onFocus: () -> Unit) {
+internal fun BrowserButton(onClick: () -> Unit) {
+    val s = LocalAppStyle.current
+    Row(
+        Modifier
+            .height(50.dp)
+            .tvFocus(onClick = onClick, shape = RoundedCornerShape(25.dp))
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Rounded.Language, contentDescription = null, tint = s.onSurface, modifier = Modifier.size(24.dp))
+        Spacer(Modifier.width(8.dp))
+        Text("Browser", color = s.onSurface, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Spacer(Modifier.width(6.dp))
+        Text(
+            "Beta",
+            color = Color.Black,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier
+                .background(Color(0xFF14B8A6), RoundedCornerShape(8.dp))
+                .padding(horizontal = 6.dp, vertical = 1.dp),
+        )
+    }
+}
+
+@Composable
+internal fun TabButton(t: TvTab, selected: Boolean, requester: FocusRequester, onFocus: () -> Unit) {
     val s = LocalAppStyle.current
     Row(
         Modifier

@@ -1,0 +1,7 @@
+Testversion 1.0.70 (Vorabversion zum Testen, noch kein offizielles Update)
+Neu: Browser (Beta) für Handy und TV. Handy: Weltkugel in der unteren Leiste. TV: Punkt „Browser“ rechts neben den Tabs.
+Werbeblocker mit echten Filterlisten (EasyList, EasyList Germany, Peter Lowe). Popups und Weiterleitungen auf Werbeseiten werden blockiert. Die Listen werden alle 3 Tage aktualisiert, offline gilt der eingebaute Stand.
+Startet leer, ohne vorbelegte Seite. Gesucht wird über DuckDuckGo.
+Die Zurück-Taste geht eine Seite zurück. Ein Tipp auf die Adressleiste markiert die ganze Adresse. Ein angetipptes Video geht sofort ins Vollbild (im Browser-Menü abschaltbar).
+TV: Mauszeiger mit den Pfeiltasten, OK klickt, am Rand wird gescrollt, Menü-Taste öffnet die Einstellungen.
+Enthält auch die Änderungen der Testversion 1.0.69: Bei Live-Sendern verbindet die App bei Fehler 1003 still neu.

@@ -44,6 +44,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.LiveTv
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Search
@@ -105,6 +106,8 @@ enum class Tab(val label: String, val icon: ImageVector) {
     MOVIES("Filme", Icons.Rounded.Movie),
     SERIES("Serien", Icons.Rounded.VideoLibrary),
     SEARCH("Suche", Icons.Rounded.Search),
+    /** Öffnet den eingebauten Browser (Beta) als eigenes Fenster, kein Inhalt im Tab. */
+    BROWSER("Browser", Icons.Rounded.Language),
     SETTINGS("Einstellungen", Icons.Rounded.Settings),
 }
 
@@ -303,6 +306,7 @@ private fun HomeScreen(
                         Tab.SERIES -> SeriesScreen(seriesVm, s, bottomPad, onSeries)
                         Tab.SEARCH -> SearchScreen(searchVm, s, bottomPad, onPlay, onMovie, onSeries)
                         Tab.SETTINGS -> SettingsScreen(mainVm, s, bottomPad, onProfiles)
+                        Tab.BROWSER -> Unit
                     }
                 }
             }
@@ -314,8 +318,13 @@ private fun HomeScreen(
             enter = if (s.animations) slideInVertically(spring(dampingRatio = 0.8f, stiffness = 300f)) { it } + fadeIn() else EnterTransition.None,
             exit = if (s.animations) slideOutVertically(tween(220)) { it } + fadeOut(tween(180)) else ExitTransition.None,
         ) {
+            val context = LocalContext.current
             BottomBar(selected = tab, onSelect = {
-                tab = it
+                if (it == Tab.BROWSER) {
+                    de.dgstudios.iptvstream.core.browser.BrowserActivity.start(context, tv = false)
+                } else {
+                    tab = it
+                }
                 barVisible.value = true
             })
         }

@@ -94,6 +94,7 @@ dependencies {
     // Absturz-/Fehlermeldungen an Sentry (nur Core: kein NDK, kein Session Replay).
     implementation("io.sentry:sentry-android-core:8.64.0")
     implementation("androidx.work:work-runtime-ktx:2.12.0")
+    implementation("androidx.webkit:webkit:1.12.1")
     api("io.coil-kt:coil-compose:2.7.0")
     api("com.squareup.retrofit2:retrofit:2.12.0")
     api("com.squareup.okhttp3:okhttp:4.12.1")
