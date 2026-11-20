@@ -1,0 +1,5 @@
+Neu: Freie Sender. Frei empfangbare Sender aus dem GitHub-Projekt iptv-org, ohne Anbieter und ohne Zugangsdaten.
+Einstellungen, Profile, „Freie Sender hinzufügen“. Deutsch und Italienisch (mit Rai) sind vorgewählt, dazu über 200 weitere Sprachen.
+Die Sender sind nach Sprache und Kategorie sortiert und laufen mit Suche, Favoriten und dem normalen Player. Dein Anbieter-Profil bleibt unberührt.
+Manche Sender sind nach Land gesperrt oder gerade offline. Auf Wunsch lassen sich als gesperrt gekennzeichnete Sender ausblenden.
+Sender mit eigener Kennung oder Referer (z. B. einige Rai-Streams) werden jetzt richtig angefragt.

@@ -26,6 +26,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -101,7 +104,9 @@ class ContentRepository(
     /** Prüft bei Xtream die Anmeldung. Gibt eine Fehlermeldung zurück oder null bei Erfolg. */
     suspend fun testProfile(p: ProfileEntity): String? {
         return try {
-            if (p.type == ProfileType.XTREAM) {
+            if (p.type == ProfileType.FREE) {
+                if (FreeTv.decode(p.url, p.username).languages.isEmpty()) "Bitte mindestens eine Sprache wählen." else null
+            } else if (p.type == ProfileType.XTREAM) {
                 val r = xtream.authenticate(p)
                 if (r.ok) null else r.message
             } else {
@@ -125,7 +130,11 @@ class ContentRepository(
     suspend fun saveProfile(p: ProfileEntity): Long {
         val clean = p.copy(
             name = p.name.trim().ifEmpty { "Meine Liste" },
-            url = if (p.type == ProfileType.XTREAM) Urls.normalizeServer(p.url) else p.url.trim(),
+            url = when (p.type) {
+                ProfileType.XTREAM -> Urls.normalizeServer(p.url)
+                ProfileType.FREE -> FreeTv.encodeLanguages(p.url.split(','))
+                else -> p.url.trim()
+            },
             username = p.username.trim(),
             password = p.password,
             epgUrl = p.epgUrl.trim(),
@@ -484,6 +493,11 @@ class ContentRepository(
                 }
                 val failed = syncXtream(p, report, only)
                 finishXtream(p.id, only, failed)
+            } else if (p.type == ProfileType.FREE) {
+                val partial = syncFree(p, report)
+                db.profiles().setSync(p.id, System.currentTimeMillis())
+                clearPending(p.id)
+                _sync.value = if (partial == null) SyncState(false, "Fertig", 1f) else SyncState(false, "Fertig", 1f, error = partial)
             } else {
                 syncM3u(p, report)
                 db.profiles().setSync(p.id, System.currentTimeMillis())
@@ -704,6 +718,97 @@ class ContentRepository(
         }
 
         return SectionFailure(failed, cause)
+    }
+
+    /**
+     * Lädt die iptv-org-Listen der gewählten Sprachen (höchstens 4 gleichzeitig) und führt sie zusammen.
+     * Fällt eine Sprache aus, bleiben die übrigen erhalten und die alten Sender der ausgefallenen
+     * Sprache werden nicht gelöscht. Rückgabe: Hinweistext bei teilweisem Ausfall, sonst null.
+     */
+    private suspend fun syncFree(p: ProfileEntity, report: (String, Float) -> Unit): String? {
+        val cfg = FreeTv.decode(p.url, p.username)
+        if (cfg.languages.isEmpty()) throw IOException("Keine Sprache gewählt.")
+        val token = System.currentTimeMillis()
+        val c = db.content()
+        report("Freie Sender werden geladen", 0.05f)
+
+        val gate = kotlinx.coroutines.sync.Semaphore(4)
+        val done = java.util.concurrent.atomic.AtomicInteger(0)
+        val results = kotlinx.coroutines.coroutineScope {
+            cfg.languages.map { code ->
+                async(Dispatchers.IO) {
+                    gate.withPermit {
+                        val r: Result<List<de.dgstudios.iptvstream.core.util.M3uEntry>> = try {
+                            http.get(FreeTv.listUrl(code)).use { body ->
+                                BufferedReader(InputStreamReader(body.byteStream(), Charsets.UTF_8), 64 * 1024).use { br ->
+                                    br.mark(256 * 1024)
+                                    if (!M3uParser.looksLikePlaylist(br)) throw IOException("keine Playlist")
+                                    br.reset()
+                                    Result.success(M3uParser().entries(br).filter { Urls.httpUrl(it.url) != null }.toList())
+                                }
+                            }
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Result.failure(e)
+                        }
+                        val n = done.incrementAndGet()
+                        report("Sprachen: $n von ${cfg.languages.size}", 0.05f + 0.75f * n / cfg.languages.size)
+                        code to r
+                    }
+                }
+            }.awaitAll()
+        }
+        val failedCodes = results.filter { it.second.isFailure }.map { it.first }
+        val lists = results.mapNotNull { (code, r) -> r.getOrNull()?.let { code to it } }
+        if (lists.isEmpty()) {
+            throw IOException(
+                "Die Senderlisten von iptv-org konnten nicht geladen werden (" +
+                    (results.firstOrNull()?.second?.exceptionOrNull()?.let(Net::friendly) ?: "unbekannter Fehler") +
+                    "). Alte Liste bleibt erhalten.",
+            )
+        }
+        val merged = FreeTv.merge(lists, cfg.hideGeo)
+        if (merged.isEmpty()) throw IOException("Keine Sender gefunden. Alte Liste bleibt erhalten.")
+
+        val groups = LinkedHashMap<String, Int>()
+        val batch = ArrayList<ChannelEntity>(BATCH)
+        merged.forEachIndexed { i, ch ->
+            groups.getOrPut(ch.group) { groups.size }
+            batch.add(
+                ChannelEntity(
+                    profileId = p.id,
+                    streamId = UUID.nameUUIDFromBytes(ch.entry.url.substringBefore('#').toByteArray()).toString().replace("-", ""),
+                    num = i + 1,
+                    name = ch.entry.name,
+                    logo = ch.entry.logo,
+                    categoryId = ch.group,
+                    epgKey = ch.entry.tvgId.trim().lowercase(),
+                    directUrl = ch.playUrl,
+                    sync = token,
+                ),
+            )
+            if (batch.size >= BATCH) {
+                c.upsertChannels(ArrayList(batch))
+                batch.clear()
+            }
+        }
+        if (batch.isNotEmpty()) c.upsertChannels(ArrayList(batch))
+        c.upsertCategories(groups.entries.map { CategoryEntity(p.id, CatType.LIVE, it.key, it.key, it.value, token) })
+        if (failedCodes.isEmpty()) {
+            c.pruneChannels(p.id, token)
+            c.pruneCategories(p.id, CatType.LIVE, token)
+        }
+        c.pruneMovies(p.id, token)
+        c.pruneCategories(p.id, CatType.MOVIE, token)
+        c.pruneSeries(p.id, token)
+        c.pruneCategories(p.id, CatType.SERIES, token)
+        return if (failedCodes.isEmpty()) {
+            null
+        } else {
+            "Nicht geladen: " + failedCodes.joinToString(", ") { FreeLanguages.find(it)?.label ?: it } +
+                ". Die übrigen Sender sind da."
+        }
     }
 
     private suspend fun syncM3u(p: ProfileEntity, report: (String, Float) -> Unit) {

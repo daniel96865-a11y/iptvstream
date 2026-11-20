@@ -12,6 +12,10 @@ data class M3uEntry(
     val archiveDays: Int = 0,
     val catchupMode: String = "",
     val catchupSource: String = "",
+    /** Eigener User-Agent des Senders (`http-user-agent` bzw. `#EXTVLCOPT`), sonst leer. */
+    val userAgent: String = "",
+    /** Referer des Senders (`http-referrer` bzw. `#EXTVLCOPT`), sonst leer. */
+    val referrer: String = "",
 )
 
 /**
@@ -29,6 +33,8 @@ class M3uParser {
         var attrs: Map<String, String> = emptyMap()
         var name: String? = null
         var groupOverride: String? = null
+        var optUa: String? = null
+        var optReferrer: String? = null
         while (true) {
             val line = reader.readLine() ?: break
             val t = stripLine(line)
@@ -59,6 +65,16 @@ class M3uParser {
                 groupOverride = t.substringAfter(':').trim()
                 continue
             }
+            if (t.startsWith("#EXTVLCOPT:", ignoreCase = true)) {
+                val opt = t.substringAfter(':')
+                val key = opt.substringBefore('=').trim().lowercase()
+                val value = opt.substringAfter('=', "").trim()
+                when (key) {
+                    "http-user-agent" -> optUa = value
+                    "http-referrer", "http-referer" -> optReferrer = value
+                }
+                continue
+            }
             if (t.startsWith("#")) continue
 
             // URL-Zeile
@@ -76,11 +92,15 @@ class M3uParser {
                     archiveDays = archive.days,
                     catchupMode = archive.mode,
                     catchupSource = archive.source,
+                    userAgent = (attrs["http-user-agent"] ?: optUa).orEmpty().trim(),
+                    referrer = (attrs["http-referrer"] ?: attrs["http-referer"] ?: optReferrer).orEmpty().trim(),
                 ),
             )
             attrs = emptyMap()
             name = null
             groupOverride = null
+            optUa = null
+            optReferrer = null
         }
     }
 

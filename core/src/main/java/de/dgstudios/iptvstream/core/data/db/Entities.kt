@@ -7,6 +7,8 @@ import androidx.room.PrimaryKey
 object ProfileType {
     const val XTREAM = "XTREAM"
     const val M3U = "M3U"
+    /** Freie Sender aus iptv-org: keine Zugangsdaten, nur Sprachauswahl (siehe FreeTv). */
+    const val FREE = "FREE"
 }
 
 object CatType {
