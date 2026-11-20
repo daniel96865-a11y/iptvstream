@@ -11,6 +11,8 @@ Mit `-Pdistribution=play`:
 | targetSdk / compileSdk | 35 / 35 | Handy 36, TV 35 / 36 (Play: TV braucht nur 34) |
 | Zurück-Taste | – | Predictive Back aus (`enableOnBackInvokedCallback=false`) |
 | TV-Manifest | leanback `required=false` | leanback `required=true`, Banner „IPTVstream“ (`tv/src/play/res`) |
+| Einstellung „Kennung gegenüber dem Anbieter“ | Option „IPTV Smarters“ vorhanden | Option ausgeblendet (alter Wert → Browser-Kennung) |
+| „Deutscher Programmführer aus dem Netz“ (epgshare01) | Standard „Als Ersatz“ | Standard „Aus“ |
 | Tests | `core/src/githubTest` | `core/src/playTest` (`FakeAppUpdateManager`) |
 
 Die UI (`UpdateHost`, Dialoge) liegt gemeinsam in `core/src/main/…/update/`. Beide Updater haben dieselbe Klasse `UpdateChecker` mit gleicher Oberfläche.
@@ -23,7 +25,7 @@ Die UI (`UpdateHost`, Dialoge) liegt gemeinsam in `core/src/main/…/update/`. B
 # signierte AABs (Upload-Schlüssel über die gleichen SIGNING_*-Variablen wie die GitHub-APK)
 ./gradlew -Pdistribution=play :mobile:bundleRelease :tv:bundleRelease
 ```
-Hilfsskript mit Schlüssel aus `/workspace/.iptvstream-signing`: `/workspace/playstore-iptvstream/build-play.sh`.
+Hilfsskript (Upload-Schlüssel aus `/workspace/.iptvstream-playstore-signing`, Sentry-DSN aus `/workspace/.iptvstream-sentry-dsn`, beides nur lokal): `/workspace/playstore-iptvstream/build-play.sh`.
 Store-Screenshots (Standard-Variante, Paparazzi): `./gradlew :mobile:recordPaparazziDebug :tv:recordPaparazziDebug` (Klassen `PlayStoreScreenshots`).
 
 `versionCode` zählt gemeinsam mit der GitHub-Version. Play-Build und GitHub-Build haben unterschiedliche Signaturen, sobald Play App Signing aktiv ist.
