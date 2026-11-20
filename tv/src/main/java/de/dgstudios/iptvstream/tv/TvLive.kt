@@ -91,6 +91,7 @@ import de.dgstudios.iptvstream.core.ui.popIn
 import de.dgstudios.iptvstream.core.ui.rememberClockTick
 import de.dgstudios.iptvstream.core.ui.rememberNowNext
 import de.dgstudios.iptvstream.core.vm.LiveViewModel
+import de.dgstudios.iptvstream.core.vm.MainViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -116,6 +117,7 @@ fun TvCategoryList(
     onUp: (Int) -> Unit,
     onDown: (Int) -> Unit,
     onRight: () -> Unit,
+    onLongClick: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val s = LocalAppStyle.current
@@ -141,6 +143,7 @@ fun TvCategoryList(
                     )
                     .tvFocus(
                         onClick = { onSelect(c.id) },
+                        onLongClick = { onLongClick(c.id) },
                         selected = c.id == selected,
                         lockDirections = true,
                         onFocus = { rowFocused = it },
@@ -357,9 +360,28 @@ private suspend fun LazyListState.reveal(index: Int) {
     if (!visibleFully()) scrollToItem(index)
 }
 
+
+@Composable
+private fun TvLiveSourceBar(mainVm: MainViewModel) {
+    val active by mainVm.active.collectAsStateWithLifecycle()
+    val profiles by mainVm.profiles.collectAsStateWithLifecycle()
+    val freeOn = active.profile?.type == de.dgstudios.iptvstream.core.data.db.ProfileType.FREE
+    val hasProvider = profiles.any { it.type != de.dgstudios.iptvstream.core.data.db.ProfileType.FREE }
+    Row(
+        Modifier.padding(start = 6.dp, bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        if (hasProvider) {
+            TvButton("Meine Sender", { mainVm.switchLiveSource(false) }, selected = !freeOn)
+        }
+        TvButton("Freie Sender", { mainVm.switchLiveSource(true) }, selected = freeOn)
+    }
+}
+
 @Composable
 fun TvLiveScreen(
     vm: LiveViewModel,
+    mainVm: MainViewModel,
     settings: AppSettings,
     entry: EntryHandle,
     first: FirstFocus,
@@ -381,6 +403,7 @@ fun TvLiveScreen(
     val itemsRef = rememberUpdatedState(items)
     val selectedRef = rememberUpdatedState(selected)
     var menuFor by remember { mutableStateOf<ChannelEntity?>(null) }
+    var catMenu by remember { mutableStateOf<String?>(null) }
     var pendingFrom by remember { mutableStateOf<List<ChannelEntity>?>(null) }
     val catItems = remember(cats) { buildCatItems(cats) }
     val catItemsRef = rememberUpdatedState(catItems)
@@ -648,6 +671,7 @@ fun TvLiveScreen(
 
     if (drawer) {
         Column(Modifier.fillMaxSize()) {
+            TvLiveSourceBar(mainVm)
             TvButton(
                 text = "Kategorien: ${Cat.label(selected, cats.firstOrNull { it.id == selected }?.name)}",
                 onClick = { drawerOpen = true },
@@ -671,22 +695,28 @@ fun TvLiveScreen(
             )
         }
     } else {
-        TvSplitRail(
-            open = railOpen,
-            rail = {
-                TvCategoryList(
-                    items = catItems,
-                    selected = selected,
-                    registry = catReg,
-                    listState = catListState,
-                    onSelect = ::chooseCategory,
-                    onUp = { moveCategory(it, -1) },
-                    onDown = { moveCategory(it, 1) },
-                    onRight = ::focusChannels,
+        Column(Modifier.fillMaxSize()) {
+            TvLiveSourceBar(mainVm)
+            Box(Modifier.weight(1f).fillMaxSize()) {
+                TvSplitRail(
+                    open = railOpen,
+                    rail = {
+                        TvCategoryList(
+                            items = catItems,
+                            selected = selected,
+                            registry = catReg,
+                            listState = catListState,
+                            onSelect = ::chooseCategory,
+                            onUp = { moveCategory(it, -1) },
+                            onDown = { moveCategory(it, 1) },
+                            onRight = ::focusChannels,
+                            onLongClick = { catMenu = it },
+                        )
+                    },
+                    content = { LiveChannels() },
                 )
-            },
-            content = { LiveChannels() },
-        )
+            }
+        }
     }
 
     val m = menuFor
@@ -697,9 +727,25 @@ fun TvLiveScreen(
             actions = listOf(
                 TvAction(if (isFav) "Aus Favoriten entfernen" else "Zu Favoriten hinzufügen") { vm.toggleFavorite(m.streamId) },
                 TvAction("Als Startsender festlegen") { vm.setStartChannel(m) },
+                TvAction("Nach oben") { vm.moveChannel(m, -1) },
+                TvAction("Nach unten") { vm.moveChannel(m, 1) },
                 TvAction("Schließen") {},
             ),
             onDismiss = { menuFor = null },
+        )
+    }
+    val cm = catMenu
+    if (cm != null && cm != Cat.ALL && cm != Cat.FAV && cm != Cat.RECENT) {
+        val label = cats.firstOrNull { it.id == cm }?.name ?: cm
+        TvActionDialog(
+            title = label,
+            actions = listOf(
+                TvAction("Nach oben") { vm.moveCategory(cm, -1) },
+                TvAction("Nach unten") { vm.moveCategory(cm, 1) },
+                TvAction("Ausblenden") { vm.hideCategory(cm) },
+                TvAction("Schließen") {},
+            ),
+            onDismiss = { catMenu = null },
         )
     }
 }

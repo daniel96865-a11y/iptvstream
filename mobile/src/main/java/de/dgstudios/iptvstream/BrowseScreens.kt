@@ -131,6 +131,8 @@ fun CategoryPicker(
     drawerIndex: Int = 0,
     drawerOffset: Int = 0,
     onDrawerScroll: (Int, Int) -> Unit = { _, _ -> },
+    onMoveCategory: (String, Int) -> Unit = { _, _ -> },
+    onHideCategory: (String) -> Unit = {},
 ) {
     if (!drawer) {
         CategoryRow(categories, selected, onSelect)
@@ -177,6 +179,8 @@ fun CategoryPicker(
                 open = false
             },
             onDismiss = { open = false },
+            onMove = onMoveCategory,
+            onHide = onHideCategory,
         )
     }
 }
@@ -189,6 +193,8 @@ private fun CategoryDrawer(
     outerBottom: Dp,
     onSelect: (String) -> Unit,
     onDismiss: () -> Unit,
+    onMove: (String, Int) -> Unit = { _, _ -> },
+    onHide: (String) -> Unit = {},
 ) {
     val s = LocalAppStyle.current
     var query by remember { mutableStateOf("") }
@@ -257,7 +263,15 @@ private fun CategoryDrawer(
                         contentPadding = PaddingValues(bottom = listBottom),
                     ) {
                         items(shown, key = { it.first }) { (id, name) ->
-                            CategoryDrawerRow(name, id == selected) { onSelect(id) }
+                            CategoryDrawerRow(
+                                name = name,
+                                selected = id == selected,
+                                sortable = id != Cat.ALL && id != Cat.FAV && id != Cat.RECENT,
+                                onClick = { onSelect(id) },
+                                onMoveUp = { onMove(id, -1) },
+                                onMoveDown = { onMove(id, 1) },
+                                onHide = { onHide(id) },
+                            )
                         }
                     }
                 }
@@ -268,30 +282,46 @@ private fun CategoryDrawer(
 
 /** Deckende Karte, gleiche Ecke und Schrift wie die Senderliste, ohne durchscheinendes Glas. */
 @Composable
-private fun CategoryDrawerRow(name: String, selected: Boolean, onClick: () -> Unit) {
+private fun CategoryDrawerRow(
+    name: String,
+    selected: Boolean,
+    sortable: Boolean,
+    onClick: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    onHide: () -> Unit,
+) {
     val s = LocalAppStyle.current
     val shape = RoundedCornerShape(18.dp)
     val fill = if (selected) solidMix(s.backgroundColors[2], s.accent, 0.5f) else s.backgroundColors[2]
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(fill, shape)
-            .then(if (selected) Modifier.border(1.5.dp, s.accent, shape) else Modifier)
-            .pressable({ onClick() })
-            .padding(horizontal = 14.dp, vertical = 13.dp),
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        Text(
-            name,
-            color = s.onSurface,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.SemiBold,
-            lineHeight = 20.sp,
-            maxLines = 1,
-            softWrap = false,
-            overflow = TextOverflow.Ellipsis,
-        )
+    var menu by remember { mutableStateOf(false) }
+    Box {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .background(fill, shape)
+                .then(if (selected) Modifier.border(1.5.dp, s.accent, shape) else Modifier)
+                .pressable(onClick, onLongClick = if (sortable) ({ menu = true }) else null)
+                .padding(horizontal = 14.dp, vertical = 13.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            Text(
+                name,
+                color = s.onSurface,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                lineHeight = 20.sp,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            DropdownMenuItem(text = { Text("Nach oben") }, onClick = { menu = false; onMoveUp() })
+            DropdownMenuItem(text = { Text("Nach unten") }, onClick = { menu = false; onMoveDown() })
+            DropdownMenuItem(text = { Text("Ausblenden") }, onClick = { menu = false; onHide() })
+        }
     }
 }
 
@@ -408,6 +438,27 @@ internal fun LiveTopBar(recent: List<ChannelEntity>, onSearch: () -> Unit, onPla
     }
 }
 
+
+/** Ein Tipp wechselt zwischen Anbieter-Profil und Freien Sendern. */
+@Composable
+internal fun LiveSourceSwitcher(mainVm: MainViewModel) {
+    val active by mainVm.active.collectAsStateWithLifecycle()
+    val profiles by mainVm.profiles.collectAsStateWithLifecycle()
+    val hasProvider = profiles.any { it.type != de.dgstudios.iptvstream.core.data.db.ProfileType.FREE }
+    val hasFree = profiles.any { it.type == de.dgstudios.iptvstream.core.data.db.ProfileType.FREE }
+    if (!hasProvider && !hasFree) return
+    val freeOn = active.profile?.type == de.dgstudios.iptvstream.core.data.db.ProfileType.FREE
+    Row(
+        Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (hasProvider) {
+            GlassChip("Meine Sender", !freeOn) { mainVm.switchLiveSource(false) }
+        }
+        GlassChip("Freie Sender", freeOn) { mainVm.switchLiveSource(true) }
+    }
+}
+
 @Composable
 fun LiveScreen(
     vm: LiveViewModel,
@@ -444,6 +495,7 @@ fun LiveScreen(
 
     Column(Modifier.fillMaxSize().nestedScroll(topConnection)) {
         ScreenHeader("Live TV", if (items.isNotEmpty()) "${items.size} Sender" else null)
+        LiveSourceSwitcher(mainVm)
         // Suche + „Weiterschauen“ klappen beim Runterscrollen ein und beim Hochscrollen wieder aus (wie die untere Leiste).
         // Suche + „Weiterschauen“ klappen beim Runterscrollen fingergenau ein und beim Hochscrollen wieder aus.
         // Die Leiste verbraucht dabei den Scrollweg selbst, so springt die Liste nicht mehr.
@@ -471,6 +523,8 @@ fun LiveScreen(
             drawerIndex = vm.drawerIndex,
             drawerOffset = vm.drawerOffset,
             onDrawerScroll = vm::onDrawerScroll,
+            onMoveCategory = vm::moveCategory,
+            onHideCategory = vm::hideCategory,
         )
         if (!restored) return@Column
 
@@ -517,6 +571,7 @@ fun LiveScreen(
                         },
                         onFav = { vm.toggleFavorite(ch.streamId) },
                         onStart = { vm.setStartChannel(ch) },
+                        onMove = { d -> vm.moveChannel(ch, d) },
                     )
                 }
             }
@@ -533,6 +588,7 @@ private fun ChannelRow(
     onClick: () -> Unit,
     onFav: () -> Unit,
     onStart: () -> Unit,
+    onMove: (Int) -> Unit = {},
 ) {
     val s = LocalAppStyle.current
     val nowNext by rememberNowNext(ch.profileId, ch.epgKey, tick)
@@ -612,18 +668,14 @@ private fun ChannelRow(
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
             DropdownMenuItem(
                 text = { Text(if (fav) "Aus Favoriten entfernen" else "Zu Favoriten hinzufügen") },
-                onClick = {
-                    menu = false
-                    onFav()
-                },
+                onClick = { menu = false; onFav() },
             )
             DropdownMenuItem(
                 text = { Text("Als Startsender festlegen") },
-                onClick = {
-                    menu = false
-                    onStart()
-                },
+                onClick = { menu = false; onStart() },
             )
+            DropdownMenuItem(text = { Text("Nach oben") }, onClick = { menu = false; onMove(-1) })
+            DropdownMenuItem(text = { Text("Nach unten") }, onClick = { menu = false; onMove(1) })
         }
     }
 }

@@ -497,6 +497,8 @@ class ContentRepository(
                 val partial = syncFree(p, report)
                 db.profiles().setSync(p.id, System.currentTimeMillis())
                 clearPending(p.id)
+                // Programmführer zu den gewählten Sprachen laden (DE über GermanGuide, IT/… als XML).
+                epg.launchRefresh(p.id)
                 _sync.value = if (partial == null) SyncState(false, "Fertig", 1f) else SyncState(false, "Fertig", 1f, error = partial)
             } else {
                 syncM3u(p, report)

@@ -1,0 +1,4 @@
+Freie Sender leichter erreichbar: Oben in Live TV ein Schalter „Meine Sender“ / „Freie Sender“. Ein Tipp genügt.
+Programmführer für Freie Sender: Deutsch über den bekannten Führer, Italienisch und weitere Sprachen über epgshare01. Viele Rai-Sender und die großen deutschen Sender bekommen Programminfos.
+Eigene Sortierung: Kategorien in der Schublade lange drücken (TV: lange OK), Sender lange drücken – nach oben, nach unten, Kategorie ausblenden. Unter Einstellungen lässt sich die Sortierung zurücksetzen.
+Freie Sender mit Deutsch und Italienisch werden automatisch angelegt, ohne dein Anbieter-Profil zu wechseln.

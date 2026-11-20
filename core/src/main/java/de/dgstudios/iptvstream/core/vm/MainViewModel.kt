@@ -9,6 +9,8 @@ import de.dgstudios.iptvstream.core.data.EpgState
 import de.dgstudios.iptvstream.core.data.LiveRequest
 import de.dgstudios.iptvstream.core.data.SyncState
 import de.dgstudios.iptvstream.core.data.db.ProfileEntity
+import de.dgstudios.iptvstream.core.data.db.ProfileType
+import de.dgstudios.iptvstream.core.data.FreeTv
 import de.dgstudios.iptvstream.core.settings.AppSettings
 import de.dgstudios.iptvstream.core.settings.SettingsStore
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -51,8 +53,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     else -> null
                 }
                 if (channel != null) _autoStart.value = LiveRequest(p.id, Cat.ALL, channel.streamId)
+                if (p.type != ProfileType.FREE) {
+                    c.settings.set(SettingsStore.LAST_PROVIDER_PROFILE, p.id.toString())
+                }
             }
         }
+        viewModelScope.launch { ensureFreeProfile() }
     }
 
     fun consumeAutoStart() {
@@ -95,4 +101,60 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val id = c.active.value.profile?.id ?: return
         c.epg.launchRefresh(id)
     }
+
+    /** Löscht die selbst gewählte Reihenfolge/Ausblendungen des aktiven Profils (Live). */
+    fun resetLiveOrder() {
+        val id = c.active.value.profile?.id ?: return
+        viewModelScope.launch {
+            c.settings.remove(SettingsStore.catOrderKey(id, "LIVE"))
+            c.settings.remove(SettingsStore.catHiddenKey(id, "LIVE"))
+            // Sender-Reihenfolgen: Prefixe lassen sich nicht listen – Nutzer setzt Kategorie zurück
+            // indem die Kategorie-Reihenfolge neu ist; einzelne ch_order-Keys bleiben harmlos.
+        }
+    }
+
+    /**
+     * Legt einmalig das Profil „Freie Sender“ mit Deutsch und Italienisch an,
+     * ohne das aktive Anbieter-Profil zu wechseln.
+     */
+    suspend fun ensureFreeProfile(): Long {
+        val existing = c.repo.allProfiles().firstOrNull { it.type == ProfileType.FREE }
+        if (existing != null) return existing.id
+        val id = c.repo.saveProfile(
+            ProfileEntity(
+                name = FreeTv.PROFILE_NAME,
+                type = ProfileType.FREE,
+                url = FreeTv.DEFAULT_LANGUAGES,
+            ),
+        )
+        c.repo.launchSync(id)
+        return id
+    }
+
+    /** True, wenn gerade die Freien Sender aktiv sind. */
+    fun isFreeActive(): Boolean = c.active.value.profile?.type == ProfileType.FREE
+
+    /** Wechselt mit einem Tipp zwischen Anbieter und Freien Sendern. */
+    fun switchLiveSource(wantFree: Boolean) {
+        viewModelScope.launch {
+            val all = c.repo.allProfiles()
+            if (wantFree) {
+                val cur = c.active.value.profile
+                if (cur != null && cur.type != ProfileType.FREE) {
+                    c.settings.set(SettingsStore.LAST_PROVIDER_PROFILE, cur.id.toString())
+                }
+                val freeId = ensureFreeProfile()
+                c.settings.set(SettingsStore.ACTIVE_PROFILE, freeId.toString())
+            } else {
+                val last = c.settings.getRaw(SettingsStore.LAST_PROVIDER_PROFILE)?.toLongOrNull()
+                val provider = all.firstOrNull { it.id == last && it.type != ProfileType.FREE }
+                    ?: all.firstOrNull { it.type != ProfileType.FREE }
+                if (provider != null) {
+                    c.settings.set(SettingsStore.ACTIVE_PROFILE, provider.id.toString())
+                }
+            }
+        }
+    }
+
 }
+

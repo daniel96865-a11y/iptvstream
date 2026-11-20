@@ -132,6 +132,7 @@ fun TvSettingsScreen(mainVm: MainViewModel, settings: AppSettings, entry: EntryH
                         when (id) {
                             "profiles" -> onProfiles()
                             "reload" -> mainVm.reloadContent()
+                            "reset_order" -> mainVm.resetLiveOrder()
                             "epg_refresh" -> mainVm.refreshEpg()
                             "check_update" -> context.container.updates.checkNow()
                         }

@@ -73,13 +73,16 @@ object EpgMatcher {
         "de|at|ch|pl|uk|us|fr|it|es|tr|nl|ru|pt|gr|dk|se|no|fi|cz|sk|hu|ro|bg|hr|rs|si|al|ex|ar|ir"
     private val prefixRegex = Regex("""^\s*(\[(?:$countries)]|\|(?:$countries)\||(?:$countries)\s*[:|]\s*)\s*""")
     private val suffixRegex = Regex("""\.(?:$countries)$""")
-    private val noiseRegex = Regex("""\b(uhd|fhd|hd|sd|4k|8k|hevc|h265|h264|raw|50fps|60fps|1080p|1080i|720p|backup|vip|premium)\b""")
+    private val noiseRegex = Regex("""\b(uhd|fhd|hd|sd|4k|8k|hevc|h265|h264|raw|50fps|60fps|1080p|1080i|720p|576p|540p|480p|408p|360p|270p|backup|vip|premium)\b""")
     private val diacritics = Regex("\\p{M}+")
     private val nonAlnum = Regex("[^a-z0-9]")
 
     /** Vereinheitlicht Sender- und EPG-Namen (HD/FHD/4K, Ländervorsätze, Sonderzeichen entfernt). */
     fun normalize(raw: String): String {
         var s = Normalizer.normalize(raw.lowercase(), Normalizer.Form.NFD).replace(diacritics, "")
+        // iptv-org: "DasErste.de@HD" → vor dem @; Klammern/Ecken wie "(1080p)" und "[Geo-blocked]" weg.
+        s = s.substringBefore('@')
+        s = s.replace(Regex("""\([^)]*\)|\[[^\]]*\]"""), " ")
         s = s.replace("&", "and").replace("+", "plus")
         s = prefixRegex.replace(s, "")
         s = suffixRegex.replace(s.trim(), "")

@@ -310,7 +310,7 @@ private fun TvHome(
                     }
                 }
                 when (tab) {
-                    TvTab.LIVE -> TvLiveScreen(liveVm, s, entry, first, onPlay, escapeToTab)
+                    TvTab.LIVE -> TvLiveScreen(liveVm, mainVm, s, entry, first, onPlay, escapeToTab)
                     TvTab.MOVIES -> TvMoviesScreen(moviesVm, s, entry, first, onMovie, escapeToTab)
                     TvTab.SERIES -> TvSeriesScreen(seriesVm, s, entry, first, onSeries, escapeToTab)
                     TvTab.SEARCH -> TvSearchScreen(searchVm, s, entry, onPlay, onMovie, onSeries)

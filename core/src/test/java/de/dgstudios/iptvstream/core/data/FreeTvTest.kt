@@ -126,4 +126,18 @@ class FreeTvTest {
         assertTrue(rai.any { it.name.startsWith("Rai 1") })
         assertTrue(rai.any { it.name.startsWith("Rai News") })
     }
+
+    @Test
+    fun epgPlanForDeutschAndItalienisch() {
+        val plan = FreeTv.epgPlan(listOf("deu", "ita"))
+        assertTrue(plan.wantGermanGuide)
+        assertEquals(1, plan.providerUrls.size)
+        assertTrue(plan.providerUrls[0].contains("IT1"))
+        val onlyDe = FreeTv.epgPlan(listOf("deu"))
+        assertTrue(onlyDe.wantGermanGuide)
+        assertTrue(onlyDe.providerUrls.isEmpty())
+        val onlyIt = FreeTv.epgPlan(listOf("ita"))
+        assertFalse(onlyIt.wantGermanGuide)
+        assertTrue(onlyIt.providerUrls[0].contains("IT1"))
+    }
 }

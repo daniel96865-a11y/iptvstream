@@ -77,5 +77,10 @@ class SettingsStore(private val context: Context) {
         fun fixedChannelKey(profileId: Long) = "fixed_channel_$profileId"
         fun listPosKey(profileId: Long, section: String) = "listpos_${section}_$profileId"
         fun syncRetryKey(profileId: Long) = "sync_retry_$profileId"
+        fun catOrderKey(profileId: Long, type: String) = "cat_order_${type}_$profileId"
+        fun catHiddenKey(profileId: Long, type: String) = "cat_hidden_${type}_$profileId"
+        fun channelOrderKey(profileId: Long, categoryId: String) = "ch_order_${profileId}_$categoryId"
+        /** Zuletzt genutztes Nicht-Frei-Profil, damit der Schalter „Meine Sender“ zurückfindet. */
+        const val LAST_PROVIDER_PROFILE = "last_provider_profile"
     }
 }

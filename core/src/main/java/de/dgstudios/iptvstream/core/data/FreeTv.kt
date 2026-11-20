@@ -18,6 +18,56 @@ object FreeTv {
 
     fun listUrl(code: String): String = "$BASE$code.m3u"
 
+    /** Öffentliche Programmführer (epgshare01), passend zu den Sprachen. DE läuft über [GermanGuide]. */
+    private val EPG_BY_LANG = mapOf(
+        "deu" to null, // GermanGuide
+        "ita" to "https://epgshare01.online/epgshare01/epg_ripper_IT1.xml.gz",
+        "fra" to "https://epgshare01.online/epgshare01/epg_ripper_FR1.xml.gz",
+        "spa" to "https://epgshare01.online/epgshare01/epg_ripper_ES1.xml.gz",
+        "eng" to "https://epgshare01.online/epgshare01/epg_ripper_UK1.xml.gz",
+        "tur" to "https://epgshare01.online/epgshare01/epg_ripper_TR1.xml.gz",
+        "por" to "https://epgshare01.online/epgshare01/epg_ripper_PT1.xml.gz",
+        "nld" to "https://epgshare01.online/epgshare01/epg_ripper_NL1.xml.gz",
+        "pol" to "https://epgshare01.online/epgshare01/epg_ripper_PL1.xml.gz",
+        "ron" to "https://epgshare01.online/epgshare01/epg_ripper_RO1.xml.gz",
+        "ell" to "https://epgshare01.online/epgshare01/epg_ripper_GR1.xml.gz",
+        "hun" to "https://epgshare01.online/epgshare01/epg_ripper_HU1.xml.gz",
+        "ces" to "https://epgshare01.online/epgshare01/epg_ripper_CZ1.xml.gz",
+        "slk" to "https://epgshare01.online/epgshare01/epg_ripper_SK1.xml.gz",
+        "hrv" to "https://epgshare01.online/epgshare01/epg_ripper_HR1.xml.gz",
+        "srp" to "https://epgshare01.online/epgshare01/epg_ripper_RS1.xml.gz",
+        "bul" to "https://epgshare01.online/epgshare01/epg_ripper_BG1.xml.gz",
+        "ukr" to "https://epgshare01.online/epgshare01/epg_ripper_UA1.xml.gz",
+        "ara" to "https://epgshare01.online/epgshare01/epg_ripper_AE1.xml.gz",
+        "heb" to "https://epgshare01.online/epgshare01/epg_ripper_IL1.xml.gz",
+        "swe" to "https://epgshare01.online/epgshare01/epg_ripper_SE1.xml.gz",
+        "dan" to "https://epgshare01.online/epgshare01/epg_ripper_DK1.xml.gz",
+        "nor" to "https://epgshare01.online/epgshare01/epg_ripper_NO1.xml.gz",
+        "nob" to "https://epgshare01.online/epgshare01/epg_ripper_NO1.xml.gz",
+        "fin" to "https://epgshare01.online/epgshare01/epg_ripper_FI1.xml.gz",
+        "jpn" to "https://epgshare01.online/epgshare01/epg_ripper_JP1.xml.gz",
+        "kor" to "https://epgshare01.online/epgshare01/epg_ripper_KR1.xml.gz",
+        "zho" to "https://epgshare01.online/epgshare01/epg_ripper_HK1.xml.gz",
+        "hin" to "https://epgshare01.online/epgshare01/epg_ripper_IN1.xml.gz",
+    )
+
+    data class EpgPlan(val providerUrls: List<String>, val wantGermanGuide: Boolean)
+
+    /** Welche Programmführer für die gewählten Sprachen geladen werden. */
+    fun epgPlan(languages: Collection<String>): EpgPlan {
+        val langs = languages.map { it.lowercase() }.toSet()
+        val urls = LinkedHashSet<String>()
+        var german = false
+        for (code in languages) {
+            when (val u = EPG_BY_LANG[code.lowercase()]) {
+                null -> if (code.lowercase() == "deu") german = true
+                else -> urls += u
+            }
+        }
+        return EpgPlan(providerUrls = urls.toList(), wantGermanGuide = german)
+    }
+
+
     data class Config(val languages: List<String>, val hideGeo: Boolean)
 
     fun encodeLanguages(codes: Collection<String>): String =

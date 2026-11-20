@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import de.dgstudios.iptvstream.core.container
 import de.dgstudios.iptvstream.core.data.Cat
+import de.dgstudios.iptvstream.core.data.ListOrder
 import de.dgstudios.iptvstream.core.data.EpgGuide
 import de.dgstudios.iptvstream.core.data.LiveRequest
 import de.dgstudios.iptvstream.core.data.NowNext
@@ -49,7 +50,16 @@ abstract class BrowseViewModel<T>(
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     val categories: StateFlow<List<CategoryEntity>> = profileId.filterNotNull()
-        .flatMapLatest { repo.categories(it, catType) }
+        .flatMapLatest { pid ->
+            combine(
+                repo.categories(pid, catType),
+                c.settings.flow.map { prefs ->
+                    val order = ListOrder.decode(prefs.raw.get(SettingsStore.catOrderKey(pid, catType)))
+                    val hidden = ListOrder.decode(prefs.raw.get(SettingsStore.catHiddenKey(pid, catType))).toSet()
+                    order to hidden
+                },
+            ) { cats, pair -> ListOrder.apply(cats, { it.id }, pair.first, pair.second) }
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val selectedCategory = MutableStateFlow(Cat.ALL)
@@ -169,13 +179,49 @@ abstract class BrowseViewModel<T>(
         val pid = profileId.value ?: return
         viewModelScope.launch { repo.toggleFavorite(pid, favType, id) }
     }
+
+    /** Kategorie eine Position nach oben (−1) oder unten (+1) schieben. */
+    fun moveCategory(id: String, delta: Int) {
+        if (id == Cat.ALL || id == Cat.FAV || id == Cat.RECENT) return
+        val pid = profileId.value ?: return
+        viewModelScope.launch {
+            val key = SettingsStore.catOrderKey(pid, catType)
+            val current = categories.value.map { it.id }
+            val saved = ListOrder.decode(c.settings.getRaw(key))
+            val base = if (saved.isEmpty()) current else ListOrder.apply(current, { it }, saved, emptySet())
+            c.settings.set(key, ListOrder.encode(ListOrder.move(base, id, delta)))
+        }
+    }
+
+    fun hideCategory(id: String) {
+        if (id == Cat.ALL || id == Cat.FAV || id == Cat.RECENT) return
+        val pid = profileId.value ?: return
+        viewModelScope.launch {
+            val key = SettingsStore.catHiddenKey(pid, catType)
+            val hidden = ListOrder.decode(c.settings.getRaw(key)).toMutableList()
+            if (id !in hidden) hidden += id
+            c.settings.set(key, ListOrder.encode(hidden))
+            if (selectedCategory.value == id) selectCategory(Cat.ALL)
+        }
+    }
+
+    fun resetListOrder() {
+        val pid = profileId.value ?: return
+        viewModelScope.launch {
+            c.settings.remove(SettingsStore.catOrderKey(pid, catType))
+            c.settings.remove(SettingsStore.catHiddenKey(pid, catType))
+        }
+    }
 }
 
 class LiveViewModel(app: Application) :
     BrowseViewModel<ChannelEntity>(app, "live", CatType.LIVE, "LIVE") {
 
     override fun itemsFlow(profileId: Long, category: String): Flow<List<ChannelEntity>> =
-        repo.channels(profileId, category)
+        combine(
+            repo.channels(profileId, category),
+            c.settings.flow.map { prefs -> ListOrder.decode(prefs.raw.get(SettingsStore.channelOrderKey(profileId, category))) },
+        ) { list, order -> ListOrder.apply(list, { it.streamId }, order, emptySet()) }
 
     /** Zuletzt gesehene Sender für "Weiterschauen" oben in Live TV. */
     val recent: StateFlow<List<ChannelEntity>> = profileId.filterNotNull()
@@ -219,6 +265,25 @@ class LiveViewModel(app: Application) :
         viewModelScope.launch {
             c.settings.set(SettingsStore.fixedChannelKey(ch.profileId), ch.streamId)
             c.settings.set("start_mode", "fixed")
+        }
+    }
+
+    fun moveChannel(ch: ChannelEntity, delta: Int) {
+        val pid = profileId.value ?: return
+        val cat = selectedCategory.value
+        viewModelScope.launch {
+            val key = SettingsStore.channelOrderKey(pid, cat)
+            val current = items.value.map { it.streamId }
+            val saved = ListOrder.decode(c.settings.getRaw(key))
+            val base = if (saved.isEmpty()) current else ListOrder.apply(current, { it }, saved, emptySet())
+            c.settings.set(key, ListOrder.encode(ListOrder.move(base, ch.streamId, delta)))
+        }
+    }
+
+    fun resetChannelOrder() {
+        val pid = profileId.value ?: return
+        viewModelScope.launch {
+            c.settings.remove(SettingsStore.channelOrderKey(pid, selectedCategory.value))
         }
     }
 

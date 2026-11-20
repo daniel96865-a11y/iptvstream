@@ -56,4 +56,12 @@ class EpgMatcherTest {
         assertFalse(GermanGuide.eligible("us", GermanGuide.FALLBACK))
         assertFalse(GermanGuide.eligible("de", GermanGuide.OFF))
     }
+
+    @Test
+    fun stripsFeedAndQualityFromNames() {
+        assertEquals("daserste", EpgMatcher.normalize("DasErste.de@HD"))
+        assertEquals("rai1", EpgMatcher.normalize("Rai 1 (1080p)"))
+        assertEquals("raiscuola", EpgMatcher.normalize("Rai Scuola (576p) [Geo-blocked]"))
+        assertEquals("rai1", EpgMatcher.normalize("Rai1.it@SD"))
+    }
 }
