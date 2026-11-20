@@ -8,6 +8,12 @@ plugins {
 }
 
 /**
+ * Vertriebsvariante: Standard ist die GitHub-APK (eigener Updater). Mit `-Pdistribution=play`
+ * entsteht die Google-Play-Variante: Updates über Play (In-App-Updates), kein APK-Installer.
+ */
+val playBuild: Boolean = providers.gradleProperty("distribution").orNull == "play"
+
+/**
  * Sentry-DSN nur aus Umgebung (CI-Secret SENTRY_DSN), ~/.gradle/gradle.properties oder der
  * nicht eingecheckten local.properties. Nie im Repo. Ohne DSN bleibt Sentry aus.
  */
@@ -22,7 +28,7 @@ val sentryDsn: String = run {
 
 android {
     namespace = "de.dgstudios.iptvstream.core"
-    compileSdk = 35
+    compileSdk = if (playBuild) 36 else 35
 
     defaultConfig {
         // Beide Apps verlangen 24. Ein niedrigerer Wert täuscht alte Geräte vor,
@@ -30,7 +36,13 @@ android {
         minSdk = 24
         consumerProguardFiles("consumer-rules.pro")
         buildConfigField("String", "SENTRY_DSN", "\"${sentryDsn.replace("\"", "")}\"")
+        buildConfigField("boolean", "PLAY_BUILD", playBuild.toString())
     }
+
+    // Updater je Vertriebsvariante: GitHub (APK-Download) oder Google Play (In-App-Updates).
+    val distribution = if (playBuild) "play" else "github"
+    sourceSets["main"].java.srcDir("src/$distribution/java")
+    sourceSets["test"].java.srcDir("src/${distribution}Test/java")
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -92,6 +104,10 @@ dependencies {
 
     api("androidx.datastore:datastore-preferences:1.2.1")
     // Absturz-/Fehlermeldungen an Sentry (nur Core: kein NDK, kein Session Replay).
+    if (playBuild) {
+        // Google Play In-App-Updates (Handy/Tablet); Fake-Manager für Tests liegt im selben Artefakt.
+        api("com.google.android.play:app-update:2.1.0")
+    }
     implementation("io.sentry:sentry-android-core:8.64.0")
     implementation("androidx.work:work-runtime-ktx:2.12.0")
     implementation("androidx.webkit:webkit:1.12.1")

@@ -1,11 +1,5 @@
 package de.dgstudios.iptvstream.core.update
 
-import android.app.Activity
-import android.content.ActivityNotFoundException
-import android.content.Context
-import android.content.ContextWrapper
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
@@ -27,12 +21,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -48,24 +42,7 @@ private val Muted = Color(0xFFB7C0CC)
 @Composable
 fun UpdateHost(checker: UpdateChecker, television: Boolean = false) {
     val prompt by checker.prompt.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        checker.onPermissionReturned()
-    }
-
-    LaunchedEffect(checker) {
-        checker.installs.collect { file ->
-            val activity = context.findActivity()
-            val intent = checker.installIntent(file)
-            try {
-                if (activity != null) activity.startActivity(intent) else context.startActivity(intent)
-            } catch (e: ActivityNotFoundException) {
-                checker.installUnavailable("kein Installer gefunden")
-            } catch (e: SecurityException) {
-                checker.installUnavailable("Zugriff verweigert")
-            }
-        }
-    }
+    val onPermission = rememberFlavorUpdateActions(checker)
 
     WhatsNewHost(show = prompt is UpdatePrompt.Hidden, television = television)
 
@@ -92,15 +69,7 @@ fun UpdateHost(checker: UpdateChecker, television: Boolean = false) {
                 .focusGroup(),
         ) {
             when (current) {
-                is UpdatePrompt.Offer -> OfferBody(current, television, primary, checker, onPermission = {
-                    try {
-                        permissionLauncher.launch(checker.permissionIntent())
-                    } catch (_: ActivityNotFoundException) {
-                        checker.installUnavailable("Einstellung für unbekannte Apps fehlt")
-                    } catch (_: SecurityException) {
-                        checker.installUnavailable("Einstellung nicht erreichbar")
-                    }
-                })
+                is UpdatePrompt.Offer -> OfferBody(current, television, primary, checker, onPermission = onPermission)
                 is UpdatePrompt.Message -> {
                     Text(current.text, color = Color.White, fontSize = if (television) 22.sp else 16.sp)
                     Row(Modifier.fillMaxWidth().padding(top = 18.dp), horizontalArrangement = Arrangement.End) {
@@ -109,6 +78,28 @@ fun UpdateHost(checker: UpdateChecker, television: Boolean = false) {
                             modifier = Modifier.focusRequester(primary),
                             colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color.White),
                         ) { Text("OK") }
+                    }
+                }
+                UpdatePrompt.ReadyToRestart -> {
+                    Text("Update geladen", color = Color.White, fontSize = if (television) 28.sp else 20.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Zum Fertigstellen startet die App kurz neu.",
+                        color = Color.White,
+                        fontSize = if (television) 18.sp else 15.sp,
+                        modifier = Modifier.padding(top = 14.dp),
+                    )
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = 18.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
+                    ) {
+                        TextButton(onClick = { checker.later() }) {
+                            Text("Später", color = Muted, fontSize = if (television) 18.sp else 15.sp)
+                        }
+                        Button(
+                            onClick = { checker.confirm() },
+                            modifier = Modifier.focusRequester(primary),
+                            colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color.White),
+                        ) { Text("Jetzt neu starten", fontSize = if (television) 18.sp else 15.sp) }
                     }
                 }
                 UpdatePrompt.Hidden -> Unit
@@ -128,12 +119,14 @@ private fun OfferBody(
     val titleSize = if (television) 28.sp else 20.sp
     val bodySize = if (television) 18.sp else 15.sp
     Text("Update verfügbar", color = Color.White, fontSize = titleSize, fontWeight = FontWeight.Bold)
-    Text(
-        "Version ${offer.info.versionName}",
-        color = Muted,
-        fontSize = if (television) 16.sp else 13.sp,
-        modifier = Modifier.padding(top = 4.dp),
-    )
+    if (offer.info.versionName.isNotBlank()) {
+        Text(
+            "Version ${offer.info.versionName}",
+            color = Muted,
+            fontSize = if (television) 16.sp else 13.sp,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
     if (offer.info.changelog.isNotBlank()) {
         Text(
             offer.info.changelog,
@@ -143,6 +136,14 @@ private fun OfferBody(
                 .padding(top = 14.dp)
                 .heightIn(max = if (television) 220.dp else 160.dp)
                 .verticalScroll(rememberScrollState()),
+        )
+    }
+    if (offer.viaStore) {
+        Text(
+            "Das Update ist im Google Play Store verfügbar. Dort kannst du es mit einem Tipp installieren.",
+            color = Color.White,
+            fontSize = bodySize,
+            modifier = Modifier.padding(top = 14.dp),
         )
     }
     if (offer.needPermission) {
@@ -191,16 +192,7 @@ private fun OfferBody(
                 onClick = { checker.confirm() },
                 modifier = Modifier.focusRequester(primary),
                 colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color.White),
-            ) { Text("Jetzt aktualisieren", fontSize = bodySize) }
+            ) { Text(if (offer.viaStore) "Im Play Store öffnen" else "Jetzt aktualisieren", fontSize = bodySize) }
         }
     }
-}
-
-private fun Context.findActivity(): Activity? {
-    var c: Context? = this
-    while (c is ContextWrapper) {
-        if (c is Activity) return c
-        c = c.baseContext
-    }
-    return null
 }

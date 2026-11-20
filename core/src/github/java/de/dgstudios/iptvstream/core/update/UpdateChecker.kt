@@ -24,27 +24,6 @@ import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
-data class UpdateInfo(
-    val versionCode: Int,
-    val versionName: String,
-    val apkUrl: String,
-    val sha256: String,
-    val changelog: String,
-)
-
-sealed interface UpdatePrompt {
-    data object Hidden : UpdatePrompt
-
-    data class Offer(
-        val info: UpdateInfo,
-        val downloading: Boolean,
-        val progress: Float?,
-        val needPermission: Boolean,
-    ) : UpdatePrompt
-
-    data class Message(val text: String) : UpdatePrompt
-}
-
 /**
  * Prüft den öffentlichen JSON-Feed und lädt bei Bedarf die APK.
  * Automatische Prüfung höchstens alle paar Stunden, manuell immer.
@@ -345,20 +324,6 @@ class UpdateChecker(
                 !sha256.matches(Regex("[0-9a-f]{64}"))) error("ungültiger Feed")
             return UpdateInfo(code, name, apk, sha256, o.optString("changelog"))
         }
-    }
-}
-
-fun installedVersionName(context: Context): String = try {
-    context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: ""
-} catch (_: PackageManager.NameNotFoundException) {
-    ""
-}
-
-fun installedVersionCode(context: Context): Long {
-    val info = context.packageManager.getPackageInfo(context.packageName, 0)
-    return if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else {
-        @Suppress("DEPRECATION")
-        info.versionCode.toLong()
     }
 }
 

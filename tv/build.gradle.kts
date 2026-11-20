@@ -8,6 +8,12 @@ plugins {
     id("app.cash.paparazzi")
 }
 
+/**
+ * Vertriebsvariante: Standard ist die GitHub-APK. Mit `-Pdistribution=play` entsteht die
+ * Google-Play-Variante (targetSdk 36, ohne APK-Installer-Berechtigung, Updates über Play).
+ */
+val playBuild: Boolean = providers.gradleProperty("distribution").orNull == "play"
+
 fun signingProp(name: String): String? =
     System.getenv(name)?.trim()?.takeIf { it.isNotEmpty() }
         ?: providers.gradleProperty(name).orNull?.trim()?.takeIf { it.isNotEmpty() }
@@ -32,17 +38,26 @@ val hasReleaseSigning = releaseKeystoreFile != null &&
 
 android {
     namespace = "de.dgstudios.iptvstream.tv"
-    compileSdk = 35
+    compileSdk = if (playBuild) 36 else 35
 
     defaultConfig {
         applicationId = "de.dgstudios.iptvstream.tv"
         minSdk = 24
-        targetSdk = 35
+        // Play verlangt für Handy-Apps seit 31.08.2026 API 36, für Android TV reicht 34.
+        targetSdk = if (playBuild) 35 else 35
         versionCode = 76
         versionName = "1.0.74"
+        // Play-Variante: nur für Fernseher anbieten (Leanback Pflicht). GitHub-APK bleibt für jedes Gerät installierbar.
+        manifestPlaceholders["leanbackRequired"] = if (playBuild) "true" else "false"
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a")
         }
+    }
+
+    if (playBuild) {
+        // Manifest-Zusatz der Play-Variante: ohne REQUEST_INSTALL_PACKAGES und ohne Update-FileProvider.
+        sourceSets["debug"].manifest.srcFile("src/play/AndroidManifest.xml")
+        sourceSets["release"].manifest.srcFile("src/play/AndroidManifest.xml")
     }
 
     signingConfigs {
@@ -91,6 +106,10 @@ android {
     packaging {
         jniLibs.excludes += setOf("**/x86/**", "**/x86_64/**")
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+    }
+    if (playBuild) {
+        // Paparazzi (Layoutlib) kennt compileSdk 36 noch nicht. Screenshots entstehen in der Standard-Variante.
+        testOptions.unitTests.all { test -> test.exclude("**/*Screenshots*") }
     }
     lint {
         abortOnError = true
