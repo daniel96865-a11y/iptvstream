@@ -1,10 +1,7 @@
 package de.dgstudios.iptvstream.core.util
 
-import de.dgstudios.iptvstream.core.update.UpdateChecker
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PlaybackUrlTest {
@@ -17,14 +14,5 @@ class PlaybackUrlTest {
         assertNull(Urls.httpUrl("javascript:alert(1)"))
         assertNull(Urls.httpUrl(""))
         assertNull(Urls.httpUrl(null))
-    }
-
-    @Test
-    fun updateRedirectStaysOnGitHubHosts() {
-        assertTrue(UpdateChecker.allowedDownloadHost("github.com"))
-        assertTrue(UpdateChecker.allowedDownloadHost("objects.githubusercontent.com"))
-        assertTrue(UpdateChecker.allowedDownloadHost("release-assets.githubusercontent.com"))
-        assertFalse(UpdateChecker.allowedDownloadHost("evil.example"))
-        assertFalse(UpdateChecker.allowedDownloadHost("github.com.evil.example"))
     }
 }

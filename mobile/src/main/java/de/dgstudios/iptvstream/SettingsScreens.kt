@@ -377,7 +377,7 @@ fun ProfilesScreen(mainVm: MainViewModel, onBack: () -> Unit, onEdit: (Long) -> 
                             }
                         }
                         Text(
-                            (if (p.type == ProfileType.XTREAM) "Xtream Codes" else "M3U") + " · " + p.url.removePrefix("http://").removePrefix("https://"),
+                            (if (p.type == ProfileType.XTREAM) de.dgstudios.iptvstream.core.LoginLabels.SERVER else "M3U") + " · " + p.url.removePrefix("http://").removePrefix("https://"),
                             color = s.onSurfaceDim,
                             fontSize = 12.sp,
                             maxLines = 1,
@@ -462,7 +462,7 @@ fun ProfileFormScreen(mainVm: MainViewModel, profileId: Long, first: Boolean, on
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            GlassChip("Xtream Codes", form.type == ProfileType.XTREAM) { form.type = ProfileType.XTREAM }
+            GlassChip(de.dgstudios.iptvstream.core.LoginLabels.SERVER, form.type == ProfileType.XTREAM) { form.type = ProfileType.XTREAM }
             GlassChip("M3U / M3U8", form.type == ProfileType.M3U) { form.type = ProfileType.M3U }
         }
 

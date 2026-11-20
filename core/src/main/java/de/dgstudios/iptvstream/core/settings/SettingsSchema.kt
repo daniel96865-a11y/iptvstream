@@ -176,17 +176,22 @@ object SettingsSchema {
                     "on",
                     "Alle sechs Stunden, auch wenn die App zu ist",
                 ),
-                ChoiceDef(
-                    "epg_de",
-                    "Deutscher Programmführer aus dem Netz",
-                    listOf(
-                        Option("fallback", "Als Ersatz"),
-                        Option("prefer", "Bevorzugt"),
-                        Option("off", "Aus"),
-                    ),
-                    "fallback",
-                    "Für deutsche Sender; wirkt nach der nächsten EPG-Aktualisierung",
-                ),
+            ) + (
+                // Play-Ausgabe: kein eingebauter Programmführer aus fremder Quelle.
+                if (de.dgstudios.iptvstream.core.BuildConfig.BUILTIN_GUIDE) listOf(
+                    ChoiceDef(
+                        "epg_de",
+                        "Deutscher Programmführer aus dem Netz",
+                        listOf(
+                            Option("fallback", "Als Ersatz"),
+                            Option("prefer", "Bevorzugt"),
+                            Option("off", "Aus"),
+                        ),
+                        "fallback",
+                        "Für deutsche Sender; wirkt nach der nächsten EPG-Aktualisierung",
+                    )
+                ) else emptyList()
+            ) + listOf(
                 ActionDef("epg_refresh", "EPG jetzt aktualisieren"),
             ),
         ),
@@ -202,7 +207,10 @@ object SettingsSchema {
                 ),
                 ActionDef("profiles", "Profile verwalten", "Hinzufügen, bearbeiten, löschen"),
                 ActionDef("reload", "Inhalte neu laden", "Sender, Filme und Serien aktualisieren"),
-                ActionDef("check_update", "Nach Updates suchen"),
+            ) + (
+                // Play-Ausgabe: Updates nur über Google Play, kein eigener Knopf.
+                if (de.dgstudios.iptvstream.core.BuildConfig.SELF_UPDATE) listOf(ActionDef("check_update", "Nach Updates suchen")) else emptyList()
+            ) + listOf(
                 InfoDef("language", "App-Sprache", "Deutsch"),
                 InfoDef("version", "Version", "1.0.13"),
             ),

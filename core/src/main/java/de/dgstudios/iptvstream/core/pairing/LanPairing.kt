@@ -372,7 +372,7 @@ object LanPairing {
 
     /** Fehlermeldung oder null, wenn die Felder grundsätzlich brauchbar sind. */
     fun validate(p: ProfileEntity): String? {
-        if (p.type != ProfileType.XTREAM && p.type != ProfileType.M3U) return "Bitte Xtream Codes oder M3U wählen."
+        if (p.type != ProfileType.XTREAM && p.type != ProfileType.M3U) return "Bitte ${de.dgstudios.iptvstream.core.LoginLabels.SERVER} oder M3U wählen."
         if (p.name.length > 80) return "Der Profilname ist zu lang."
         if (p.url.isBlank()) return "Die Adresse fehlt."
         if (p.url.length > 2000) return "Die Adresse ist zu lang."
@@ -477,14 +477,14 @@ object LanPairing {
             <input id="name" name="name" maxlength="80">
             <label for="type">Art</label>
             <select id="type" name="type">
-            <option value="XTREAM" selected>Xtream Codes</option>
+            <option value="XTREAM" selected>${html(de.dgstudios.iptvstream.core.LoginLabels.SERVER)}</option>
             <option value="M3U">M3U / M3U8</option>
             </select>
             <label for="url">Server- oder Playlist-Adresse</label>
             <input id="url" name="url" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" required>
-            <label for="username">Benutzername (nur Xtream)</label>
+            <label for="username">Benutzername (nur ${html(de.dgstudios.iptvstream.core.LoginLabels.SERVER_SHORT)})</label>
             <input id="username" name="username" autocapitalize="off" autocorrect="off" spellcheck="false">
-            <label for="password">Passwort (nur Xtream)</label>
+            <label for="password">Passwort (nur ${html(de.dgstudios.iptvstream.core.LoginLabels.SERVER_SHORT)})</label>
             <input id="password" name="password" type="password">
             <label for="epgUrl">EPG-Adresse (optional, bei M3U)</label>
             <input id="epgUrl" name="epgUrl" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false">

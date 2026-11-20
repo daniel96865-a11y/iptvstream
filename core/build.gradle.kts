@@ -46,6 +46,24 @@ android {
             "-opt-in=androidx.media3.common.util.UnstableApi",
         )
     }
+    // Vertriebsweg: github = eigene APKs mit Update-Feed, play = Google Play (ohne Selbst-Update).
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("github") {
+            dimension = "distribution"
+            isDefault = true
+            buildConfigField("boolean", "SELF_UPDATE", "true")
+            buildConfigField("boolean", "BUILTIN_GUIDE", "true")
+            buildConfigField("String", "DISTRIBUTION", "\"github\"")
+        }
+        create("play") {
+            dimension = "distribution"
+            buildConfigField("boolean", "SELF_UPDATE", "false")
+            // Play: keine fest eingebaute Fremd-Quelle (EPG nur aus dem Zugang des Nutzers).
+            buildConfigField("boolean", "BUILTIN_GUIDE", "false")
+            buildConfigField("String", "DISTRIBUTION", "\"play\"")
+        }
+    }
     sourceSets["main"].assets.srcDir(rootProject.file("release-notes"))
     buildFeatures {
         compose = true

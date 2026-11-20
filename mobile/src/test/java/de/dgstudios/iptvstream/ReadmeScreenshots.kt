@@ -61,10 +61,13 @@ import org.junit.Test
  * Echte Bausteine der App (Theme, Glas, Kopfzeile, Leiste, Player-Knöpfe, Einstellungszeilen);
  * Listenzeilen ohne Datenbank nachgebaut. `./gradlew :mobile:recordPaparazziDebug`
  */
-class ReadmeScreenshots {
+class ReadmeScreenshots : DemoScreenshots(DeviceConfig.PIXEL_5.copy(softButtons = false))
+
+/** Gemeinsame Demo-Ansichten für README ([ReadmeScreenshots]) und Google Play ([StoreScreenshots]). */
+abstract class DemoScreenshots(deviceConfig: DeviceConfig) {
     @get:Rule
     val paparazzi = Paparazzi(
-        deviceConfig = DeviceConfig.PIXEL_5.copy(softButtons = false),
+        deviceConfig = deviceConfig,
         showSystemUi = false,
         maxPercentDifference = 1.0,
     )
@@ -153,7 +156,7 @@ class ReadmeScreenshots {
         Frame(Tab.LIVE) {
             ScreenHeader("Live TV", "${channels.size} Sender")
             LiveTopBar(
-                listOf("Das Erste HD", "Sport Live").mapIndexed { i, n ->
+                listOf("Demo 1", "Sport Live").mapIndexed { i, n ->
                     de.dgstudios.iptvstream.core.data.db.ChannelEntity(0, "r$i", i + 1, n, null, "", "", null)
                 },
                 {},

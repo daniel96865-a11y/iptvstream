@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Google-Play-Ausgabe: Die App startet keine Vordergrund-Dienste (WorkManager bringt die Berechtigung nur mit).
+     Entfernen spart die Play-Erklärung zu Vordergrund-Diensten. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" tools:node="remove" />
+
+    <application>
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            tools:ignore="MissingClass"
+            tools:node="remove" />
+    </application>
+</manifest>

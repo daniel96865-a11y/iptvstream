@@ -31,6 +31,12 @@ val hasReleaseSigning = releaseKeystoreFile != null &&
     signingKeyPassword != null &&
     signingKeyAlias != null
 
+// Upload-Schlüssel für Google Play: Pfad, Alias und Passwort nur per Umgebung/Gradle-Property.
+val playUploadStore = signingProp("PLAY_UPLOAD_KEYSTORE")
+val playUploadPassword = signingProp("PLAY_UPLOAD_PASSWORD")
+val playUploadAlias = signingProp("PLAY_UPLOAD_ALIAS")
+val hasPlayUploadSigning = playUploadStore != null && playUploadPassword != null && playUploadAlias != null
+
 android {
     namespace = "de.dgstudios.iptvstream"
     compileSdk = 35
@@ -46,7 +52,33 @@ android {
         }
     }
 
+    // Vertriebsweg: github = eigene APKs mit Update-Feed (wie bisher), play = Google Play.
+    // play: kein Selbst-Update, kein REQUEST_INSTALL_PACKAGES, eigener Upload-Schlüssel (Play App Signing).
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("github") {
+            dimension = "distribution"
+            isDefault = true
+        }
+        create("play") {
+            dimension = "distribution"
+            // Google Play verlangt seit 31.08.2026 für neue Apps API 36 (TV-Apps: 34+).
+            // compileSdk bleibt vorerst 35: Paparazzi 1.3.5 (Screenshot-Tests) kann noch nicht gegen 36 bauen.
+            // Die App nutzt keine API-36-Schnittstellen; Verhalten von Android 16 gilt trotzdem (siehe Play-Notizen).
+            targetSdk = 36
+        }
+    }
+
     signingConfigs {
+        if (hasPlayUploadSigning) {
+            create("playUpload") {
+                storeFile = file(playUploadStore!!)
+                storeType = "PKCS12"
+                storePassword = playUploadPassword
+                keyAlias = playUploadAlias
+                keyPassword = playUploadPassword
+            }
+        }
         if (hasReleaseSigning) {
             create("release") {
                 storeFile = releaseKeystoreFile
@@ -75,6 +107,7 @@ android {
             } else {
                 signingConfigs.getByName("debug")
             }
+
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
@@ -96,6 +129,13 @@ android {
     lint {
         abortOnError = true
         checkReleaseBuilds = true
+    }
+}
+
+// Play-Release mit dem eigenen Upload-Schlüssel signieren (Play App Signing ersetzt ihn durch den App-Schlüssel).
+androidComponents {
+    onVariants(selector().withFlavor("distribution" to "play").withBuildType("release")) { variant ->
+        if (hasPlayUploadSigning) variant.signingConfig?.setConfig(android.signingConfigs.getByName("playUpload"))
     }
 }
 

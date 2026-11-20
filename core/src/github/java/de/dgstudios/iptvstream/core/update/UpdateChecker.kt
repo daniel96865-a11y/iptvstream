@@ -348,20 +348,6 @@ class UpdateChecker(
     }
 }
 
-fun installedVersionName(context: Context): String = try {
-    context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: ""
-} catch (_: PackageManager.NameNotFoundException) {
-    ""
-}
-
-fun installedVersionCode(context: Context): Long {
-    val info = context.packageManager.getPackageInfo(context.packageName, 0)
-    return if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else {
-        @Suppress("DEPRECATION")
-        info.versionCode.toLong()
-    }
-}
-
 fun canInstall(context: Context): Boolean {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return true
     return context.packageManager.canRequestPackageInstalls()

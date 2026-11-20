@@ -42,7 +42,9 @@ class AppContainer(context: Context) {
         .create(HttpService::class.java)
     val settings = SettingsStore(context.applicationContext)
     val xtream = XtreamApi(http)
-    val epg = EpgManager(db, http, appScope) { settings.current().epgGerman }
+    val epg = EpgManager(db, http, appScope) {
+        if (BuildConfig.BUILTIN_GUIDE) settings.current().epgGerman else de.dgstudios.iptvstream.core.util.GermanGuide.OFF
+    }
     val repo = ContentRepository(db, http, xtream, epg, appScope, settings)
     val session = PlaybackSession()
     val updates = UpdateChecker(context.applicationContext, okHttp, appScope)

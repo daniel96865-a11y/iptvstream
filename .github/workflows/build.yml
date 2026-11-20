@@ -34,15 +34,15 @@ jobs:
         test -n "$CMDLINE"
         echo "$(dirname "$CMDLINE"):$SDK/platform-tools" >> "$GITHUB_PATH"
         yes | "$CMDLINE" --sdk_root="$SDK" --licenses >/dev/null || true
-        "$CMDLINE" --sdk_root="$SDK" --install "platforms;android-35" "build-tools;35.0.0"
+        "$CMDLINE" --sdk_root="$SDK" --install "platforms;android-35" "platforms;android-36" "build-tools;35.0.0"
 
     - uses: gradle/actions/setup-gradle@v4
 
     - name: Unit-Tests
-      run: ./gradlew --no-daemon testDebugUnitTest
+      run: ./gradlew --no-daemon testGithubDebugUnitTest testPlayDebugUnitTest
 
     - name: Lint
-      run: ./gradlew --no-daemon lintDebug
+      run: ./gradlew --no-daemon lintGithubDebug lintPlayDebug
 
   build:
     needs: test
@@ -67,18 +67,18 @@ jobs:
         test -n "$CMDLINE"
         echo "$(dirname "$CMDLINE"):$SDK/platform-tools" >> "$GITHUB_PATH"
         yes | "$CMDLINE" --sdk_root="$SDK" --licenses >/dev/null || true
-        "$CMDLINE" --sdk_root="$SDK" --install "platforms;android-35" "build-tools;35.0.0"
+        "$CMDLINE" --sdk_root="$SDK" --install "platforms;android-35" "platforms;android-36" "build-tools;35.0.0"
 
     - uses: gradle/actions/setup-gradle@v4
 
     - name: Release-APKs bauen
-      run: ./gradlew --no-daemon :mobile:assembleRelease :tv:assembleRelease
+      run: ./gradlew --no-daemon :mobile:assembleGithubRelease :tv:assembleGithubRelease
 
     - name: APKs einsammeln
       run: |
         mkdir -p dist
-        cp mobile/build/outputs/apk/release/mobile-release.apk dist/iptvstream-mobile.apk
-        cp tv/build/outputs/apk/release/tv-release.apk dist/iptvstream-tv.apk
+        cp mobile/build/outputs/apk/github/release/mobile-github-release.apk dist/iptvstream-mobile.apk
+        cp tv/build/outputs/apk/github/release/tv-github-release.apk dist/iptvstream-tv.apk
         ls -la dist
 
     - uses: actions/upload-artifact@v4
@@ -114,7 +114,7 @@ jobs:
         test -n "$CMDLINE"
         echo "$(dirname "$CMDLINE"):$SDK/platform-tools" >> "$GITHUB_PATH"
         yes | "$CMDLINE" --sdk_root="$SDK" --licenses >/dev/null || true
-        "$CMDLINE" --sdk_root="$SDK" --install "platforms;android-35" "build-tools;35.0.0"
+        "$CMDLINE" --sdk_root="$SDK" --install "platforms;android-35" "platforms;android-36" "build-tools;35.0.0"
 
     - uses: gradle/actions/setup-gradle@v4
 
@@ -156,13 +156,13 @@ jobs:
         SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
         # Sentry-DSN nur aus dem Repo-Secret, nie im Quelltext.
         SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
-      run: ./gradlew --no-daemon :mobile:assembleRelease :tv:assembleRelease
+      run: ./gradlew --no-daemon :mobile:assembleGithubRelease :tv:assembleGithubRelease
 
     - name: APKs einsammeln
       run: |
         mkdir -p dist
-        cp mobile/build/outputs/apk/release/mobile-release.apk dist/iptvstream-mobile.apk
-        cp tv/build/outputs/apk/release/tv-release.apk dist/iptvstream-tv.apk
+        cp mobile/build/outputs/apk/github/release/mobile-github-release.apk dist/iptvstream-mobile.apk
+        cp tv/build/outputs/apk/github/release/tv-github-release.apk dist/iptvstream-tv.apk
         ls -la dist
 
     - uses: actions/upload-artifact@v4

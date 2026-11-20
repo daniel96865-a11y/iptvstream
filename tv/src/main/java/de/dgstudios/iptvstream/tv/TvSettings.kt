@@ -264,7 +264,7 @@ fun TvProfilesScreen(mainVm: MainViewModel, onBack: () -> Unit, onEdit: (Long) -
                             maxLines = 1, overflow = TextOverflow.Ellipsis,
                         )
                         Text(
-                            (if (p.type == ProfileType.XTREAM) "Xtream Codes" else "M3U") + " · " +
+                            (if (p.type == ProfileType.XTREAM) de.dgstudios.iptvstream.core.LoginLabels.SERVER else "M3U") + " · " +
                                 p.url.removePrefix("http://").removePrefix("https://"),
                             color = s.onSurfaceDim, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         )
@@ -350,7 +350,7 @@ fun TvProfileForm(mainVm: MainViewModel, profileId: Long, first: Boolean, onDone
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             TvButton(
-                "Xtream Codes",
+                de.dgstudios.iptvstream.core.LoginLabels.SERVER,
                 { form.type = ProfileType.XTREAM },
                 selected = form.type == ProfileType.XTREAM,
                 requester = if (first) null else firstField,

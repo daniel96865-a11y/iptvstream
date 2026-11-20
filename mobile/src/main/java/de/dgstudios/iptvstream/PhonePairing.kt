@@ -264,7 +264,7 @@ fun SendToTvScreen(mainVm: MainViewModel, onDone: () -> Unit) {
             Text("oder neu eintragen", color = s.onSurfaceDim, fontSize = 13.sp)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            GlassChip("Xtream Codes", form.type == ProfileType.XTREAM) { form.type = ProfileType.XTREAM }
+            GlassChip(de.dgstudios.iptvstream.core.LoginLabels.SERVER, form.type == ProfileType.XTREAM) { form.type = ProfileType.XTREAM }
             GlassChip("M3U / M3U8", form.type == ProfileType.M3U) { form.type = ProfileType.M3U }
         }
         GlassTextField(form.name, { form.name = it }, "Profilname (optional)")
