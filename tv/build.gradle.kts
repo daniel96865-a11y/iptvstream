@@ -45,7 +45,7 @@ android {
         minSdk = 24
         // Play verlangt für Handy-Apps seit 31.08.2026 API 36, für Android TV reicht 34.
         targetSdk = if (playBuild) 35 else 35
-        versionCode = 76
+        versionCode = 77
         versionName = "1.0.74"
         // Play-Variante: nur für Fernseher anbieten (Leanback Pflicht). GitHub-APK bleibt für jedes Gerät installierbar.
         manifestPlaceholders["leanbackRequired"] = if (playBuild) "true" else "false"
