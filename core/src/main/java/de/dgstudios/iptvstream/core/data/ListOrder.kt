@@ -45,6 +45,24 @@ object ListOrder {
         return out
     }
 
+    fun moveTo(ids: List<String>, id: String, index: Int): List<String> {
+        val i = ids.indexOf(id)
+        if (i < 0 || ids.isEmpty()) return ids
+        val j = index.coerceIn(0, ids.lastIndex)
+        if (i == j) return ids
+        val out = ids.toMutableList()
+        out.add(j, out.removeAt(i))
+        return out
+    }
+
+    fun moveToStart(ids: List<String>, id: String): List<String> = moveTo(ids, id, 0)
+
+    fun moveToEnd(ids: List<String>, id: String): List<String> =
+        if (ids.isEmpty()) ids else moveTo(ids, id, ids.lastIndex)
+
+    fun sortBy(ids: List<String>, labelOf: (String) -> String): List<String> =
+        ids.sortedBy { labelOf(it).lowercase() }
+
     fun hide(hidden: Set<String>, id: String): Set<String> = hidden + id
     fun show(hidden: Set<String>, id: String): Set<String> = hidden - id
 }

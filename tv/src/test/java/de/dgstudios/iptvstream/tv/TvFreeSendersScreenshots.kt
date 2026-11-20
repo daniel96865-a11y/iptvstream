@@ -18,7 +18,7 @@ import de.dgstudios.iptvstream.core.ui.ProfileFormState
 import org.junit.Rule
 import org.junit.Test
 
-/** TV-Formular „Freie Sender“ (Sprachauswahl). */
+/** TV-Formular „Freie Sender“ und Sortier-Menü. */
 class TvFreeSendersScreenshots {
     @get:Rule
     val paparazzi = Paparazzi(
@@ -40,6 +40,49 @@ class TvFreeSendersScreenshots {
                         form.toggleLanguage("eng")
                         TvTitle("Neues Profil")
                         TvFreeSenders(form)
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun menueLangesDruecken() {
+        paparazzi.snapshot {
+            AppTheme(AppSettings(), isTv = true) {
+                AppBackground {
+                    TvActionDialog(
+                        title = "Das Erste HD",
+                        actions = listOf(
+                            TvAction("Verschieben") {},
+                            TvAction("Ganz nach oben") {},
+                            TvAction("Ganz nach unten") {},
+                            TvAction("Ausblenden") {},
+                            TvAction("Zu Favoriten hinzufügen") {},
+                            TvAction("Als Startsender festlegen") {},
+                            TvAction("Schließen") {},
+                        ),
+                        onDismiss = {},
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun verschiebenModus() {
+        paparazzi.snapshot {
+            AppTheme(AppSettings(), isTv = true) {
+                AppBackground {
+                    Column(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 27.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        TvMoveHintBar(
+                            name = "Das Erste HD",
+                            onUp = {},
+                            onDown = {},
+                            onDone = {},
+                            onAlpha = {},
+                            onReset = {},
+                        )
                     }
                 }
             }

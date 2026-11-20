@@ -118,6 +118,7 @@ fun TvCategoryList(
     onDown: (Int) -> Unit,
     onRight: () -> Unit,
     onLongClick: (String) -> Unit = {},
+    movingId: String? = null,
     modifier: Modifier = Modifier,
 ) {
     val s = LocalAppStyle.current
@@ -144,7 +145,7 @@ fun TvCategoryList(
                     .tvFocus(
                         onClick = { onSelect(c.id) },
                         onLongClick = { onLongClick(c.id) },
-                        selected = c.id == selected,
+                        selected = c.id == selected || c.id == movingId,
                         lockDirections = true,
                         onFocus = { rowFocused = it },
                     )
@@ -207,6 +208,8 @@ fun TvCategoryDrawer(
     outerBottom: Dp,
     onSelect: (String) -> Unit,
     onDismiss: () -> Unit,
+    onLongClick: (String) -> Unit = {},
+    movingId: String? = null,
 ) {
     val s = LocalAppStyle.current
     var query by remember { mutableStateOf("") }
@@ -283,7 +286,8 @@ fun TvCategoryDrawer(
                                     .then(if (index == 0) Modifier.focusProperties { up = search } else Modifier)
                                     .tvFocus(
                                         onClick = { onSelect(c.id) },
-                                        selected = c.id == selected,
+                                        onLongClick = { onLongClick(c.id) },
+                                        selected = c.id == selected || c.id == movingId,
                                         opaque = true,
                                         onFocus = { rowFocused = it },
                                     )
@@ -378,6 +382,25 @@ private fun TvLiveSourceBar(mainVm: MainViewModel) {
     }
 }
 
+
+@Composable
+internal fun TvMoveHintBar(name: String, onUp: () -> Unit, onDown: () -> Unit, onDone: () -> Unit, onAlpha: () -> Unit, onReset: () -> Unit) {
+    val s = LocalAppStyle.current
+    Column(Modifier.padding(start = 6.dp, end = 6.dp, bottom = 8.dp)) {
+        Text("„$name“ verschieben", color = s.onSurface, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+        Text("↑↓ verschieben, OK ablegen", color = s.onSurfaceDim, fontSize = 16.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 8.dp)) {
+            TvButton("Nach oben", onUp)
+            TvButton("Nach unten", onDown)
+            TvButton("Fertig", onDone, selected = true)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 8.dp)) {
+            TvButton("Alphabetisch", onAlpha)
+            TvButton("Zurücksetzen", onReset)
+        }
+    }
+}
+
 @Composable
 fun TvLiveScreen(
     vm: LiveViewModel,
@@ -404,8 +427,15 @@ fun TvLiveScreen(
     val selectedRef = rememberUpdatedState(selected)
     var menuFor by remember { mutableStateOf<ChannelEntity?>(null) }
     var catMenu by remember { mutableStateOf<String?>(null) }
+    var movingChannel by remember { mutableStateOf<ChannelEntity?>(null) }
+    var movingCategory by remember { mutableStateOf<String?>(null) }
+    val hiddenCats by vm.hiddenCategories.collectAsStateWithLifecycle()
+    val hiddenChannels by vm.hiddenChannels.collectAsStateWithLifecycle()
+    var showHidden by remember { mutableStateOf(false) }
     var pendingFrom by remember { mutableStateOf<List<ChannelEntity>?>(null) }
-    val catItems = remember(cats) { buildCatItems(cats) }
+    val catItems = remember(cats, hiddenCats) {
+        buildCatItems(cats) + hiddenCats.map { CatItem(it.id, it.name + " (aus)") }
+    }
     val catItemsRef = rememberUpdatedState(catItems)
     val drawer = settings.categoryDrawer
     val openButton = remember { FocusRequester() }
@@ -568,6 +598,16 @@ fun TvLiveScreen(
     }
 
     fun chooseCategory(id: String) {
+        if (movingCategory != null) {
+            if (id == movingCategory) movingCategory = null
+            return
+        }
+        if (hiddenCats.any { it.id == id }) {
+            vm.unhideCategory(id)
+            pendingFrom = items
+            vm.selectCategory(id)
+            return
+        }
         if (id == selected) {
             focusChannels()
         } else {
@@ -653,15 +693,26 @@ fun TvLiveScreen(
                         isFav = ch.streamId in favs,
                         tick = tick,
                         registry = listReg,
-                        onUp = { stepChannel(index, -1) },
-                        onDown = { stepChannel(index, 1) },
+                        onUp = {
+                            if (movingChannel?.streamId == ch.streamId) vm.moveChannel(ch, -1)
+                            else stepChannel(index, -1)
+                        },
+                        onDown = {
+                            if (movingChannel?.streamId == ch.streamId) vm.moveChannel(ch, 1)
+                            else stepChannel(index, 1)
+                        },
                         onLeft = if (drawer) null else ::focusCategory,
                         onRight = {},
                         onClick = {
-                            vm.play(ch)
-                            onPlay()
+                            if (movingChannel != null) {
+                                if (movingChannel?.streamId == ch.streamId) movingChannel = null
+                            } else {
+                                vm.play(ch)
+                                onPlay()
+                            }
                         },
-                        onMenu = { menuFor = ch },
+                        onMenu = { if (movingChannel == null) menuFor = ch },
+                        moving = movingChannel?.streamId == ch.streamId,
                     )
                 }
             }
@@ -672,6 +723,20 @@ fun TvLiveScreen(
     if (drawer) {
         Column(Modifier.fillMaxSize()) {
             TvLiveSourceBar(mainVm)
+            val moveName = movingChannel?.name ?: cats.firstOrNull { it.id == movingCategory }?.name
+            if (moveName != null) {
+                TvMoveHintBar(
+                    name = moveName,
+                    onUp = { movingChannel?.let { vm.moveChannel(it, -1) }; movingCategory?.let { vm.moveCategory(it, -1) } },
+                    onDown = { movingChannel?.let { vm.moveChannel(it, 1) }; movingCategory?.let { vm.moveCategory(it, 1) } },
+                    onDone = { movingChannel = null; movingCategory = null },
+                    onAlpha = { if (movingChannel != null) vm.sortChannelsByName() else vm.sortCategoriesByName() },
+                    onReset = { mainVm.resetLiveOrder(); movingChannel = null; movingCategory = null },
+                )
+            }
+            if (hiddenChannels.isNotEmpty()) {
+                TvButton("${hiddenChannels.size} ausgeblendete Sender", { showHidden = true }, modifier = Modifier.padding(start = 6.dp, bottom = 8.dp))
+            }
             TvButton(
                 text = "Kategorien: ${Cat.label(selected, cats.firstOrNull { it.id == selected }?.name)}",
                 onClick = { drawerOpen = true },
@@ -692,11 +757,27 @@ fun TvLiveScreen(
                     chooseCategory(it)
                 },
                 onDismiss = { drawerOpen = false },
+                onLongClick = { if (it !in setOf(Cat.ALL, Cat.FAV, Cat.RECENT)) catMenu = it },
+                movingId = movingCategory,
             )
         }
     } else {
         Column(Modifier.fillMaxSize()) {
             TvLiveSourceBar(mainVm)
+            val moveNameSplit = movingChannel?.name ?: cats.firstOrNull { it.id == movingCategory }?.name
+            if (moveNameSplit != null) {
+                TvMoveHintBar(
+                    name = moveNameSplit,
+                    onUp = { movingChannel?.let { vm.moveChannel(it, -1) }; movingCategory?.let { vm.moveCategory(it, -1) } },
+                    onDown = { movingChannel?.let { vm.moveChannel(it, 1) }; movingCategory?.let { vm.moveCategory(it, 1) } },
+                    onDone = { movingChannel = null; movingCategory = null },
+                    onAlpha = { if (movingChannel != null) vm.sortChannelsByName() else vm.sortCategoriesByName() },
+                    onReset = { mainVm.resetLiveOrder(); movingChannel = null; movingCategory = null },
+                )
+            }
+            if (hiddenChannels.isNotEmpty()) {
+                TvButton("${hiddenChannels.size} ausgeblendete Sender", { showHidden = true }, modifier = Modifier.padding(start = 6.dp, bottom = 8.dp))
+            }
             Box(Modifier.weight(1f).fillMaxSize()) {
                 TvSplitRail(
                     open = railOpen,
@@ -707,10 +788,19 @@ fun TvLiveScreen(
                             registry = catReg,
                             listState = catListState,
                             onSelect = ::chooseCategory,
-                            onUp = { moveCategory(it, -1) },
-                            onDown = { moveCategory(it, 1) },
+                            onUp = { idx ->
+                                val id = catItemsRef.value.getOrNull(idx)?.id
+                                if (id != null && id == movingCategory) vm.moveCategory(id, -1)
+                                else moveCategory(idx, -1)
+                            },
+                            onDown = { idx ->
+                                val id = catItemsRef.value.getOrNull(idx)?.id
+                                if (id != null && id == movingCategory) vm.moveCategory(id, 1)
+                                else moveCategory(idx, 1)
+                            },
                             onRight = ::focusChannels,
-                            onLongClick = { catMenu = it },
+                            onLongClick = { if (movingCategory == null && it !in setOf(Cat.ALL, Cat.FAV, Cat.RECENT)) catMenu = it },
+                            movingId = movingCategory,
                         )
                     },
                     content = { LiveChannels() },
@@ -725,10 +815,12 @@ fun TvLiveScreen(
         TvActionDialog(
             title = m.name,
             actions = listOf(
+                TvAction("Verschieben") { movingChannel = m; movingCategory = null },
+                TvAction("Ganz nach oben") { vm.moveChannelToStart(m) },
+                TvAction("Ganz nach unten") { vm.moveChannelToEnd(m) },
+                TvAction("Ausblenden") { vm.hideChannel(m) },
                 TvAction(if (isFav) "Aus Favoriten entfernen" else "Zu Favoriten hinzufügen") { vm.toggleFavorite(m.streamId) },
                 TvAction("Als Startsender festlegen") { vm.setStartChannel(m) },
-                TvAction("Nach oben") { vm.moveChannel(m, -1) },
-                TvAction("Nach unten") { vm.moveChannel(m, 1) },
                 TvAction("Schließen") {},
             ),
             onDismiss = { menuFor = null },
@@ -740,12 +832,22 @@ fun TvLiveScreen(
         TvActionDialog(
             title = label,
             actions = listOf(
-                TvAction("Nach oben") { vm.moveCategory(cm, -1) },
-                TvAction("Nach unten") { vm.moveCategory(cm, 1) },
+                TvAction("Verschieben") { movingCategory = cm; movingChannel = null },
+                TvAction("Ganz nach oben") { vm.moveCategoryToStart(cm) },
+                TvAction("Ganz nach unten") { vm.moveCategoryToEnd(cm) },
                 TvAction("Ausblenden") { vm.hideCategory(cm) },
                 TvAction("Schließen") {},
             ),
             onDismiss = { catMenu = null },
+        )
+    }
+    if (showHidden) {
+        TvActionDialog(
+            title = "Ausgeblendete Sender",
+            actions = hiddenChannels.map { ch ->
+                TvAction(ch.name + " · einblenden") { vm.unhideChannel(ch.streamId) }
+            } + TvAction("Schließen") {},
+            onDismiss = { showHidden = false },
         )
     }
 }
@@ -764,6 +866,7 @@ private fun ChannelRow(
     onRight: () -> Unit,
     onClick: () -> Unit,
     onMenu: () -> Unit,
+    moving: Boolean = false,
 ) {
     val s = LocalAppStyle.current
     val nn by rememberNowNext(ch.profileId, ch.epgKey, tick)
@@ -781,7 +884,7 @@ private fun ChannelRow(
                     false
                 }
             }
-            .tvFocus(onClick = onClick, onLongClick = onMenu, lockDirections = true)
+            .tvFocus(onClick = onClick, onLongClick = onMenu, lockDirections = true, selected = moving)
             .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

@@ -2,7 +2,6 @@ package de.dgstudios.iptvstream
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Modifier
@@ -12,11 +11,10 @@ import de.dgstudios.iptvstream.core.settings.AppSettings
 import de.dgstudios.iptvstream.core.ui.AppBackground
 import de.dgstudios.iptvstream.core.ui.AppTheme
 import de.dgstudios.iptvstream.core.ui.ProfileFormState
-import de.dgstudios.iptvstream.core.data.db.ProfileType
 import org.junit.Rule
 import org.junit.Test
 
-/** Formular „Freie Sender“ am Handy (Sprachauswahl). */
+/** Formular „Freie Sender“ und Sortier-Menü am Handy. */
 class FreeSendersScreenshots {
     @get:Rule
     val paparazzi = Paparazzi(
@@ -34,6 +32,49 @@ class FreeSendersScreenshots {
                         val form = ProfileFormState(null, startFree = true)
                         form.toggleLanguage("eng")
                         FreeSendersSection(form)
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun menueLangesDruecken() {
+        paparazzi.snapshot {
+            AppTheme(AppSettings(), isTv = false) {
+                AppBackground {
+                    SortActionMenu(
+                        title = "Das Erste HD",
+                        onDismiss = {},
+                        onMove = {},
+                        onToStart = {},
+                        onToEnd = {},
+                        onHide = {},
+                        extra = listOf(
+                            "Zu Favoriten hinzufügen" to {},
+                            "Als Startsender festlegen" to {},
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun verschiebenModus() {
+        paparazzi.snapshot {
+            AppTheme(AppSettings(), isTv = false) {
+                AppBackground {
+                    Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        MoveHintBar(
+                            name = "Das Erste HD",
+                            onUp = {},
+                            onDown = {},
+                            onDone = {},
+                            onAlpha = {},
+                            onReset = {},
+                        )
+                        HiddenLine("2 ausgeblendete Sender · zum Einblenden tippen") {}
                     }
                 }
             }

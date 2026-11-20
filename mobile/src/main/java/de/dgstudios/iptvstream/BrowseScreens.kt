@@ -18,6 +18,12 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material.icons.rounded.DragHandle
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -61,6 +67,8 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -107,7 +115,15 @@ import kotlinx.coroutines.flow.first
 
 /** Horizontale Kategorieauswahl inkl. "Alle", "Favoriten" und "Zuletzt". */
 @Composable
-fun CategoryRow(categories: List<CategoryEntity>, selected: String, onSelect: (String) -> Unit) {
+fun CategoryRow(
+    categories: List<CategoryEntity>,
+    selected: String,
+    onSelect: (String) -> Unit,
+    movingId: String? = null,
+    hidden: List<CategoryEntity> = emptyList(),
+    onCategoryMenu: (String) -> Unit = {},
+    onUnhide: (String) -> Unit = {},
+) {
     LazyRow(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -116,7 +132,16 @@ fun CategoryRow(categories: List<CategoryEntity>, selected: String, onSelect: (S
         item(key = Cat.FAV) { GlassChip("★ Favoriten", selected == Cat.FAV) { onSelect(Cat.FAV) } }
         item(key = Cat.RECENT) { GlassChip("Zuletzt", selected == Cat.RECENT) { onSelect(Cat.RECENT) } }
         items(categories, key = { it.id }) { c ->
-            GlassChip(c.name, selected == c.id) { onSelect(c.id) }
+            GlassChip(
+                text = c.name,
+                selected = selected == c.id,
+                onClick = { onSelect(c.id) },
+                onLongClick = { onCategoryMenu(c.id) },
+                emphasized = movingId == c.id,
+            )
+        }
+        items(hidden, key = { "hidden-${it.id}" }) { c ->
+            GlassChip(c.name + " (aus)", selected = false, onClick = { onUnhide(c.id) })
         }
     }
 }
@@ -133,9 +158,13 @@ fun CategoryPicker(
     onDrawerScroll: (Int, Int) -> Unit = { _, _ -> },
     onMoveCategory: (String, Int) -> Unit = { _, _ -> },
     onHideCategory: (String) -> Unit = {},
+    onCategoryMenu: (String) -> Unit = {},
+    movingCategory: String? = null,
+    hiddenCategories: List<CategoryEntity> = emptyList(),
+    onUnhideCategory: (String) -> Unit = {},
 ) {
     if (!drawer) {
-        CategoryRow(categories, selected, onSelect)
+        CategoryRow(categories, selected, onSelect, movingCategory, hiddenCategories, onCategoryMenu, onUnhideCategory)
         return
     }
     var open by remember { mutableStateOf(false) }
@@ -179,8 +208,10 @@ fun CategoryPicker(
                 open = false
             },
             onDismiss = { open = false },
-            onMove = onMoveCategory,
-            onHide = onHideCategory,
+            onCategoryMenu = onCategoryMenu,
+            hiddenCategories = hiddenCategories,
+            onUnhideCategory = onUnhideCategory,
+            movingCategory = movingCategory,
         )
     }
 }
@@ -193,8 +224,10 @@ private fun CategoryDrawer(
     outerBottom: Dp,
     onSelect: (String) -> Unit,
     onDismiss: () -> Unit,
-    onMove: (String, Int) -> Unit = { _, _ -> },
-    onHide: (String) -> Unit = {},
+    onCategoryMenu: (String) -> Unit = {},
+    hiddenCategories: List<CategoryEntity> = emptyList(),
+    onUnhideCategory: (String) -> Unit = {},
+    movingCategory: String? = null,
 ) {
     val s = LocalAppStyle.current
     var query by remember { mutableStateOf("") }
@@ -204,6 +237,7 @@ private fun CategoryDrawer(
             add(Cat.FAV to Cat.label(Cat.FAV))
             add(Cat.RECENT to Cat.label(Cat.RECENT))
             categories.forEach { add(it.id to it.name) }
+            hiddenCategories.forEach { add("hidden:${it.id}" to it.name + " (ausgeblendet)") }
         }
     }
     val shown = remember(entries, query) {
@@ -263,14 +297,17 @@ private fun CategoryDrawer(
                         contentPadding = PaddingValues(bottom = listBottom),
                     ) {
                         items(shown, key = { it.first }) { (id, name) ->
+                            val hiddenItem = id.startsWith("hidden:")
+                            val realId = if (hiddenItem) id.removePrefix("hidden:") else id
                             CategoryDrawerRow(
                                 name = name,
-                                selected = id == selected,
-                                sortable = id != Cat.ALL && id != Cat.FAV && id != Cat.RECENT,
-                                onClick = { onSelect(id) },
-                                onMoveUp = { onMove(id, -1) },
-                                onMoveDown = { onMove(id, 1) },
-                                onHide = { onHide(id) },
+                                selected = realId == selected,
+                                sortable = !hiddenItem && realId != Cat.ALL && realId != Cat.FAV && realId != Cat.RECENT,
+                                emphasized = movingCategory == realId,
+                                onClick = {
+                                    if (hiddenItem) onUnhideCategory(realId) else onSelect(realId)
+                                },
+                                onMenu = { onCategoryMenu(realId) },
                             )
                         }
                     }
@@ -286,42 +323,33 @@ private fun CategoryDrawerRow(
     name: String,
     selected: Boolean,
     sortable: Boolean,
+    emphasized: Boolean,
     onClick: () -> Unit,
-    onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit,
-    onHide: () -> Unit,
+    onMenu: () -> Unit,
 ) {
     val s = LocalAppStyle.current
     val shape = RoundedCornerShape(18.dp)
-    val fill = if (selected) solidMix(s.backgroundColors[2], s.accent, 0.5f) else s.backgroundColors[2]
-    var menu by remember { mutableStateOf(false) }
-    Box {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .clip(shape)
-                .background(fill, shape)
-                .then(if (selected) Modifier.border(1.5.dp, s.accent, shape) else Modifier)
-                .pressable(onClick, onLongClick = if (sortable) ({ menu = true }) else null)
-                .padding(horizontal = 14.dp, vertical = 13.dp),
-            contentAlignment = Alignment.CenterStart,
-        ) {
-            Text(
-                name,
-                color = s.onSurface,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                lineHeight = 20.sp,
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-            DropdownMenuItem(text = { Text("Nach oben") }, onClick = { menu = false; onMoveUp() })
-            DropdownMenuItem(text = { Text("Nach unten") }, onClick = { menu = false; onMoveDown() })
-            DropdownMenuItem(text = { Text("Ausblenden") }, onClick = { menu = false; onHide() })
-        }
+    val fill = if (selected || emphasized) solidMix(s.backgroundColors[2], s.accent, 0.5f) else s.backgroundColors[2]
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(fill, shape)
+            .then(if (selected || emphasized) Modifier.border(1.5.dp, s.accent, shape) else Modifier)
+            .pressable(onClick, onLongClick = if (sortable) onMenu else null)
+            .padding(horizontal = 14.dp, vertical = 13.dp),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Text(
+            name,
+            color = s.onSurface,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            lineHeight = 20.sp,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -471,12 +499,20 @@ fun LiveScreen(
 ) {
     val recent by vm.recent.collectAsStateWithLifecycle()
     val categories by vm.categories.collectAsStateWithLifecycle()
+    val hiddenCats by vm.hiddenCategories.collectAsStateWithLifecycle()
     val selected by vm.selectedCategory.collectAsStateWithLifecycle()
     val items by vm.items.collectAsStateWithLifecycle()
+    val hiddenChannels by vm.hiddenChannels.collectAsStateWithLifecycle()
     val favs by vm.favoriteIds.collectAsStateWithLifecycle()
     val restored by vm.restored.collectAsStateWithLifecycle()
     val sync by mainVm.sync.collectAsStateWithLifecycle()
     val tick by rememberClockTick(10_000)
+    var menuChannel by remember { mutableStateOf<ChannelEntity?>(null) }
+    var menuCategory by remember { mutableStateOf<String?>(null) }
+    var movingChannel by remember { mutableStateOf<ChannelEntity?>(null) }
+    var movingCategory by remember { mutableStateOf<String?>(null) }
+    var showSortHelp by remember { mutableStateOf(false) }
+    var showHiddenChannels by remember { mutableStateOf(false) }
 
     val topMax = remember { mutableIntStateOf(0) }
     val topCollapse = remember { mutableFloatStateOf(0f) }
@@ -494,7 +530,17 @@ fun LiveScreen(
     }
 
     Column(Modifier.fillMaxSize().nestedScroll(topConnection)) {
-        ScreenHeader("Live TV", if (items.isNotEmpty()) "${items.size} Sender" else null)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) {
+                ScreenHeader("Live TV", if (items.isNotEmpty()) "${items.size} Sender" else null)
+            }
+            Text(
+                "Sortieren",
+                color = LocalAppStyle.current.onSurfaceDim,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(end = 16.dp).pressable({ showSortHelp = true }),
+            )
+        }
         LiveSourceSwitcher(mainVm)
         // Suche + „Weiterschauen“ klappen beim Runterscrollen ein und beim Hochscrollen wieder aus (wie die untere Leiste).
         // Suche + „Weiterschauen“ klappen beim Runterscrollen fingergenau ein und beim Hochscrollen wieder aus.
@@ -523,9 +569,34 @@ fun LiveScreen(
             drawerIndex = vm.drawerIndex,
             drawerOffset = vm.drawerOffset,
             onDrawerScroll = vm::onDrawerScroll,
-            onMoveCategory = vm::moveCategory,
-            onHideCategory = vm::hideCategory,
+            onCategoryMenu = { menuCategory = it },
+            movingCategory = movingCategory,
+            hiddenCategories = hiddenCats,
+            onUnhideCategory = vm::unhideCategory,
         )
+        val movingName = movingChannel?.name ?: categories.firstOrNull { it.id == movingCategory }?.name
+        if (movingName != null) {
+            MoveHintBar(
+                name = movingName,
+                onUp = {
+                    movingChannel?.let { vm.moveChannel(it, -1) }
+                    movingCategory?.let { vm.moveCategory(it, -1) }
+                },
+                onDown = {
+                    movingChannel?.let { vm.moveChannel(it, 1) }
+                    movingCategory?.let { vm.moveCategory(it, 1) }
+                },
+                onDone = { movingChannel = null; movingCategory = null },
+                onAlpha = {
+                    if (movingChannel != null) vm.sortChannelsByName() else vm.sortCategoriesByName()
+                },
+                onReset = {
+                    mainVm.resetLiveOrder()
+                    movingChannel = null
+                    movingCategory = null
+                },
+            )
+        }
         if (!restored) return@Column
 
         val listState = rememberLazyListState(vm.scrollIndex, vm.scrollOffset)
@@ -566,16 +637,83 @@ fun LiveScreen(
                         fav = ch.streamId in favs,
                         tick = tick,
                         onClick = {
-                            vm.play(ch)
-                            onPlay()
+                            if (movingChannel != null) {
+                                if (movingChannel?.streamId == ch.streamId) movingChannel = null
+                            } else {
+                                vm.play(ch)
+                                onPlay()
+                            }
                         },
                         onFav = { vm.toggleFavorite(ch.streamId) },
                         onStart = { vm.setStartChannel(ch) },
                         onMove = { d -> vm.moveChannel(ch, d) },
+                        onMenu = { if (movingChannel == null) menuChannel = ch },
+                        moving = movingChannel?.streamId == ch.streamId,
                     )
+                }
+                if (hiddenChannels.isNotEmpty()) {
+                    item(key = "hidden-channels") {
+                        HiddenLine("${hiddenChannels.size} ausgeblendete Sender · zum Einblenden tippen") {
+                            showHiddenChannels = true
+                        }
+                    }
                 }
             }
         }
+    }
+
+    val mc = menuChannel
+    if (mc != null) {
+        SortActionMenu(
+            title = mc.name,
+            onDismiss = { menuChannel = null },
+            onMove = { movingChannel = mc; movingCategory = null },
+            onToStart = { vm.moveChannelToStart(mc) },
+            onToEnd = { vm.moveChannelToEnd(mc) },
+            onHide = { vm.hideChannel(mc) },
+            extra = listOf(
+                (if (mc.streamId in favs) "Aus Favoriten entfernen" else "Zu Favoriten hinzufügen") to { vm.toggleFavorite(mc.streamId) },
+                "Als Startsender festlegen" to { vm.setStartChannel(mc) },
+            ),
+        )
+    }
+    val mcat = menuCategory
+    if (mcat != null && mcat != Cat.ALL && mcat != Cat.FAV && mcat != Cat.RECENT) {
+        SortActionMenu(
+            title = categories.firstOrNull { it.id == mcat }?.name ?: mcat,
+            onDismiss = { menuCategory = null },
+            onMove = { movingCategory = mcat; movingChannel = null },
+            onToStart = { vm.moveCategoryToStart(mcat) },
+            onToEnd = { vm.moveCategoryToEnd(mcat) },
+            onHide = { vm.hideCategory(mcat) },
+        )
+    }
+    if (showSortHelp) {
+        AlertDialog(
+            onDismissRequest = { showSortHelp = false },
+            title = { Text("Sortieren") },
+            text = { Text("Halte einen Sender oder eine Kategorie gedrückt. Im Menü „Verschieben“ wählen, dann mit dem Finger oder den Pfeilen an den gewünschten Platz schieben.") },
+            confirmButton = { TextButton(onClick = { showSortHelp = false }) { Text("OK") } },
+        )
+    }
+    if (showHiddenChannels) {
+        AlertDialog(
+            onDismissRequest = { showHiddenChannels = false },
+            title = { Text("Ausgeblendete Sender") },
+            text = {
+                Column {
+                    hiddenChannels.forEach { ch ->
+                        Text(
+                            ch.name,
+                            modifier = Modifier.fillMaxWidth().pressable({
+                                vm.unhideChannel(ch.streamId)
+                            }).padding(vertical = 10.dp),
+                        )
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showHiddenChannels = false }) { Text("Fertig") } },
+        )
     }
 }
 
@@ -589,23 +727,54 @@ private fun ChannelRow(
     onFav: () -> Unit,
     onStart: () -> Unit,
     onMove: (Int) -> Unit = {},
+    onMenu: () -> Unit = {},
+    moving: Boolean = false,
 ) {
     val s = LocalAppStyle.current
     val nowNext by rememberNowNext(ch.profileId, ch.epgKey, tick)
-    var menu by remember { mutableStateOf(false) }
     val nn = nowNext
     val cur = nn?.now
     val next = nn?.next
+    val density = LocalDensity.current
+    var drag by remember { mutableFloatStateOf(0f) }
+    val threshold = with(density) { 56.dp.toPx() }
 
     Box {
         Row(
             Modifier
                 .fillMaxWidth()
+                .offset { IntOffset(0, if (moving) drag.toInt() else 0) }
                 .glass(RoundedCornerShape(18.dp))
-                .pressable(onClick, onLongClick = { menu = true })
+                .then(
+                    if (moving) Modifier.border(2.dp, s.accent, RoundedCornerShape(18.dp)) else Modifier,
+                )
+                .pointerInput(moving, ch.streamId) {
+                    if (!moving) return@pointerInput
+                    detectVerticalDragGestures(
+                        onDragEnd = { drag = 0f },
+                        onDragCancel = { drag = 0f },
+                        onVerticalDrag = { change, amount ->
+                            change.consume()
+                            var nextDrag = drag + amount
+                            while (nextDrag > threshold) {
+                                onMove(1)
+                                nextDrag -= threshold
+                            }
+                            while (nextDrag < -threshold) {
+                                onMove(-1)
+                                nextDrag += threshold
+                            }
+                            drag = nextDrag
+                        },
+                    )
+                }
+                .pressable(onClick, onLongClick = if (moving) null else onMenu)
                 .padding(start = 12.dp, end = 4.dp, top = 9.dp, bottom = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (moving) {
+                Icon(Icons.Rounded.DragHandle, "Verschieben", tint = s.onSurfaceDim, modifier = Modifier.size(22.dp).padding(end = 6.dp))
+            }
             if (showNumber) {
                 Text(
                     ch.num.toString(),
@@ -664,18 +833,6 @@ private fun ChannelRow(
                     modifier = if (fav) Modifier.popIn() else Modifier,
                 )
             }
-        }
-        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-            DropdownMenuItem(
-                text = { Text(if (fav) "Aus Favoriten entfernen" else "Zu Favoriten hinzufügen") },
-                onClick = { menu = false; onFav() },
-            )
-            DropdownMenuItem(
-                text = { Text("Als Startsender festlegen") },
-                onClick = { menu = false; onStart() },
-            )
-            DropdownMenuItem(text = { Text("Nach oben") }, onClick = { menu = false; onMove(-1) })
-            DropdownMenuItem(text = { Text("Nach unten") }, onClick = { menu = false; onMove(1) })
         }
     }
 }

@@ -104,7 +104,13 @@ fun Modifier.pressable(onClick: () -> Unit, onLongClick: (() -> Unit)? = null): 
 }
 
 @Composable
-fun GlassChip(text: String, selected: Boolean, onClick: () -> Unit) {
+fun GlassChip(
+    text: String,
+    selected: Boolean,
+    onLongClick: (() -> Unit)? = null,
+    emphasized: Boolean = false,
+    onClick: () -> Unit,
+) {
     val s = LocalAppStyle.current
     val shape = RoundedCornerShape(50)
     val base = Modifier.height(36.dp)
@@ -114,7 +120,10 @@ fun GlassChip(text: String, selected: Boolean, onClick: () -> Unit) {
         base.glass(shape)
     }
     Box(
-        modifier = m.pressable(onClick).padding(horizontal = 16.dp),
+        modifier = m
+            .then(if (emphasized) Modifier.border(2.dp, s.accent, shape) else Modifier)
+            .pressable(onClick, onLongClick)
+            .padding(horizontal = 16.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(

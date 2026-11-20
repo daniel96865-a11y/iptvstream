@@ -1,0 +1,4 @@
+Sortieren ist einfacher: Sender oder Kategorie länger gedrückt halten (am TV: OK länger halten). Es öffnet sich ein klares Menü mit „Verschieben“, „Ganz nach oben“, „Ganz nach unten“ und „Ausblenden“.
+Nach „Verschieben“ den Eintrag mit dem Finger oder den Pfeilen an den gewünschten Platz schieben, dann „Fertig“ tippen. Am TV: Hoch/Runter verschieben, OK ablegen.
+Das geht in der Senderliste, bei den Kategorie-Chips und in der Kategorie-Schublade – bei Meine Sender und bei Freie Sender.
+Oben gibt es einen kleinen Hinweis „Sortieren“. Ausgeblendete Sender und Kategorien lassen sich wieder einblenden. In der Verschieben-Leiste gibt es außerdem „Alphabetisch“ und „Zurücksetzen“.

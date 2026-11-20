@@ -106,10 +106,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun resetLiveOrder() {
         val id = c.active.value.profile?.id ?: return
         viewModelScope.launch {
+            val raw = c.settings.current().raw
             c.settings.remove(SettingsStore.catOrderKey(id, "LIVE"))
             c.settings.remove(SettingsStore.catHiddenKey(id, "LIVE"))
-            // Sender-Reihenfolgen: Prefixe lassen sich nicht listen – Nutzer setzt Kategorie zurück
-            // indem die Kategorie-Reihenfolge neu ist; einzelne ch_order-Keys bleiben harmlos.
+            c.settings.remove(SettingsStore.channelHiddenKey(id))
+            val prefix = SettingsStore.channelOrderPrefix(id)
+            raw.keys.filter { it.startsWith(prefix) }.forEach { c.settings.remove(it) }
         }
     }
 

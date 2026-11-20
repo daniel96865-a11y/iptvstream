@@ -23,4 +23,17 @@ class ListOrderTest {
         val ids = listOf("x", "y z", "1")
         assertEquals(ids, ListOrder.decode(ListOrder.encode(ids)))
     }
+
+    @Test
+    fun moveToStartAndEnd() {
+        assertEquals(listOf("c", "a", "b"), ListOrder.moveToStart(listOf("a", "b", "c"), "c"))
+        assertEquals(listOf("b", "c", "a"), ListOrder.moveToEnd(listOf("a", "b", "c"), "a"))
+        assertEquals(listOf("a", "c", "b"), ListOrder.moveTo(listOf("a", "b", "c"), "c", 1))
+    }
+
+    @Test
+    fun sortByLabel() {
+        val labels = mapOf("a" to "Zebra", "b" to "Affe", "c" to "Bär")
+        assertEquals(listOf("b", "c", "a"), ListOrder.sortBy(listOf("a", "b", "c")) { labels.getValue(it) })
+    }
 }
