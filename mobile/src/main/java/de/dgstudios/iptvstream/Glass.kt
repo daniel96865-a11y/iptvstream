@@ -31,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -109,6 +110,8 @@ fun GlassChip(
     selected: Boolean,
     onLongClick: (() -> Unit)? = null,
     emphasized: Boolean = false,
+    lifted: Boolean = false,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     val s = LocalAppStyle.current
@@ -121,7 +124,9 @@ fun GlassChip(
     }
     Box(
         modifier = m
-            .then(if (emphasized) Modifier.border(2.dp, s.accent, shape) else Modifier)
+            .then(if (lifted) Modifier.shadow(10.dp, shape, clip = false).graphicsLayer { scaleX = 1.06f; scaleY = 1.06f } else Modifier)
+            .then(if (emphasized || lifted) Modifier.border(2.dp, s.accent, shape) else Modifier)
+            .then(modifier)
             .pressable(onClick, onLongClick)
             .padding(horizontal = 16.dp),
         contentAlignment = Alignment.Center,

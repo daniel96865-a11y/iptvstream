@@ -224,6 +224,13 @@ abstract class BrowseViewModel<T>(
         }
     }
 
+    /** Speichert die sichtbare Kategorie-Reihenfolge (nach Drag-and-Drop). */
+    fun setCategoryOrder(ids: List<String>) {
+        val clean = ids.filter { !isFixedCat(it) }
+        if (clean.isEmpty()) return
+        viewModelScope.launch { mutateCatOrder { ListOrder.replaceVisible(it, clean) } }
+    }
+
     fun hideCategory(id: String) {
         if (isFixedCat(id)) return
         val pid = profileId.value ?: return
@@ -347,6 +354,12 @@ class LiveViewModel(app: Application) :
             val labels = items.value.associate { it.streamId to it.name }
             mutateChannelOrder { ListOrder.sortBy(it) { id -> labels[id] ?: id } }
         }
+    }
+
+    /** Speichert die sichtbare Sender-Reihenfolge der aktuellen Kategorie (nach Drag-and-Drop). */
+    fun setChannelOrder(ids: List<String>) {
+        if (ids.isEmpty()) return
+        viewModelScope.launch { mutateChannelOrder { ListOrder.replaceVisible(it, ids) } }
     }
 
     fun hideChannel(ch: ChannelEntity) {

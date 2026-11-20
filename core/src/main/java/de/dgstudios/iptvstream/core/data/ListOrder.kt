@@ -63,6 +63,30 @@ object ListOrder {
     fun sortBy(ids: List<String>, labelOf: (String) -> String): List<String> =
         ids.sortedBy { labelOf(it).lowercase() }
 
+    /** Schiebt [fromId] an die Stelle von [toId] (wie beim Drag-and-Drop). */
+    fun moveByKey(ids: List<String>, fromId: String, toId: String): List<String> {
+        if (fromId == toId) return ids
+        val to = ids.indexOf(toId)
+        if (to < 0) return ids
+        return moveTo(ids, fromId, to)
+    }
+
+    fun <T> moveByKey(items: List<T>, idOf: (T) -> String, fromId: String, toId: String): List<T> {
+        if (fromId == toId) return items
+        val i = items.indexOfFirst { idOf(it) == fromId }
+        val j = items.indexOfFirst { idOf(it) == toId }
+        if (i < 0 || j < 0) return items
+        val out = items.toMutableList()
+        out.add(j, out.removeAt(i))
+        return out
+    }
+
+    /** Neue sichtbare Reihenfolge behalten, übrige (z. B. ausgeblendete) IDs hinten anhängen. */
+    fun replaceVisible(saved: List<String>, visible: List<String>): List<String> {
+        val vis = visible.toSet()
+        return visible + saved.filter { it !in vis }
+    }
+
     fun hide(hidden: Set<String>, id: String): Set<String> = hidden + id
     fun show(hidden: Set<String>, id: String): Set<String> = hidden - id
 }

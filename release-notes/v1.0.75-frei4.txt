@@ -1,0 +1,4 @@
+Sortieren am Handy ist jetzt wie auf dem Startbildschirm: Sender oder Kategorie länger gedrückt halten und ohne Loslassen an den neuen Platz schieben. Die Zeile hebt sich an, die anderen rücken zur Seite, am Rand scrollt die Liste mit. Loslassen speichert sofort.
+Wenn du gedrückt hältst und ohne Schieben loslässt, erscheint ein kleines Menü mit „Ganz nach oben“, „Ganz nach unten“, „Ausblenden“ sowie „Alphabetisch“ und „Zurücksetzen“.
+Das gilt für die Senderliste, die Kategorie-Leiste (waagerecht) und die Kategorie-Schublade (senkrecht), bei Meine Sender und bei Freie Sender.
+Am Fernseher bleibt es wie in der vorigen Vorabversion: langes OK öffnet das Menü, „Verschieben“ startet den Verschiebe-Modus.
