@@ -58,6 +58,9 @@ android {
         // Manifest-Zusatz der Play-Variante: ohne REQUEST_INSTALL_PACKAGES und ohne Update-FileProvider.
         sourceSets["debug"].manifest.srcFile("src/play/AndroidManifest.xml")
         sourceSets["release"].manifest.srcFile("src/play/AndroidManifest.xml")
+        // Play-Banner mit vollem App-Namen „IPTVstream“ (Android-TV-Vorgabe: Banner enthält den Namen).
+        sourceSets["debug"].res.srcDir("src/play/res")
+        sourceSets["release"].res.srcDir("src/play/res")
     }
 
     signingConfigs {
