@@ -1,5 +1,6 @@
 package de.dgstudios.iptvstream.core.data.remote
 
+import de.dgstudios.iptvstream.core.BuildConfig
 import android.util.JsonReader
 import android.util.JsonToken
 import okhttp3.OkHttpClient
@@ -29,7 +30,7 @@ object Net {
     fun userAgentFor(choice: String): String = when (choice) {
         "vlc" -> "VLC/3.0.20 LibVLC/3.0.20"
         "okhttp" -> "okhttp/4.12.0"
-        "smarters" -> "IPTVSmartersPro"
+        "smarters" -> if (BuildConfig.PLAY_BUILD) USER_AGENT else "IPTVSmartersPro"
         else -> USER_AGENT
     }
 

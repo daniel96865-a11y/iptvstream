@@ -1,5 +1,7 @@
 package de.dgstudios.iptvstream.core.settings
 
+import de.dgstudios.iptvstream.core.BuildConfig
+
 data class Option(val id: String, val label: String)
 
 sealed interface SettingDef {
@@ -147,8 +149,7 @@ object SettingsSchema {
                         Option("chrome", "Browser (Standard)"),
                         Option("vlc", "VLC"),
                         Option("okhttp", "Android-App"),
-                        Option("smarters", "IPTV Smarters"),
-                    ),
+                    ) + if (BuildConfig.PLAY_BUILD) emptyList() else listOf(Option("smarters", "IPTV Smarters")),
                     "chrome",
                     "Manche Anbieter behandeln Player unterschiedlich. Wirkt ab dem nächsten Sender.",
                 ),
@@ -184,7 +185,8 @@ object SettingsSchema {
                         Option("prefer", "Bevorzugt"),
                         Option("off", "Aus"),
                     ),
-                    "fallback",
+                    // Play-Variante: standardmäßig aus (kein automatischer Abruf externer Programmdaten).
+                    if (BuildConfig.PLAY_BUILD) "off" else "fallback",
                     "Für deutsche Sender; wirkt nach der nächsten EPG-Aktualisierung",
                 ),
                 ActionDef("epg_refresh", "EPG jetzt aktualisieren"),
