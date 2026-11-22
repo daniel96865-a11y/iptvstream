@@ -44,6 +44,7 @@ import de.dgstudios.iptvstream.core.data.PlayKind
 import de.dgstudios.iptvstream.core.data.remote.Net
 import de.dgstudios.iptvstream.core.settings.AppSettings
 import de.dgstudios.iptvstream.core.update.installedVersionName
+import de.dgstudios.iptvstream.core.util.StreamHeaders
 import de.dgstudios.iptvstream.core.util.Urls
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -179,6 +180,8 @@ class PlayerController(
     val player: ExoPlayer
 
     private var current: PlayItem? = null
+    @Volatile private var streamUserAgent: String? = null
+    @Volatile private var streamReferrer: String? = null
     private var lastTracks: Tracks = Tracks.EMPTY
     private val fallback = AudioFallbackState(maxTrackSwitches = 3)
     private var maxChannels = if (settings.surround) 6 else 2
@@ -240,14 +243,20 @@ class PlayerController(
         // schafft auf diesen Geräten 1080p nicht und lässt das Bild ruckeln oder stehen, während der Ton läuft.
         // Bleibt der Hardware-Decoder stehen, schaltet der Wächter auf Software um (onFrozenPicture).
 
-        val httpFactory = DefaultDataSource.Factory(
-            context,
-            // Kürzeres Lese-Zeitlimit für Streams: Hängt die Verbindung, kommt nach 15 s ein Fehler
-            // und die Wiederverbindung greift, statt 45 s lang mit leerem Puffer zu warten.
-            OkHttpDataSource.Factory(
-                okHttp.newBuilder().readTimeout(STREAM_READ_TIMEOUT_S, java.util.concurrent.TimeUnit.SECONDS).build(),
-            ).setUserAgent(Net.userAgentFor(settings.userAgent)),
-        )
+        // Pro Sender kann eine eigene Kennung/Referer gelten (iptv-org-Listen). Die Fabrik wird je
+        // Verbindung neu gebaut und liest die Werte des gerade laufenden Senders.
+        val httpFactory = DataSource.Factory {
+            val extra = streamReferrer?.let { mapOf("Referer" to it) }.orEmpty()
+            DefaultDataSource.Factory(
+                context,
+                // Kürzeres Lese-Zeitlimit für Streams: Hängt die Verbindung, kommt nach 15 s ein Fehler
+                // und die Wiederverbindung greift, statt 45 s lang mit leerem Puffer zu warten.
+                OkHttpDataSource.Factory(
+                    okHttp.newBuilder().readTimeout(STREAM_READ_TIMEOUT_S, java.util.concurrent.TimeUnit.SECONDS).build(),
+                ).setUserAgent(streamUserAgent ?: Net.userAgentFor(settings.userAgent))
+                    .setDefaultRequestProperties(extra),
+            ).createDataSource()
+        }
         // Live-TS: Beendet der Anbieter die Verbindung, wird sofort neu geöffnet, ohne den Player anzufassen.
         val dataSource = DataSource.Factory {
             ReconnectingDataSource(
@@ -372,6 +381,9 @@ class PlayerController(
                 .build()
         }
         current = item
+        val hdr = StreamHeaders.parse(item.url)
+        streamUserAgent = hdr.userAgent
+        streamReferrer = hdr.referrer
         val live = liveEdge(item)
         liveMode = live
         eofPending = false
@@ -379,7 +391,7 @@ class PlayerController(
         diag.format = if (Urls.isHls(item.url)) "HLS" else "TS"
         diag.agent = settings.userAgent
         val mediaItem = MediaItem.Builder()
-            .setUri(item.url)
+            .setUri(hdr.url)
             .setMediaId(item.id)
             .apply {
                 if (Urls.isHls(item.url)) setMimeType(MimeTypes.APPLICATION_M3U8)

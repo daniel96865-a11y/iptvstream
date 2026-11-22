@@ -46,8 +46,8 @@ android {
         minSdk = 24
         // Play verlangt für Handy-Apps seit 31.08.2026 API 36, für Android TV reicht 34.
         targetSdk = if (playBuild) 36 else 35
-        versionCode = 81
-        versionName = "1.0.74"
+        versionCode = 83
+        versionName = "1.0.75"
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a")
         }
@@ -118,6 +118,7 @@ android {
 
 dependencies {
     implementation(project(":core"))
+    implementation("sh.calvin.reorderable:reorderable:3.1.0")
     implementation("androidx.glance:glance-appwidget:1.2.0")
     // Chromecast-Sender (Handy → TV): Standard-Empfänger, eigene Auswahl im Glas-Look.
     implementation("com.google.android.gms:play-services-cast-framework:22.2.0")

@@ -77,5 +77,15 @@ class SettingsStore(private val context: Context) {
         fun fixedChannelKey(profileId: Long) = "fixed_channel_$profileId"
         fun listPosKey(profileId: Long, section: String) = "listpos_${section}_$profileId"
         fun syncRetryKey(profileId: Long) = "sync_retry_$profileId"
+        fun catOrderKey(profileId: Long, type: String) = "cat_order_${type}_$profileId"
+        fun catHiddenKey(profileId: Long, type: String) = "cat_hidden_${type}_$profileId"
+        fun channelOrderKey(profileId: Long, categoryId: String) = "ch_order_${profileId}_$categoryId"
+        fun channelHiddenKey(profileId: Long) = "ch_hidden_$profileId"
+        fun channelOrderPrefix(profileId: Long) = "ch_order_${profileId}_"
+        /** Zuletzt genutztes Nicht-Frei-Profil, damit der Schalter „Meine Sender“ zurückfindet. */
+        const val LAST_PROVIDER_PROFILE = "last_provider_profile"
+
+        /** Fernseher: Freie Sender einmalig von Deutsch+Italienisch auf nur Deutsch umgestellt. */
+        const val FREE_TV_DE_ONLY = "free_tv_de_only_v1"
     }
 }

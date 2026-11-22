@@ -39,6 +39,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.ui.draw.clip
+import de.dgstudios.iptvstream.core.data.FreeLanguages
+import de.dgstudios.iptvstream.core.data.FreeTv
+import de.dgstudios.iptvstream.core.ui.profileSubtitle
 import de.dgstudios.iptvstream.core.data.db.ProfileEntity
 import de.dgstudios.iptvstream.core.data.db.ProfileType
 import de.dgstudios.iptvstream.core.container
@@ -126,6 +133,7 @@ fun TvSettingsScreen(mainVm: MainViewModel, settings: AppSettings, entry: EntryH
                         when (id) {
                             "profiles" -> onProfiles()
                             "reload" -> mainVm.reloadContent()
+                            "reset_order" -> mainVm.resetLiveOrder()
                             "epg_refresh" -> mainVm.refreshEpg()
                             "check_update" -> context.container.updates.checkNow()
                         }
@@ -245,6 +253,10 @@ fun TvProfilesScreen(mainVm: MainViewModel, onBack: () -> Unit, onEdit: (Long) -
             TvTitle("Profile", Modifier.weight(1f))
             TvButton("Zurück", onBack)
             Spacer(Modifier.width(12.dp))
+            if (profiles.none { it.type == ProfileType.FREE }) {
+                TvButton("Freie Sender hinzufügen", { onEdit(NEW_FREE_PROFILE) })
+                Spacer(Modifier.width(12.dp))
+            }
             TvButton("Profil hinzufügen", { onEdit(0L) }, requester = addFocus)
         }
         Spacer(Modifier.height(16.dp))
@@ -264,8 +276,7 @@ fun TvProfilesScreen(mainVm: MainViewModel, onBack: () -> Unit, onEdit: (Long) -
                             maxLines = 1, overflow = TextOverflow.Ellipsis,
                         )
                         Text(
-                            (if (p.type == ProfileType.XTREAM) "Xtream Codes" else "M3U") + " · " +
-                                p.url.removePrefix("http://").removePrefix("https://"),
+                            profileSubtitle(p),
                             color = s.onSurfaceDim, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         )
                     }
@@ -296,7 +307,7 @@ fun TvProfileForm(mainVm: MainViewModel, profileId: Long, first: Boolean, onDone
     val s = LocalAppStyle.current
     val profiles by mainVm.profiles.collectAsStateWithLifecycle()
     val initial = profiles.firstOrNull { it.id == profileId }
-    val form = remember(initial?.id) { ProfileFormState(initial) }
+    val form = remember(initial?.id, profileId) { ProfileFormState(initial, startFree = profileId == NEW_FREE_PROFILE, freeDefault = FreeTv.TV_DEFAULT_LANGUAGES) }
     val firstField = remember { FocusRequester() }
     var transfer by remember { mutableStateOf(false) }
     if (transfer) {
@@ -335,7 +346,7 @@ fun TvProfileForm(mainVm: MainViewModel, profileId: Long, first: Boolean, onDone
         if (first) {
             Text("Willkommen", color = s.onSurface, fontSize = 36.sp, fontWeight = FontWeight.Bold)
             Text(
-                "Verbinde deinen IPTV-Anbieter. Nach der Anmeldung werden Sender, Filme und Serien automatisch geladen.",
+                "Verbinde deinen IPTV-Anbieter oder nimm „Freie Sender“ ohne Anbieter. Nach der Anmeldung werden Sender, Filme und Serien automatisch geladen.",
                 color = s.onSurfaceDim, fontSize = 17.sp,
             )
         } else {
@@ -351,14 +362,17 @@ fun TvProfileForm(mainVm: MainViewModel, profileId: Long, first: Boolean, onDone
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             TvButton(
                 "Xtream Codes",
-                { form.type = ProfileType.XTREAM },
+                { form.chooseType(ProfileType.XTREAM) },
                 selected = form.type == ProfileType.XTREAM,
                 requester = if (first) null else firstField,
             )
-            TvButton("M3U / M3U8", { form.type = ProfileType.M3U }, selected = form.type == ProfileType.M3U)
+            TvButton("M3U / M3U8", { form.chooseType(ProfileType.M3U) }, selected = form.type == ProfileType.M3U)
+            TvButton("Freie Sender", { form.chooseType(ProfileType.FREE) }, selected = form.type == ProfileType.FREE)
         }
-        TvField("Profilname (optional)", form.name, { form.name = it })
-        if (form.type == ProfileType.XTREAM) {
+        TvField(if (form.isFree) "Profilname (Freie Sender)" else "Profilname (optional)", form.name, { form.name = it })
+        if (form.isFree) {
+            TvFreeSenders(form)
+        } else if (form.type == ProfileType.XTREAM) {
             TvField("Server-URL, z. B. http://server:8080", form.url, { form.url = it })
             TvField("Benutzername", form.username, { form.username = it })
             TvField("Passwort", form.password, { form.password = it }, password = true)
@@ -370,7 +384,12 @@ fun TvProfileForm(mainVm: MainViewModel, profileId: Long, first: Boolean, onDone
         if (err != null) Text(err, color = Color(0xFFFF8A8A), fontSize = 17.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             TvButton(
-                text = if (form.busy) "Prüfe Zugangsdaten …" else if (form.isEdit) "Speichern" else "Anmelden & Laden",
+                text = when {
+                    form.busy -> if (form.isFree) "Lade Sender …" else "Prüfe Zugangsdaten …"
+                    form.isEdit -> "Speichern"
+                    form.isFree -> "Sender laden"
+                    else -> "Anmelden & Laden"
+                },
                 onClick = { submit() },
                 selected = form.valid,
             )
@@ -378,6 +397,103 @@ fun TvProfileForm(mainVm: MainViewModel, profileId: Long, first: Boolean, onDone
         }
         if (form.busy) {
             LinearProgressIndicator(Modifier.fillMaxWidth(), color = s.accent, trackColor = Color.White.copy(alpha = 0.15f))
+        }
+    }
+}
+
+/** Profil-ID, mit der das Formular direkt als neues „Freie Sender“-Profil startet. */
+const val NEW_FREE_PROFILE = -1L
+
+/** Sprachauswahl der Freien Sender (iptv-org) für die Fernbedienung. Vorgewählt ist nur Deutsch; Italienisch und alle anderen wählt man selbst dazu. */
+@Composable
+internal fun TvFreeSenders(form: ProfileFormState) {
+    val s = LocalAppStyle.current
+    var showAll by remember { mutableStateOf(false) }
+    val selected = form.freeLanguages
+    Text(
+        "Frei empfangbare Sender aus dem GitHub-Projekt iptv-org, ohne Anbieter. " +
+            "Manche Sender sind nach Land gesperrt oder gerade offline.",
+        color = s.onSurfaceDim, fontSize = 16.sp,
+    )
+    Text("Sprachen", color = s.onSurface, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        for (code in FreeLanguages.PROMINENT) {
+            val lang = FreeLanguages.find(code) ?: continue
+            TvButton(lang.label, { form.toggleLanguage(code) }, selected = code in selected)
+        }
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        TvButton("Weitere Sprachen …", { showAll = true })
+        TvButton(
+            if (form.freeHideGeo) "Geo-gesperrte ausblenden: an" else "Geo-gesperrte ausblenden: aus",
+            { form.freeHideGeo = !form.freeHideGeo },
+            selected = form.freeHideGeo,
+        )
+    }
+    val extra = selected.filter { it !in FreeLanguages.PROMINENT }
+    if (extra.isNotEmpty()) {
+        Text(
+            "Außerdem: " + extra.joinToString(", ") { FreeLanguages.find(it)?.label ?: it },
+            color = s.onSurfaceDim, fontSize = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
+        )
+    }
+    if (selected.isEmpty()) {
+        Text("Bitte mindestens eine Sprache wählen.", color = Color(0xFFFF8A8A), fontSize = 16.sp)
+    }
+    if (showAll) TvFreeLanguagesDialog(form, onClose = { showAll = false })
+}
+
+@Composable
+private fun TvFreeLanguagesDialog(form: ProfileFormState, onClose: () -> Unit) {
+    val s = LocalAppStyle.current
+    val all = remember { FreeLanguages.FOR_PICKER }
+    val selected = form.freeLanguages
+    val first = remember { FocusRequester() }
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onClose,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Column(
+            Modifier
+                .width(620.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(s.backgroundColors[1])
+                .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(24.dp))
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text("Sprachen (${selected.size} gewählt)", color = s.onSurface, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            LazyColumn(
+                Modifier.height(420.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                contentPadding = PaddingValues(6.dp),
+            ) {
+                itemsIndexed(all, key = { _, l -> l.code }) { i, lang ->
+                    val on = lang.code in selected
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .tvFocus(
+                                onClick = { form.toggleLanguage(lang.code) },
+                                selected = on,
+                                requester = if (i == 0) first else null,
+                            )
+                            .padding(horizontal = 18.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(lang.label, color = s.onSurface, fontSize = 19.sp, modifier = Modifier.weight(1f))
+                        if (on) Text("✓", color = s.onSurface, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+            TvButton("Fertig", onClose, modifier = Modifier.fillMaxWidth())
+        }
+    }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        try {
+            first.requestFocus()
+        } catch (e: IllegalStateException) {
         }
     }
 }

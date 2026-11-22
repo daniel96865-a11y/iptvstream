@@ -63,6 +63,8 @@ import androidx.media3.ui.PlayerView
 import de.dgstudios.iptvstream.core.container
 import de.dgstudios.iptvstream.core.player.UhdPlayback
 import de.dgstudios.iptvstream.core.data.NowNext
+import de.dgstudios.iptvstream.core.data.FreeLanguages
+import de.dgstudios.iptvstream.core.data.FreeTv
 import de.dgstudios.iptvstream.core.data.db.ProfileEntity
 import de.dgstudios.iptvstream.core.data.db.ProfileType
 import de.dgstudios.iptvstream.core.settings.AppSettings
@@ -397,10 +399,15 @@ fun NumberOverlay(text: String, modifier: Modifier = Modifier) {
 // ---------------------------------------------------------------------- Profil-Formular
 
 /** Formularzustand, den Handy- und TV-Oberfläche gleichermaßen verwenden. */
-class ProfileFormState(private val initial: ProfileEntity?) {
+class ProfileFormState(
+    private val initial: ProfileEntity?,
+    startFree: Boolean = false,
+    /** Vorauswahl der Sprachen bei Freien Sendern: Handy Deutsch+Italienisch, Fernseher nur Deutsch. */
+    private val freeDefault: String = FreeTv.DEFAULT_LANGUAGES,
+) {
     var name by mutableStateOf(initial?.name ?: "")
-    var type by mutableStateOf(initial?.type ?: ProfileType.XTREAM)
-    var url by mutableStateOf(initial?.url ?: "")
+    var type by mutableStateOf(initial?.type ?: if (startFree) ProfileType.FREE else ProfileType.XTREAM)
+    var url by mutableStateOf(initial?.url ?: if (startFree) freeDefault else "")
     var username by mutableStateOf(initial?.username ?: "")
     var password by mutableStateOf(initial?.password ?: "")
     var epgUrl by mutableStateOf(initial?.epgUrl ?: "")
@@ -408,17 +415,53 @@ class ProfileFormState(private val initial: ProfileEntity?) {
     var error by mutableStateOf<String?>(null)
 
     val isEdit: Boolean get() = initial != null
+    val isFree: Boolean get() = type == ProfileType.FREE
+
+    /** Wechselt die Art. Freie Sender bringen eigene Vorgaben mit (siehe [freeDefault]). */
+    fun chooseType(t: String) {
+        if (t == type) return
+        val wasFree = type == ProfileType.FREE
+        type = t
+        if (t == ProfileType.FREE) {
+            url = freeDefault
+            username = ""
+            password = ""
+            epgUrl = ""
+        } else if (wasFree) {
+            url = ""
+            username = ""
+        }
+        error = null
+    }
+
+    /** Gewählte Sprachcodes der Freien Sender, in Auswahlreihenfolge. */
+    var freeLanguages: List<String>
+        get() = FreeTv.decode(url, username).languages
+        set(v) {
+            url = FreeTv.encodeLanguages(v)
+        }
+
+    var freeHideGeo: Boolean
+        get() = FreeTv.decode(url, username).hideGeo
+        set(v) {
+            username = if (v) FreeTv.NO_GEO else ""
+        }
+
+    fun toggleLanguage(code: String) {
+        val cur = freeLanguages
+        freeLanguages = if (code in cur) cur - code else cur + code
+    }
 
     val valid: Boolean
-        get() = if (type == ProfileType.XTREAM) {
-            url.isNotBlank() && username.isNotBlank() && password.isNotBlank()
-        } else {
-            url.isNotBlank()
+        get() = when (type) {
+            ProfileType.XTREAM -> url.isNotBlank() && username.isNotBlank() && password.isNotBlank()
+            ProfileType.FREE -> freeLanguages.isNotEmpty()
+            else -> url.isNotBlank()
         }
 
     fun toEntity() = ProfileEntity(
         id = initial?.id ?: 0L,
-        name = name,
+        name = if (isFree) name.ifBlank { FreeTv.PROFILE_NAME } else name,
         type = type,
         url = url,
         username = username,
@@ -427,4 +470,15 @@ class ProfileFormState(private val initial: ProfileEntity?) {
         lastSync = initial?.lastSync ?: 0L,
         lastEpgSync = initial?.lastEpgSync ?: 0L,
     )
+}
+
+/** Kurztext für Profilliste: bei Freien Sendern die gewählten Sprachen. */
+fun profileSubtitle(p: ProfileEntity): String = when (p.type) {
+    ProfileType.XTREAM -> "Xtream Codes · " + p.url.removePrefix("http://").removePrefix("https://")
+    ProfileType.FREE -> {
+        val langs = FreeTv.decode(p.url, p.username).languages
+        val names = langs.take(4).joinToString(", ") { FreeLanguages.find(it)?.label ?: it }
+        "Freie Sender · " + names + if (langs.size > 4) " und ${langs.size - 4} weitere" else ""
+    }
+    else -> "M3U · " + p.url.removePrefix("http://").removePrefix("https://")
 }

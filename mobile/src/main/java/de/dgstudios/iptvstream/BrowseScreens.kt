@@ -18,6 +18,19 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import de.dgstudios.iptvstream.core.data.ListOrder
+import sh.calvin.reorderable.rememberReorderableLazyListState
+import sh.calvin.reorderable.ReorderableItem
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material.icons.rounded.DragHandle
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -61,6 +74,8 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -107,16 +122,69 @@ import kotlinx.coroutines.flow.first
 
 /** Horizontale Kategorieauswahl inkl. "Alle", "Favoriten" und "Zuletzt". */
 @Composable
-fun CategoryRow(categories: List<CategoryEntity>, selected: String, onSelect: (String) -> Unit) {
+fun CategoryRow(
+    categories: List<CategoryEntity>,
+    selected: String,
+    onSelect: (String) -> Unit,
+    hidden: List<CategoryEntity> = emptyList(),
+    onCategoryMenu: (String) -> Unit = {},
+    onUnhide: (String) -> Unit = {},
+    onReorder: ((List<String>) -> Unit)? = null,
+) {
+    var local by remember { mutableStateOf(categories) }
+    var dragging by remember { mutableStateOf(false) }
+    var moved by remember { mutableStateOf(false) }
+    var suppressClick by remember { mutableStateOf(false) }
+    LaunchedEffect(categories) { if (!dragging) local = categories }
+    val listState = rememberLazyListState()
+    val haptic = LocalHapticFeedback.current
+    val reorder = rememberReorderableLazyListState(listState) { from, to ->
+        val fromId = from.key as? String ?: return@rememberReorderableLazyListState
+        val toId = to.key as? String ?: return@rememberReorderableLazyListState
+        if (fromId == toId) return@rememberReorderableLazyListState
+        if (fromId in setOf(Cat.ALL, Cat.FAV, Cat.RECENT) || toId in setOf(Cat.ALL, Cat.FAV, Cat.RECENT)) return@rememberReorderableLazyListState
+        if (fromId.startsWith("hidden-") || toId.startsWith("hidden-")) return@rememberReorderableLazyListState
+        local = ListOrder.moveByKey(local, { it.id }, fromId, toId)
+        moved = true
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+    }
     LazyRow(
+        state = listState,
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item(key = Cat.ALL) { GlassChip("Alle", selected == Cat.ALL) { onSelect(Cat.ALL) } }
         item(key = Cat.FAV) { GlassChip("★ Favoriten", selected == Cat.FAV) { onSelect(Cat.FAV) } }
         item(key = Cat.RECENT) { GlassChip("Zuletzt", selected == Cat.RECENT) { onSelect(Cat.RECENT) } }
-        items(categories, key = { it.id }) { c ->
-            GlassChip(c.name, selected == c.id) { onSelect(c.id) }
+        items(local, key = { it.id }) { c ->
+            ReorderableItem(reorder, c.id, enabled = onReorder != null) { isDragging ->
+                GlassChip(
+                    text = c.name,
+                    selected = selected == c.id,
+                    lifted = isDragging,
+                    modifier = if (onReorder != null) Modifier.longPressDraggableHandle(
+                        onDragStarted = {
+                            dragging = true
+                            moved = false
+                            suppressClick = true
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        },
+                        onDragStopped = {
+                            dragging = false
+                            if (moved) onReorder(local.map { it.id })
+                            else onCategoryMenu(c.id)
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        },
+                    ) else Modifier,
+                    onLongClick = if (onReorder == null) ({ onCategoryMenu(c.id) }) else null,
+                    onClick = {
+                        if (suppressClick) suppressClick = false else onSelect(c.id)
+                    },
+                )
+            }
+        }
+        items(hidden, key = { "hidden-${it.id}" }) { c ->
+            GlassChip(c.name + " (aus)", selected = false, onClick = { onUnhide(c.id) })
         }
     }
 }
@@ -131,9 +199,24 @@ fun CategoryPicker(
     drawerIndex: Int = 0,
     drawerOffset: Int = 0,
     onDrawerScroll: (Int, Int) -> Unit = { _, _ -> },
+    onMoveCategory: (String, Int) -> Unit = { _, _ -> },
+    onHideCategory: (String) -> Unit = {},
+    onCategoryMenu: (String) -> Unit = {},
+    movingCategory: String? = null,
+    hiddenCategories: List<CategoryEntity> = emptyList(),
+    onUnhideCategory: (String) -> Unit = {},
+    onReorderCategories: ((List<String>) -> Unit)? = null,
 ) {
     if (!drawer) {
-        CategoryRow(categories, selected, onSelect)
+        CategoryRow(
+            categories = categories,
+            selected = selected,
+            onSelect = onSelect,
+            hidden = hiddenCategories,
+            onCategoryMenu = onCategoryMenu,
+            onUnhide = onUnhideCategory,
+            onReorder = onReorderCategories,
+        )
         return
     }
     var open by remember { mutableStateOf(false) }
@@ -177,6 +260,10 @@ fun CategoryPicker(
                 open = false
             },
             onDismiss = { open = false },
+            onCategoryMenu = onCategoryMenu,
+            hiddenCategories = hiddenCategories,
+            onUnhideCategory = onUnhideCategory,
+            onReorder = onReorderCategories,
         )
     }
 }
@@ -189,15 +276,26 @@ private fun CategoryDrawer(
     outerBottom: Dp,
     onSelect: (String) -> Unit,
     onDismiss: () -> Unit,
+    onCategoryMenu: (String) -> Unit = {},
+    hiddenCategories: List<CategoryEntity> = emptyList(),
+    onUnhideCategory: (String) -> Unit = {},
+    onReorder: ((List<String>) -> Unit)? = null,
 ) {
     val s = LocalAppStyle.current
     var query by remember { mutableStateOf("") }
-    val entries = remember(categories) {
+    var localCats by remember { mutableStateOf(categories) }
+    var dragging by remember { mutableStateOf(false) }
+    var moved by remember { mutableStateOf(false) }
+    var suppressClick by remember { mutableStateOf(false) }
+    val haptic = LocalHapticFeedback.current
+    LaunchedEffect(categories) { if (!dragging) localCats = categories }
+    val entries = remember(localCats, hiddenCategories) {
         buildList {
             add(Cat.ALL to Cat.label(Cat.ALL))
             add(Cat.FAV to Cat.label(Cat.FAV))
             add(Cat.RECENT to Cat.label(Cat.RECENT))
-            categories.forEach { add(it.id to it.name) }
+            localCats.forEach { add(it.id to it.name) }
+            hiddenCategories.forEach { add("hidden:${it.id}" to it.name + " (ausgeblendet)") }
         }
     }
     val shown = remember(entries, query) {
@@ -206,6 +304,19 @@ private fun CategoryDrawer(
     }
     val filterState = rememberLazyListState()
     val browsingAll = query.isBlank()
+    val canReorder = onReorder != null && browsingAll
+    val activeListState = if (browsingAll) listState else filterState
+    val reorder = rememberReorderableLazyListState(activeListState) { from, to ->
+        if (!canReorder) return@rememberReorderableLazyListState
+        val fromId = from.key as? String ?: return@rememberReorderableLazyListState
+        val toId = to.key as? String ?: return@rememberReorderableLazyListState
+        if (fromId == toId) return@rememberReorderableLazyListState
+        if (fromId.startsWith("hidden:") || toId.startsWith("hidden:")) return@rememberReorderableLazyListState
+        if (fromId in setOf(Cat.ALL, Cat.FAV, Cat.RECENT) || toId in setOf(Cat.ALL, Cat.FAV, Cat.RECENT)) return@rememberReorderableLazyListState
+        localCats = ListOrder.moveByKey(localCats, { it.id }, fromId, toId)
+        moved = true
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+    }
     // Dialog liefert die Navigationsleiste oft nicht. Der Wert von außen (Activity) bleibt gültig.
     val listBottom = maxOf(drawerSystemBottom(), outerBottom) + 48.dp
     LaunchedEffect(browsingAll, selected, entries) {
@@ -251,13 +362,48 @@ private fun CategoryDrawer(
                     Text("Keine Kategorie", color = s.onSurfaceDim, fontSize = 15.sp, modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp))
                 } else {
                     LazyColumn(
-                        state = if (browsingAll) listState else filterState,
+                        state = activeListState,
                         modifier = Modifier.weight(1f).fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         contentPadding = PaddingValues(bottom = listBottom),
                     ) {
                         items(shown, key = { it.first }) { (id, name) ->
-                            CategoryDrawerRow(name, id == selected) { onSelect(id) }
+                            val hiddenItem = id.startsWith("hidden:")
+                            val realId = if (hiddenItem) id.removePrefix("hidden:") else id
+                            val sortable = canReorder && !hiddenItem && realId != Cat.ALL && realId != Cat.FAV && realId != Cat.RECENT
+                            ReorderableItem(reorder, id, enabled = sortable) { isDragging ->
+                                CategoryDrawerRow(
+                                    name = name,
+                                    selected = realId == selected,
+                                    sortable = sortable,
+                                    emphasized = isDragging,
+                                    lifted = isDragging,
+                                    modifier = if (sortable) Modifier.longPressDraggableHandle(
+                                        onDragStarted = {
+                                            dragging = true
+                                            moved = false
+                                            suppressClick = true
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        },
+                                        onDragStopped = {
+                                            dragging = false
+                                            if (moved) onReorder?.invoke(localCats.map { it.id })
+                                            else onCategoryMenu(realId)
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        },
+                                    ) else Modifier,
+                                    onClick = {
+                                        if (suppressClick) {
+                                            suppressClick = false
+                                        } else if (hiddenItem) {
+                                            onUnhideCategory(realId)
+                                        } else {
+                                            onSelect(realId)
+                                        }
+                                    },
+                                    onMenu = { onCategoryMenu(realId) },
+                                )
+                            }
                         }
                     }
                 }
@@ -268,17 +414,29 @@ private fun CategoryDrawer(
 
 /** Deckende Karte, gleiche Ecke und Schrift wie die Senderliste, ohne durchscheinendes Glas. */
 @Composable
-private fun CategoryDrawerRow(name: String, selected: Boolean, onClick: () -> Unit) {
+private fun CategoryDrawerRow(
+    name: String,
+    selected: Boolean,
+    sortable: Boolean,
+    emphasized: Boolean,
+    lifted: Boolean = false,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+    onMenu: () -> Unit,
+) {
     val s = LocalAppStyle.current
     val shape = RoundedCornerShape(18.dp)
-    val fill = if (selected) solidMix(s.backgroundColors[2], s.accent, 0.5f) else s.backgroundColors[2]
+    val fill = if (selected || emphasized || lifted) solidMix(s.backgroundColors[2], s.accent, 0.5f) else s.backgroundColors[2]
+    val handleActive = modifier !== Modifier
     Box(
         Modifier
             .fillMaxWidth()
+            .dragLift(lifted)
             .clip(shape)
             .background(fill, shape)
-            .then(if (selected) Modifier.border(1.5.dp, s.accent, shape) else Modifier)
-            .pressable({ onClick() })
+            .then(if (selected || emphasized || lifted) Modifier.border(1.5.dp, s.accent, shape) else Modifier)
+            .then(modifier)
+            .pressable(onClick, onLongClick = if (sortable && !handleActive) onMenu else null)
             .padding(horizontal = 14.dp, vertical = 13.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
@@ -408,6 +566,27 @@ internal fun LiveTopBar(recent: List<ChannelEntity>, onSearch: () -> Unit, onPla
     }
 }
 
+
+/** Ein Tipp wechselt zwischen Anbieter-Profil und Freien Sendern. */
+@Composable
+internal fun LiveSourceSwitcher(mainVm: MainViewModel) {
+    val active by mainVm.active.collectAsStateWithLifecycle()
+    val profiles by mainVm.profiles.collectAsStateWithLifecycle()
+    val hasProvider = profiles.any { it.type != de.dgstudios.iptvstream.core.data.db.ProfileType.FREE }
+    val hasFree = profiles.any { it.type == de.dgstudios.iptvstream.core.data.db.ProfileType.FREE }
+    if (!hasProvider && !hasFree) return
+    val freeOn = active.profile?.type == de.dgstudios.iptvstream.core.data.db.ProfileType.FREE
+    Row(
+        Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (hasProvider) {
+            GlassChip("Meine Sender", !freeOn) { mainVm.switchLiveSource(false) }
+        }
+        GlassChip("Freie Sender", freeOn) { mainVm.switchLiveSource(true) }
+    }
+}
+
 @Composable
 fun LiveScreen(
     vm: LiveViewModel,
@@ -420,12 +599,24 @@ fun LiveScreen(
 ) {
     val recent by vm.recent.collectAsStateWithLifecycle()
     val categories by vm.categories.collectAsStateWithLifecycle()
+    val hiddenCats by vm.hiddenCategories.collectAsStateWithLifecycle()
     val selected by vm.selectedCategory.collectAsStateWithLifecycle()
     val items by vm.items.collectAsStateWithLifecycle()
+    val hiddenChannels by vm.hiddenChannels.collectAsStateWithLifecycle()
     val favs by vm.favoriteIds.collectAsStateWithLifecycle()
     val restored by vm.restored.collectAsStateWithLifecycle()
     val sync by mainVm.sync.collectAsStateWithLifecycle()
     val tick by rememberClockTick(10_000)
+    var menuChannel by remember { mutableStateOf<ChannelEntity?>(null) }
+    var menuCategory by remember { mutableStateOf<String?>(null) }
+    var showSortHelp by remember { mutableStateOf(false) }
+    var showHiddenChannels by remember { mutableStateOf(false) }
+    var draggingChannels by remember { mutableStateOf(false) }
+    var localItems by remember { mutableStateOf(items) }
+    var channelMoved by remember { mutableStateOf(false) }
+    var suppressChannelClick by remember { mutableStateOf(false) }
+    val haptic = LocalHapticFeedback.current
+    LaunchedEffect(items) { if (!draggingChannels) localItems = items }
 
     val topMax = remember { mutableIntStateOf(0) }
     val topCollapse = remember { mutableFloatStateOf(0f) }
@@ -443,7 +634,18 @@ fun LiveScreen(
     }
 
     Column(Modifier.fillMaxSize().nestedScroll(topConnection)) {
-        ScreenHeader("Live TV", if (items.isNotEmpty()) "${items.size} Sender" else null)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) {
+                ScreenHeader("Live TV", if (items.isNotEmpty()) "${items.size} Sender" else null)
+            }
+            Text(
+                "Sortieren",
+                color = LocalAppStyle.current.onSurfaceDim,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(end = 16.dp).pressable({ showSortHelp = true }),
+            )
+        }
+        LiveSourceSwitcher(mainVm)
         // Suche + „Weiterschauen“ klappen beim Runterscrollen ein und beim Hochscrollen wieder aus (wie die untere Leiste).
         // Suche + „Weiterschauen“ klappen beim Runterscrollen fingergenau ein und beim Hochscrollen wieder aus.
         // Die Leiste verbraucht dabei den Scrollweg selbst, so springt die Liste nicht mehr.
@@ -471,11 +673,26 @@ fun LiveScreen(
             drawerIndex = vm.drawerIndex,
             drawerOffset = vm.drawerOffset,
             onDrawerScroll = vm::onDrawerScroll,
+            onCategoryMenu = { menuCategory = it },
+            hiddenCategories = hiddenCats,
+            onUnhideCategory = vm::unhideCategory,
+            onReorderCategories = { vm.setCategoryOrder(it) },
         )
         if (!restored) return@Column
 
         val listState = rememberLazyListState(vm.scrollIndex, vm.scrollOffset)
-        val hasItems = items.isNotEmpty()
+        val reorder = rememberReorderableLazyListState(
+            listState,
+            scrollThresholdPadding = PaddingValues(bottom = bottomPad),
+        ) { from, to ->
+            val fromId = from.key as? String ?: return@rememberReorderableLazyListState
+            val toId = to.key as? String ?: return@rememberReorderableLazyListState
+            if (fromId == toId || fromId == "hidden-channels" || toId == "hidden-channels") return@rememberReorderableLazyListState
+            localItems = ListOrder.moveByKey(localItems, { it.streamId }, fromId, toId)
+            channelMoved = true
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        }
+        val hasItems = localItems.isNotEmpty()
         LaunchedEffect(hasItems, selected) {
             if (!hasItems) return@LaunchedEffect
             listState.scrollToItem(vm.scrollIndex.coerceAtMost(items.lastIndex), vm.scrollOffset)
@@ -491,7 +708,7 @@ fun LiveScreen(
                 .collect { (i, o) -> vm.onScroll(i, o) }
         }
 
-        if (items.isEmpty()) {
+        if (localItems.isEmpty() && items.isEmpty()) {
             when {
                 sync.running -> EmptyState("Sender werden geladen …", sync.stage, busy = true)
                 selected == Cat.FAV -> EmptyState("Noch keine Favoriten", "Tippe auf den Stern bei einem Sender.")
@@ -505,48 +722,139 @@ fun LiveScreen(
                 contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 6.dp, bottom = bottomPad),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(items, key = { it.streamId }, contentType = { "channel" }) { ch ->
-                    ChannelRow(
-                        ch = ch,
-                        showNumber = settings.showNumbers,
-                        fav = ch.streamId in favs,
-                        tick = tick,
-                        onClick = {
-                            vm.play(ch)
-                            onPlay()
-                        },
-                        onFav = { vm.toggleFavorite(ch.streamId) },
-                        onStart = { vm.setStartChannel(ch) },
-                    )
+                items(localItems, key = { it.streamId }, contentType = { "channel" }) { ch ->
+                    ReorderableItem(reorder, ch.streamId) { isDragging ->
+                        ChannelRow(
+                            ch = ch,
+                            showNumber = settings.showNumbers,
+                            fav = ch.streamId in favs,
+                            tick = tick,
+                            lifted = isDragging,
+                            rowModifier = Modifier.longPressDraggableHandle(
+                                onDragStarted = {
+                                    draggingChannels = true
+                                    channelMoved = false
+                                    suppressChannelClick = true
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                },
+                                onDragStopped = {
+                                    draggingChannels = false
+                                    if (channelMoved) vm.setChannelOrder(localItems.map { it.streamId })
+                                    else menuChannel = ch
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                },
+                            ),
+                            onClick = {
+                                if (suppressChannelClick) {
+                                    suppressChannelClick = false
+                                } else {
+                                    vm.play(ch)
+                                    onPlay()
+                                }
+                            },
+                            onFav = { vm.toggleFavorite(ch.streamId) },
+                            onMenu = { menuChannel = ch },
+                        )
+                    }
+                }
+                if (hiddenChannels.isNotEmpty()) {
+                    item(key = "hidden-channels") {
+                        HiddenLine("${hiddenChannels.size} ausgeblendete Sender · zum Einblenden tippen") {
+                            showHiddenChannels = true
+                        }
+                    }
                 }
             }
         }
     }
+
+    val mc = menuChannel
+    if (mc != null) {
+        SortActionMenu(
+            title = mc.name,
+            onDismiss = { menuChannel = null },
+            onToStart = { vm.moveChannelToStart(mc) },
+            onToEnd = { vm.moveChannelToEnd(mc) },
+            onHide = { vm.hideChannel(mc) },
+            extra = listOf(
+                (if (mc.streamId in favs) "Aus Favoriten entfernen" else "Zu Favoriten hinzufügen") to { vm.toggleFavorite(mc.streamId) },
+                "Als Startsender festlegen" to { vm.setStartChannel(mc) },
+                "Alphabetisch" to { vm.sortChannelsByName() },
+                "Zurücksetzen" to { mainVm.resetLiveOrder() },
+            ),
+        )
+    }
+    val mcat = menuCategory
+    if (mcat != null && mcat != Cat.ALL && mcat != Cat.FAV && mcat != Cat.RECENT) {
+        SortActionMenu(
+            title = categories.firstOrNull { it.id == mcat }?.name ?: mcat,
+            onDismiss = { menuCategory = null },
+            onToStart = { vm.moveCategoryToStart(mcat) },
+            onToEnd = { vm.moveCategoryToEnd(mcat) },
+            onHide = { vm.hideCategory(mcat) },
+            extra = listOf(
+                "Alphabetisch" to { vm.sortCategoriesByName() },
+                "Zurücksetzen" to { mainVm.resetLiveOrder() },
+            ),
+        )
+    }
+    if (showSortHelp) {
+        AlertDialog(
+            onDismissRequest = { showSortHelp = false },
+            title = { Text("Sortieren") },
+            text = { Text("Halte einen Sender oder eine Kategorie gedrückt und schiebe ihn an den neuen Platz. Loslassen speichert sofort. Wenn du ohne Schieben loslässt, erscheint ein kleines Menü.") },
+            confirmButton = { TextButton(onClick = { showSortHelp = false }) { Text("OK") } },
+        )
+    }
+    if (showHiddenChannels) {
+        AlertDialog(
+            onDismissRequest = { showHiddenChannels = false },
+            title = { Text("Ausgeblendete Sender") },
+            text = {
+                Column {
+                    hiddenChannels.forEach { ch ->
+                        Text(
+                            ch.name,
+                            modifier = Modifier.fillMaxWidth().pressable({
+                                vm.unhideChannel(ch.streamId)
+                            }).padding(vertical = 10.dp),
+                        )
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showHiddenChannels = false }) { Text("Fertig") } },
+        )
+    }
 }
 
 @Composable
-private fun ChannelRow(
+internal fun ChannelRow(
     ch: ChannelEntity,
     showNumber: Boolean,
     fav: Boolean,
     tick: Long,
     onClick: () -> Unit,
     onFav: () -> Unit,
-    onStart: () -> Unit,
+    onMenu: () -> Unit = {},
+    lifted: Boolean = false,
+    rowModifier: Modifier = Modifier,
 ) {
     val s = LocalAppStyle.current
     val nowNext by rememberNowNext(ch.profileId, ch.epgKey, tick)
-    var menu by remember { mutableStateOf(false) }
     val nn = nowNext
     val cur = nn?.now
     val next = nn?.next
+    val shape = RoundedCornerShape(18.dp)
 
     Box {
         Row(
             Modifier
                 .fillMaxWidth()
-                .glass(RoundedCornerShape(18.dp))
-                .pressable(onClick, onLongClick = { menu = true })
+                .dragLift(lifted)
+                .glass(shape)
+                .then(if (lifted) Modifier.border(2.dp, s.accent, shape) else Modifier)
+                .then(rowModifier)
+                .pressable(onClick, onLongClick = if (rowModifier === Modifier) onMenu else null)
                 .padding(start = 12.dp, end = 4.dp, top = 9.dp, bottom = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -608,22 +916,6 @@ private fun ChannelRow(
                     modifier = if (fav) Modifier.popIn() else Modifier,
                 )
             }
-        }
-        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-            DropdownMenuItem(
-                text = { Text(if (fav) "Aus Favoriten entfernen" else "Zu Favoriten hinzufügen") },
-                onClick = {
-                    menu = false
-                    onFav()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text("Als Startsender festlegen") },
-                onClick = {
-                    menu = false
-                    onStart()
-                },
-            )
         }
     }
 }

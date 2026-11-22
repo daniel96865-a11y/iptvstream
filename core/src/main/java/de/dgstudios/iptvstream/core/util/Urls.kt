@@ -64,7 +64,7 @@ object Urls {
     }
 
     fun isHls(url: String): Boolean {
-        val l = url.lowercase()
+        val l = url.substringBefore('#').lowercase()
         return l.substringBefore('?').endsWith(".m3u8") || l.contains(".m3u8?")
     }
 
@@ -87,5 +87,44 @@ object Urls {
         val altExt = if (file.endsWith(".m3u8", ignoreCase = true)) ".ts" else ".m3u8"
         val prefix = if (slash >= 0) path.substring(0, slash + 1) else ""
         return prefix + stem + altExt + query
+    }
+}
+
+/**
+ * Kennung und Referer eines einzelnen Senders (z. B. aus iptv-org-Listen). Sie reisen als
+ * URL-Fragment mit der Sender-URL, weil ein Fragment nie an den Server geht. So braucht die
+ * Datenbank kein neues Feld. Der Player trennt das Fragment vor dem Abspielen wieder ab.
+ */
+object StreamHeaders {
+    private const val MARK = "#iptvhdr="
+
+    data class Parsed(val url: String, val userAgent: String?, val referrer: String?)
+
+    fun attach(url: String, userAgent: String, referrer: String): String {
+        if (userAgent.isBlank() && referrer.isBlank()) return url
+        val enc = { v: String -> java.net.URLEncoder.encode(v, "UTF-8") }
+        return url.substringBefore('#') + MARK + "ua=" + enc(userAgent) + "&ref=" + enc(referrer)
+    }
+
+    fun parse(url: String): Parsed {
+        val i = url.indexOf(MARK)
+        if (i < 0) return Parsed(url, null, null)
+        val base = url.substring(0, i)
+        var ua: String? = null
+        var ref: String? = null
+        for (part in url.substring(i + MARK.length).split('&')) {
+            val k = part.substringBefore('=')
+            val v = try {
+                java.net.URLDecoder.decode(part.substringAfter('=', ""), "UTF-8")
+            } catch (_: IllegalArgumentException) {
+                ""
+            }.trim()
+            if (v.isEmpty()) continue
+            when (k) {
+                "ua" -> ua = v
+                "ref" -> ref = v
+            }
+        }
+        return Parsed(base, ua, ref)
     }
 }

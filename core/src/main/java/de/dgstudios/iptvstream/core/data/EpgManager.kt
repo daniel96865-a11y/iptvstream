@@ -68,9 +68,43 @@ class EpgManager(
     private data class GuideEntry(val value: NowNext, val until: Long)
 
     fun epgUrlFor(p: ProfileEntity): String? = when {
+        p.type == ProfileType.FREE -> FreeTv.epgPlan(FreeTv.decode(p.url, p.username).languages).providerUrls.firstOrNull()
         p.epgUrl.isNotBlank() -> p.epgUrl
         p.type == ProfileType.XTREAM -> Urls.xmltv(p.url, p.username, p.password)
         else -> null
+    }
+
+    /** Alle Anbieter-EPG-URLs (bei Freien Sendern ggf. mehrere Länder). */
+    private fun providerEpgUrls(p: ProfileEntity): List<String> = when {
+        p.type == ProfileType.FREE -> FreeTv.epgPlan(FreeTv.decode(p.url, p.username).languages).providerUrls
+        else -> listOfNotNull(epgUrlFor(p))
+    }
+
+    /**
+     * Freie Sender mit Deutsch brauchen den deutschen Programmführer immer, auch wenn er für
+     * Anbieter-Profile ausgeschaltet ist (Play-Variante: standardmäßig „Aus“). Sonst hätten die
+     * deutschen Freien Sender gar kein EPG.
+     */
+    private suspend fun modeFor(p: ProfileEntity?): String {
+        val user = germanMode()
+        if (p == null || p.type != ProfileType.FREE) return user
+        val plan = FreeTv.epgPlan(FreeTv.decode(p.url, p.username).languages)
+        return if (plan.wantGermanGuide && user == GermanGuide.OFF) GermanGuide.FALLBACK else user
+    }
+
+    /**
+     * Bei Freien Sendern nur die Programme der Sender aus der Liste speichern
+     * (normalisierte tvg-id und Name). Spart bei großen Länderdateien Speicher und Zeit.
+     * null = nicht filtern (z. B. Liste noch leer).
+     */
+    private suspend fun freeFilter(p: ProfileEntity): Set<String>? {
+        if (p.type != ProfileType.FREE) return null
+        val wanted = HashSet<String>()
+        for (c in db.content().channelEpgInfo(p.id)) {
+            if (!GermanGuide.isKey(c.epgKey)) EpgMatcher.normalize(c.epgKey).takeIf { it.isNotEmpty() }?.let(wanted::add)
+            EpgMatcher.normalize(c.name).takeIf { it.isNotEmpty() }?.let(wanted::add)
+        }
+        return wanted.takeIf { it.isNotEmpty() }
     }
 
     /** Startet eine Aktualisierung im Hintergrund. Ein laufender Abruf wird zu Ende gebracht, dieser danach. */
@@ -94,18 +128,18 @@ class EpgManager(
 
     private suspend fun runRefresh(p: ProfileEntity) {
         try {
-            val mode = germanMode()
-            val url = epgUrlFor(p)
-            if (url == null && mode == GermanGuide.OFF) {
+            val mode = modeFor(p)
+            val urls = providerEpgUrls(p)
+            if (urls.isEmpty() && mode == GermanGuide.OFF) {
                 _state.value = EpgState(error = "Keine EPG-Quelle hinterlegt.")
                 return
             }
             var loaded = 0
             var failure: String? = null
-            if (url != null) {
+            if (urls.isNotEmpty()) {
                 _state.value = EpgState(running = true, fraction = -1f, message = "EPG wird geladen …")
                 try {
-                    withContext(Dispatchers.IO) { importXmltv(p, url, german = false) }
+                    withContext(Dispatchers.IO) { importProviderXmltvs(p, urls) }
                     loaded++
                 } catch (e: CancellationException) {
                     throw e
@@ -150,7 +184,126 @@ class EpgManager(
         }
     }
 
-    private suspend fun importXmltv(p: ProfileEntity, url: String, german: Boolean) {
+    /**
+     * Mehrere Länder-Führer nacheinander in denselben Staging-Bereich, dann einmal freigeben.
+     * So behalten Freie Sender mit Deutsch+Italienisch beide Programmlisten.
+     */
+    private suspend fun importProviderXmltvs(p: ProfileEntity, urls: List<String>) {
+        if (urls.isEmpty()) return
+        val filter = freeFilter(p)
+        if (urls.size == 1) {
+            importXmltv(p, urls[0], german = false, filter = filter)
+            return
+        }
+        val now = System.currentTimeMillis()
+        val token = now
+        val minStop = now - 7 * 24 * 3_600_000L
+        val maxStart = now + 72 * 3_600_000L
+        val stage = EpgStaging.profileId(p.id)
+        val epgDao = db.epg()
+        var committed = false
+        try {
+            epgDao.clear(stage)
+            epgDao.clearNames(stage)
+            val names = HashMap<String, String>()
+            val keepIds = HashSet<String>()
+            var stored = 0
+            var firstFailure: Exception? = null
+            var okCount = 0
+            for ((index, url) in urls.withIndex()) {
+                _state.value = EpgState(running = true, fraction = -1f, message = "EPG ${index + 1}/${urls.size} …")
+                try {
+                http.get(url).use { body ->
+                    val counting = CountingInputStream(body.byteStream())
+                    val inflated = CountingInputStream(maybeGunzip(counting))
+                    val parser = Xml.newPullParser()
+                    parser.setInput(inflated, null)
+                    val batch = ArrayList<EpgEntity>(1000)
+                    var event = parser.eventType
+                    while (event != XmlPullParser.END_DOCUMENT) {
+                        if (event == XmlPullParser.START_TAG) {
+                            when (parser.name) {
+                                "channel" -> readChannel(parser, names, "", filter, keepIds)
+                                "programme" -> {
+                                    val start = XmltvTime.parse(parser.getAttributeValue(null, "start"))
+                                    val stop = XmltvTime.parse(parser.getAttributeValue(null, "stop"))
+                                    val ch = parser.getAttributeValue(null, "channel")?.lowercase()
+                                        ?.takeIf { filter == null || it in keepIds }
+                                    var title: String? = null
+                                    var desc: String? = null
+                                    val depth = parser.depth
+                                    while (true) {
+                                        val ev = parser.next()
+                                        if (ev == XmlPullParser.END_DOCUMENT) break
+                                        if (ev == XmlPullParser.END_TAG && parser.depth == depth) break
+                                        if (ev == XmlPullParser.START_TAG) {
+                                            when (parser.name) {
+                                                "title" -> {
+                                                    val t = parser.nextText().take(MAX_TITLE)
+                                                    if (title == null) title = t
+                                                }
+                                                "desc" -> {
+                                                    val t = parser.nextText().take(MAX_DESC)
+                                                    if (desc == null) desc = t
+                                                }
+                                            }
+                                        }
+                                    }
+                                    val finalTitle = title?.trim()
+                                    if (start != null && stop != null && ch != null && !finalTitle.isNullOrEmpty() &&
+                                        stop > minStop && start < maxStart
+                                    ) {
+                                        if (inflated.count > MAX_EPG_BYTES || stored >= MAX_EPG_ROWS) {
+                                            error("EPG-Datei ist zu groß")
+                                        }
+                                        stored++
+                                        batch.add(
+                                            EpgEntity(
+                                                profileId = stage,
+                                                channelKey = ch,
+                                                start = start,
+                                                stop = stop,
+                                                title = finalTitle,
+                                                description = desc?.trim()?.takeIf { it.isNotEmpty() },
+                                                sync = token,
+                                            ),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        if (batch.size >= 1000) {
+                            flushProgrammes(batch)
+                            currentCoroutineContext().ensureActive()
+                        }
+                        event = parser.next()
+                    }
+                    if (batch.isNotEmpty()) flushProgrammes(batch)
+                }
+                okCount++
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // Eine ausgefallene Länderdatei soll die anderen nicht mitreißen.
+                    if (firstFailure == null) firstFailure = e
+                }
+            }
+            if (okCount == 0) throw firstFailure ?: IllegalStateException("EPG leer")
+            db.withTransaction {
+                epgDao.clearProvider(p.id)
+                epgDao.clearProviderNames(p.id)
+                epgDao.promoteProvider(stage, p.id)
+                val nameRows = names.entries.map { EpgNameEntity(p.id, it.key, it.value) }
+                for (chunk in nameRows.chunked(500)) epgDao.insertNames(chunk)
+            }
+            committed = true
+        } catch (t: Throwable) {
+            if (!committed) abandonStaging(stage)
+            if (!committed || t is CancellationException) throw t
+        }
+    }
+
+    private suspend fun importXmltv(p: ProfileEntity, url: String, german: Boolean, filter: Set<String>? = null) {
         val prefix = if (german) GermanGuide.PREFIX else ""
         val label = if (german) "Programmführer" else "EPG"
         val now = System.currentTimeMillis()
@@ -174,6 +327,7 @@ class EpgManager(
 
                 val batch = ArrayList<EpgEntity>(1000)
                 val names = HashMap<String, String>()
+                val keepIds = HashSet<String>()
                 var stored = 0
                 var lastReport = 0L
                 var event = parser.eventType
@@ -181,11 +335,13 @@ class EpgManager(
                 while (event != XmlPullParser.END_DOCUMENT) {
                     if (event == XmlPullParser.START_TAG) {
                         when (parser.name) {
-                            "channel" -> readChannel(parser, names, prefix)
+                            "channel" -> readChannel(parser, names, prefix, filter, keepIds)
                             "programme" -> {
                                 val start = XmltvTime.parse(parser.getAttributeValue(null, "start"))
                                 val stop = XmltvTime.parse(parser.getAttributeValue(null, "stop"))
-                                val ch = parser.getAttributeValue(null, "channel")?.lowercase()?.let { prefix + it }
+                                val ch = parser.getAttributeValue(null, "channel")?.lowercase()
+                                    ?.takeIf { filter == null || it in keepIds }
+                                    ?.let { prefix + it }
                                 var title: String? = null
                                 var desc: String? = null
                                 val depth = parser.depth
@@ -288,24 +444,38 @@ class EpgManager(
         }
     }
 
-    private fun readChannel(p: XmlPullParser, names: MutableMap<String, String>, prefix: String) {
+    /**
+     * Liest einen Sender. Mit [filter] werden nur Sender übernommen, deren ID oder Name
+     * (normalisiert) in der Senderliste vorkommt; deren IDs landen in [keepIds].
+     */
+    private fun readChannel(
+        p: XmlPullParser,
+        names: MutableMap<String, String>,
+        prefix: String,
+        filter: Set<String>? = null,
+        keepIds: MutableSet<String>? = null,
+    ) {
         val id = p.getAttributeValue(null, "id")?.lowercase()
         val depth = p.depth
+        val found = ArrayList<String>(3)
         while (true) {
             val ev = p.next()
             if (ev == XmlPullParser.END_DOCUMENT) break
             if (ev == XmlPullParser.END_TAG && p.depth == depth) break
             if (ev == XmlPullParser.START_TAG && p.name == "display-name") {
-                val text = p.nextText().take(MAX_TITLE)
-                if (id != null && names.size < MAX_EPG_NAMES) {
-                    val n = EpgMatcher.normalize(text)
-                    if (n.isNotEmpty()) names.putIfAbsent(n, prefix + id)
-                }
+                val n = EpgMatcher.normalize(p.nextText().take(MAX_TITLE))
+                if (n.isNotEmpty()) found.add(n)
             }
         }
-        if (id != null && names.size < MAX_EPG_NAMES) {
-            val n = EpgMatcher.normalize(id)
-            if (n.isNotEmpty()) names.putIfAbsent(n, prefix + id)
+        if (id == null) return
+        EpgMatcher.normalize(id).takeIf { it.isNotEmpty() }?.let(found::add)
+        if (filter != null) {
+            if (found.none { it in filter }) return
+            keepIds?.add(id)
+        }
+        for (n in found) {
+            if (names.size >= MAX_EPG_NAMES) break
+            names.putIfAbsent(n, prefix + id)
         }
     }
 
@@ -316,7 +486,10 @@ class EpgManager(
      * deutschen Programmführer bedient werden, je nach Einstellung nur als Ersatz oder bevorzugt.
      */
     suspend fun rematch(profileId: Long) = withContext(Dispatchers.IO) {
-        val mode = germanMode()
+        val profile = db.profiles().get(profileId)
+        val mode = modeFor(profile)
+        // Die deutsche iptv-org-Liste enthält auch Sender mit .at/.ch/.fr-IDs (z. B. Euronews German).
+        val free = profile?.type == ProfileType.FREE
         val epg = db.epg()
         val content = db.content()
         val all = epg.keysWithData(profileId)
@@ -349,7 +522,8 @@ class EpgManager(
         db.withTransaction {
             for (c in channels) {
                 val country = EpgMatcher.countryOf(c.name) ?: EpgMatcher.countryOf(c.epgKey)
-                val useGerman = mode != GermanGuide.OFF && germanHave.isNotEmpty() && GermanGuide.eligible(country, mode)
+                val useGerman = mode != GermanGuide.OFF && germanHave.isNotEmpty() &&
+                    (free || GermanGuide.eligible(country, mode))
                 var target: String? = null
                 if (useGerman && mode == GermanGuide.PREFER) {
                     target = GermanGuide.match(c.epgKey, c.name, german)

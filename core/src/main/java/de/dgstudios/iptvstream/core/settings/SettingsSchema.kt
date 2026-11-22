@@ -204,6 +204,11 @@ object SettingsSchema {
                 ),
                 ActionDef("profiles", "Profile verwalten", "Hinzufügen, bearbeiten, löschen"),
                 ActionDef("reload", "Inhalte neu laden", "Sender, Filme und Serien aktualisieren"),
+                ActionDef(
+                    "reset_order",
+                    "Eigene Sortierung zurücksetzen",
+                    "Kategorien und Sender wieder in der ursprünglichen Reihenfolge",
+                ),
                 ActionDef("check_update", "Nach Updates suchen"),
                 InfoDef("language", "App-Sprache", "Deutsch"),
                 InfoDef("version", "Version", "1.0.13"),

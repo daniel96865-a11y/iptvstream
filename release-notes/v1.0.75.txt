@@ -1,0 +1,6 @@
+IPTVstream 1.0.75
+
+Neu: Freie Sender – frei empfangbare Sender aus dem Projekt iptv-org, ganz ohne Anbieter. Am Handy sind Deutsch und Italienisch vorgewählt, am Fernseher nur Deutsch; weitere Sprachen wählst du selbst in den Einstellungen.
+Mit einem Schalter wechselst du zwischen deinen Sendern und den Freien Sendern.
+Programmführer (EPG) für die Freien Sender, auch für Dritte Programme sowie österreichische und Schweizer Sender.
+Sender und Kategorien selbst sortieren: am Handy lange drücken und ziehen, am Fernseher lange OK drücken und „Verschieben“ wählen.

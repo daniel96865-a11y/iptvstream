@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import de.dgstudios.iptvstream.core.container
 import de.dgstudios.iptvstream.core.data.Cat
+import de.dgstudios.iptvstream.core.data.ListOrder
 import de.dgstudios.iptvstream.core.data.EpgGuide
 import de.dgstudios.iptvstream.core.data.LiveRequest
 import de.dgstudios.iptvstream.core.data.NowNext
@@ -48,8 +49,27 @@ abstract class BrowseViewModel<T>(
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    val categories: StateFlow<List<CategoryEntity>> = profileId.filterNotNull()
-        .flatMapLatest { repo.categories(it, catType) }
+    private data class CatPrefs(val all: List<CategoryEntity>, val order: List<String>, val hidden: Set<String>)
+
+    private val catPrefs: StateFlow<CatPrefs> = profileId.filterNotNull()
+        .flatMapLatest { pid ->
+            combine(repo.categories(pid, catType), c.settings.flow) { cats, prefs ->
+                CatPrefs(
+                    all = cats,
+                    order = ListOrder.decode(prefs.raw.get(SettingsStore.catOrderKey(pid, catType))),
+                    hidden = ListOrder.decode(prefs.raw.get(SettingsStore.catHiddenKey(pid, catType))).toSet(),
+                )
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CatPrefs(emptyList(), emptyList(), emptySet()))
+
+    val categories: StateFlow<List<CategoryEntity>> = catPrefs
+        .map { ListOrder.apply(it.all, { c -> c.id }, it.order, it.hidden) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Ausgeblendete Kategorien, zum Wieder-Einblenden. */
+    val hiddenCategories: StateFlow<List<CategoryEntity>> = catPrefs
+        .map { prefs -> prefs.all.filter { it.id in prefs.hidden } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val selectedCategory = MutableStateFlow(Cat.ALL)
@@ -169,13 +189,98 @@ abstract class BrowseViewModel<T>(
         val pid = profileId.value ?: return
         viewModelScope.launch { repo.toggleFavorite(pid, favType, id) }
     }
+
+    private fun isFixedCat(id: String) = id == Cat.ALL || id == Cat.FAV || id == Cat.RECENT
+
+    private suspend fun mutateCatOrder(transform: (List<String>) -> List<String>) {
+        val pid = profileId.value ?: return
+        val key = SettingsStore.catOrderKey(pid, catType)
+        val current = categories.value.map { it.id }
+        val saved = ListOrder.decode(c.settings.getRaw(key))
+        val base = if (saved.isEmpty()) current else ListOrder.apply(current, { it }, saved, emptySet())
+        c.settings.set(key, ListOrder.encode(transform(base)))
+    }
+
+    /** Kategorie eine Position nach oben (−1) oder unten (+1) schieben. */
+    fun moveCategory(id: String, delta: Int) {
+        if (isFixedCat(id)) return
+        viewModelScope.launch { mutateCatOrder { ListOrder.move(it, id, delta) } }
+    }
+
+    fun moveCategoryToStart(id: String) {
+        if (isFixedCat(id)) return
+        viewModelScope.launch { mutateCatOrder { ListOrder.moveToStart(it, id) } }
+    }
+
+    fun moveCategoryToEnd(id: String) {
+        if (isFixedCat(id)) return
+        viewModelScope.launch { mutateCatOrder { ListOrder.moveToEnd(it, id) } }
+    }
+
+    fun sortCategoriesByName() {
+        viewModelScope.launch {
+            val labels = categories.value.associate { it.id to it.name }
+            mutateCatOrder { ListOrder.sortBy(it) { id -> labels[id] ?: id } }
+        }
+    }
+
+    /** Speichert die sichtbare Kategorie-Reihenfolge (nach Drag-and-Drop). */
+    fun setCategoryOrder(ids: List<String>) {
+        val clean = ids.filter { !isFixedCat(it) }
+        if (clean.isEmpty()) return
+        viewModelScope.launch { mutateCatOrder { ListOrder.replaceVisible(it, clean) } }
+    }
+
+    fun hideCategory(id: String) {
+        if (isFixedCat(id)) return
+        val pid = profileId.value ?: return
+        viewModelScope.launch {
+            val key = SettingsStore.catHiddenKey(pid, catType)
+            val hidden = ListOrder.decode(c.settings.getRaw(key)).toMutableList()
+            if (id !in hidden) hidden += id
+            c.settings.set(key, ListOrder.encode(hidden))
+            if (selectedCategory.value == id) selectCategory(Cat.ALL)
+        }
+    }
+
+    fun unhideCategory(id: String) {
+        val pid = profileId.value ?: return
+        viewModelScope.launch {
+            val key = SettingsStore.catHiddenKey(pid, catType)
+            c.settings.set(key, ListOrder.encode(ListOrder.decode(c.settings.getRaw(key)).filter { it != id }))
+        }
+    }
+
+    fun resetListOrder() {
+        val pid = profileId.value ?: return
+        viewModelScope.launch {
+            c.settings.remove(SettingsStore.catOrderKey(pid, catType))
+            c.settings.remove(SettingsStore.catHiddenKey(pid, catType))
+        }
+    }
 }
 
 class LiveViewModel(app: Application) :
     BrowseViewModel<ChannelEntity>(app, "live", CatType.LIVE, "LIVE") {
 
     override fun itemsFlow(profileId: Long, category: String): Flow<List<ChannelEntity>> =
-        repo.channels(profileId, category)
+        combine(
+            repo.channels(profileId, category),
+            c.settings.flow.map { prefs ->
+                ListOrder.decode(prefs.raw.get(SettingsStore.channelOrderKey(profileId, category))) to
+                    ListOrder.decode(prefs.raw.get(SettingsStore.channelHiddenKey(profileId))).toSet()
+            },
+        ) { list, pair -> ListOrder.apply(list, { it.streamId }, pair.first, pair.second) }
+
+    /** Ausgeblendete Sender (aller Kategorien), zum Wieder-Einblenden. */
+    val hiddenChannels: StateFlow<List<ChannelEntity>> = profileId.filterNotNull()
+        .flatMapLatest { pid ->
+            combine(
+                repo.channels(pid, Cat.ALL),
+                c.settings.flow.map { ListOrder.decode(it.raw.get(SettingsStore.channelHiddenKey(pid))).toSet() },
+            ) { list, hidden -> list.filter { it.streamId in hidden } }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Zuletzt gesehene Sender für "Weiterschauen" oben in Live TV. */
     val recent: StateFlow<List<ChannelEntity>> = profileId.filterNotNull()
@@ -219,6 +324,66 @@ class LiveViewModel(app: Application) :
         viewModelScope.launch {
             c.settings.set(SettingsStore.fixedChannelKey(ch.profileId), ch.streamId)
             c.settings.set("start_mode", "fixed")
+        }
+    }
+
+    private suspend fun mutateChannelOrder(transform: (List<String>) -> List<String>) {
+        val pid = profileId.value ?: return
+        val cat = selectedCategory.value
+        val key = SettingsStore.channelOrderKey(pid, cat)
+        val current = items.value.map { it.streamId }
+        val saved = ListOrder.decode(c.settings.getRaw(key))
+        val base = if (saved.isEmpty()) current else ListOrder.apply(current, { it }, saved, emptySet())
+        c.settings.set(key, ListOrder.encode(transform(base)))
+    }
+
+    fun moveChannel(ch: ChannelEntity, delta: Int) {
+        viewModelScope.launch { mutateChannelOrder { ListOrder.move(it, ch.streamId, delta) } }
+    }
+
+    fun moveChannelToStart(ch: ChannelEntity) {
+        viewModelScope.launch { mutateChannelOrder { ListOrder.moveToStart(it, ch.streamId) } }
+    }
+
+    fun moveChannelToEnd(ch: ChannelEntity) {
+        viewModelScope.launch { mutateChannelOrder { ListOrder.moveToEnd(it, ch.streamId) } }
+    }
+
+    fun sortChannelsByName() {
+        viewModelScope.launch {
+            val labels = items.value.associate { it.streamId to it.name }
+            mutateChannelOrder { ListOrder.sortBy(it) { id -> labels[id] ?: id } }
+        }
+    }
+
+    /** Speichert die sichtbare Sender-Reihenfolge der aktuellen Kategorie (nach Drag-and-Drop). */
+    fun setChannelOrder(ids: List<String>) {
+        if (ids.isEmpty()) return
+        viewModelScope.launch { mutateChannelOrder { ListOrder.replaceVisible(it, ids) } }
+    }
+
+    fun hideChannel(ch: ChannelEntity) {
+        val pid = profileId.value ?: return
+        viewModelScope.launch {
+            val key = SettingsStore.channelHiddenKey(pid)
+            val hidden = ListOrder.decode(c.settings.getRaw(key)).toMutableList()
+            if (ch.streamId !in hidden) hidden += ch.streamId
+            c.settings.set(key, ListOrder.encode(hidden))
+        }
+    }
+
+    fun unhideChannel(id: String) {
+        val pid = profileId.value ?: return
+        viewModelScope.launch {
+            val key = SettingsStore.channelHiddenKey(pid)
+            c.settings.set(key, ListOrder.encode(ListOrder.decode(c.settings.getRaw(key)).filter { it != id }))
+        }
+    }
+
+    fun resetChannelOrder() {
+        val pid = profileId.value ?: return
+        viewModelScope.launch {
+            c.settings.remove(SettingsStore.channelOrderKey(pid, selectedCategory.value))
         }
     }
 

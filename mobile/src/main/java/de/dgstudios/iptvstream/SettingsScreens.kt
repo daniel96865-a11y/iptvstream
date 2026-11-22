@@ -69,7 +69,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import de.dgstudios.iptvstream.core.settings.SettingsSection
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.dgstudios.iptvstream.core.data.FreeLanguages
 import de.dgstudios.iptvstream.core.data.db.ProfileEntity
+import de.dgstudios.iptvstream.core.ui.profileSubtitle
 import de.dgstudios.iptvstream.core.data.db.ProfileType
 import de.dgstudios.iptvstream.core.settings.ActionDef
 import de.dgstudios.iptvstream.core.settings.AppSettings
@@ -140,6 +142,7 @@ fun SettingsScreen(mainVm: MainViewModel, settings: AppSettings, bottomPad: Dp, 
                     when (id) {
                         "profiles" -> onProfiles()
                         "reload" -> mainVm.reloadContent()
+                        "reset_order" -> mainVm.resetLiveOrder()
                         "epg_refresh" -> mainVm.refreshEpg()
                         "check_update" -> context.container.updates.checkNow()
                     }
@@ -377,18 +380,37 @@ fun ProfilesScreen(mainVm: MainViewModel, onBack: () -> Unit, onEdit: (Long) -> 
                             }
                         }
                         Text(
-                            (if (p.type == ProfileType.XTREAM) "Xtream Codes" else "M3U") + " · " + p.url.removePrefix("http://").removePrefix("https://"),
+                            profileSubtitle(p),
                             color = s.onSurfaceDim,
                             fontSize = 12.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
-                    GlassIconButton(Icons.Rounded.Tv, "An TV senden", { toTv = p })
-                    Spacer(Modifier.width(6.dp))
+                    if (p.type != ProfileType.FREE) {
+                        GlassIconButton(Icons.Rounded.Tv, "An TV senden", { toTv = p })
+                        Spacer(Modifier.width(6.dp))
+                    }
                     GlassIconButton(Icons.Rounded.Edit, "Bearbeiten", { onEdit(p.id) })
                     Spacer(Modifier.width(6.dp))
                     GlassIconButton(Icons.Rounded.Delete, "Löschen", { toDelete = p }, tint = Color(0xFFFF8A8A))
+                }
+            }
+            if (profiles.none { it.type == ProfileType.FREE }) {
+                item(key = "free-add") {
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .glass(RoundedCornerShape(18.dp))
+                            .pressable({ onEdit(NEW_FREE_PROFILE) })
+                            .padding(16.dp),
+                    ) {
+                        Text("＋ Freie Sender hinzufügen", color = s.onSurface, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "Frei empfangbare Sender aus dem Projekt iptv-org: Deutsch, Italienisch (u. a. Rai) und viele weitere Sprachen. Ohne Anbieter, ohne Zugangsdaten. Dein Anbieter-Profil bleibt unberührt.",
+                            color = s.onSurfaceDim, fontSize = 12.sp,
+                        )
+                    }
                 }
             }
         }
@@ -421,7 +443,7 @@ fun ProfileFormScreen(mainVm: MainViewModel, profileId: Long, first: Boolean, on
     val s = LocalAppStyle.current
     val profiles by mainVm.profiles.collectAsStateWithLifecycle()
     val initial = profiles.firstOrNull { it.id == profileId }
-    val form = remember(initial?.id) { ProfileFormState(initial) }
+    val form = remember(initial?.id, profileId) { ProfileFormState(initial, startFree = profileId == NEW_FREE_PROFILE) }
 
     fun submit() {
         if (!form.valid || form.busy) return
@@ -455,19 +477,26 @@ fun ProfileFormScreen(mainVm: MainViewModel, profileId: Long, first: Boolean, on
             Spacer(Modifier.height(24.dp))
             Text("Willkommen", color = s.onSurface, fontSize = 34.sp, fontWeight = FontWeight.Bold)
             Text(
-                "Verbinde deinen IPTV-Anbieter. Nach der Anmeldung werden Sender, Filme und Serien automatisch geladen.",
+                "Verbinde deinen IPTV-Anbieter oder nimm „Freie Sender“ ohne Anbieter. Nach der Anmeldung werden Sender, Filme und Serien automatisch geladen.",
                 color = s.onSurfaceDim, fontSize = 14.sp,
             )
             Spacer(Modifier.height(8.dp))
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            GlassChip("Xtream Codes", form.type == ProfileType.XTREAM) { form.type = ProfileType.XTREAM }
-            GlassChip("M3U / M3U8", form.type == ProfileType.M3U) { form.type = ProfileType.M3U }
+        @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+        androidx.compose.foundation.layout.FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            GlassChip("Xtream Codes", form.type == ProfileType.XTREAM) { form.chooseType(ProfileType.XTREAM) }
+            GlassChip("M3U / M3U8", form.type == ProfileType.M3U) { form.chooseType(ProfileType.M3U) }
+            GlassChip("Freie Sender", form.type == ProfileType.FREE) { form.chooseType(ProfileType.FREE) }
         }
 
-        GlassTextField(form.name, { form.name = it }, "Profilname (optional)")
-        if (form.type == ProfileType.XTREAM) {
+        GlassTextField(form.name, { form.name = it }, if (form.isFree) "Profilname (Freie Sender)" else "Profilname (optional)")
+        if (form.isFree) {
+            FreeSendersSection(form)
+        } else if (form.type == ProfileType.XTREAM) {
             GlassTextField(form.url, { form.url = it }, "Server-URL, z. B. http://server:8080")
             GlassTextField(form.username, { form.username = it }, "Benutzername")
             GlassTextField(
@@ -487,7 +516,12 @@ fun ProfileFormScreen(mainVm: MainViewModel, profileId: Long, first: Boolean, on
             Text(err, color = Color(0xFFFF8A8A), fontSize = 14.sp)
         }
         PrimaryButton(
-            text = if (form.busy) "Prüfe Zugangsdaten …" else if (form.isEdit) "Speichern" else "Anmelden & Laden",
+            text = when {
+                form.busy -> if (form.isFree) "Lade Sender …" else "Prüfe Zugangsdaten …"
+                form.isEdit -> "Speichern"
+                form.isFree -> "Sender laden"
+                else -> "Anmelden & Laden"
+            },
             onClick = { submit() },
             modifier = Modifier.fillMaxWidth(),
         )
@@ -500,4 +534,95 @@ fun ProfileFormScreen(mainVm: MainViewModel, profileId: Long, first: Boolean, on
         }
         Spacer(Modifier.height(24.dp))
     }
+}
+
+/** Profil-ID, mit der das Formular direkt als neues „Freie Sender“-Profil startet. */
+const val NEW_FREE_PROFILE = -1L
+
+/** Auswahl der Sprachen für Freie Sender (iptv-org). Deutsch und Italienisch sind vorgewählt. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+internal fun FreeSendersSection(form: ProfileFormState) {
+    val s = LocalAppStyle.current
+    var showAll by remember { mutableStateOf(false) }
+    val selected = form.freeLanguages
+
+    Text(
+        "Frei empfangbare Sender aus dem GitHub-Projekt iptv-org. Dazu brauchst du keinen Anbieter. " +
+            "Manche Sender sind nach Land gesperrt oder gerade offline.",
+        color = s.onSurfaceDim, fontSize = 13.sp,
+    )
+    Text("Sprachen", color = s.onSurface, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+    androidx.compose.foundation.layout.FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        for (code in FreeLanguages.PROMINENT) {
+            val lang = FreeLanguages.find(code) ?: continue
+            GlassChip(lang.label, code in selected) { form.toggleLanguage(code) }
+        }
+        GlassChip("Weitere Sprachen …", false) { showAll = true }
+    }
+    val extra = selected.filter { it !in FreeLanguages.PROMINENT }
+    if (extra.isNotEmpty()) {
+        Text(
+            "Außerdem: " + extra.joinToString(", ") { FreeLanguages.find(it)?.label ?: it },
+            color = s.onSurfaceDim, fontSize = 13.sp,
+        )
+    }
+    if (selected.isEmpty()) {
+        Text("Bitte mindestens eine Sprache wählen.", color = Color(0xFFFF8A8A), fontSize = 13.sp)
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Geo-gesperrte Sender ausblenden", color = s.onSurface, fontSize = 15.sp, modifier = Modifier.weight(1f))
+        Switch(
+            checked = form.freeHideGeo,
+            onCheckedChange = { form.freeHideGeo = it },
+            colors = SwitchDefaults.colors(checkedTrackColor = s.accent),
+        )
+    }
+
+    if (showAll) FreeLanguagesDialog(form, onClose = { showAll = false })
+}
+
+@Composable
+private fun FreeLanguagesDialog(form: ProfileFormState, onClose: () -> Unit) {
+    val s = LocalAppStyle.current
+    var query by remember { mutableStateOf("") }
+    val all = remember { FreeLanguages.FOR_PICKER }
+    val shown = remember(query) {
+        val q = query.trim().lowercase()
+        if (q.isEmpty()) all else all.filter { it.label.lowercase().contains(q) || it.english.lowercase().contains(q) }
+    }
+    val selected = form.freeLanguages
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text("Sprachen (${selected.size} gewählt)") },
+        text = {
+            Column {
+                GlassTextField(query, { query = it }, "Suchen")
+                Spacer(Modifier.height(8.dp))
+                LazyColumn(Modifier.height(340.dp)) {
+                    items(shown, key = { it.code }) { lang ->
+                        val on = lang.code in selected
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .pressable({ form.toggleLanguage(lang.code) })
+                                .padding(vertical = 10.dp, horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                lang.label, color = s.onSurface, fontSize = 15.sp,
+                                fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (on) Icon(Icons.Rounded.Check, "Gewählt", tint = s.accent, modifier = Modifier.size(20.dp))
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onClose) { Text("Fertig") } },
+    )
 }
