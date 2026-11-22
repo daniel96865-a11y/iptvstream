@@ -15,6 +15,16 @@ class BrowserPrefs(ctx: Context) {
         get() = sp.getBoolean("auto_fullscreen", true)
         set(v) = sp.edit().putBoolean("auto_fullscreen", v).apply()
 
+    /** Sicheres DNS: off, cloudflare, quad9, google oder custom (siehe [SecureDns]). */
+    var secureDns: String
+        get() = sp.getString("secure_dns", SecureDns.OFF) ?: SecureDns.OFF
+        set(v) = sp.edit().putString("secure_dns", v).apply()
+
+    /** Eigene DoH-Adresse (https://…/dns-query) für „Eigener Anbieter“. */
+    var secureDnsUrl: String
+        get() = sp.getString("secure_dns_url", "") ?: ""
+        set(v) = sp.edit().putString("secure_dns_url", v).apply()
+
     var lastUrl: String
         get() = sp.getString("last_url", "") ?: ""
         set(v) = sp.edit().putString("last_url", v).apply()

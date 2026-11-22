@@ -98,6 +98,8 @@ dependencies {
     api("io.coil-kt:coil-compose:2.7.0")
     api("com.squareup.retrofit2:retrofit:2.12.0")
     api("com.squareup.okhttp3:okhttp:4.12.1")
+    // Sicheres DNS (DNS über HTTPS) für den eingebauten Browser.
+    implementation("com.squareup.okhttp3:okhttp-dnsoverhttps:4.12.0")
     api("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
     testImplementation("junit:junit:4.13.2")
