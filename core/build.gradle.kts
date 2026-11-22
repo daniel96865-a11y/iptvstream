@@ -107,6 +107,10 @@ dependencies {
     if (playBuild) {
         // Google Play In-App-Updates (Handy/Tablet); Fake-Manager für Tests liegt im selben Artefakt.
         api("com.google.android.play:app-update:2.1.0")
+        // app-update 2.1.0 zieht über play-services-basement:18.1.0 androidx.fragment:1.0.0
+        // nach. Play markiert 1.0.0 als veraltet. Aktuelle stabile Version erzwingen
+        // (TV hat sonst keine neuere Fragment-Abhängigkeit; Handy löste bisher auf 1.3.6).
+        api("androidx.fragment:fragment:1.9.1")
     }
     implementation("io.sentry:sentry-android-core:8.64.0")
     implementation("androidx.work:work-runtime-ktx:2.12.0")
