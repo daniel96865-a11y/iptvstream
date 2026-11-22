@@ -44,6 +44,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.ui.draw.clip
 import de.dgstudios.iptvstream.core.data.FreeLanguages
+import de.dgstudios.iptvstream.core.data.FreeTv
 import de.dgstudios.iptvstream.core.ui.profileSubtitle
 import de.dgstudios.iptvstream.core.data.db.ProfileEntity
 import de.dgstudios.iptvstream.core.data.db.ProfileType
@@ -306,7 +307,7 @@ fun TvProfileForm(mainVm: MainViewModel, profileId: Long, first: Boolean, onDone
     val s = LocalAppStyle.current
     val profiles by mainVm.profiles.collectAsStateWithLifecycle()
     val initial = profiles.firstOrNull { it.id == profileId }
-    val form = remember(initial?.id, profileId) { ProfileFormState(initial, startFree = profileId == NEW_FREE_PROFILE) }
+    val form = remember(initial?.id, profileId) { ProfileFormState(initial, startFree = profileId == NEW_FREE_PROFILE, freeDefault = FreeTv.TV_DEFAULT_LANGUAGES) }
     val firstField = remember { FocusRequester() }
     var transfer by remember { mutableStateOf(false) }
     if (transfer) {
@@ -403,7 +404,7 @@ fun TvProfileForm(mainVm: MainViewModel, profileId: Long, first: Boolean, onDone
 /** Profil-ID, mit der das Formular direkt als neues „Freie Sender“-Profil startet. */
 const val NEW_FREE_PROFILE = -1L
 
-/** Sprachauswahl der Freien Sender (iptv-org) für die Fernbedienung. Deutsch und Italienisch sind vorgewählt. */
+/** Sprachauswahl der Freien Sender (iptv-org) für die Fernbedienung. Vorgewählt ist nur Deutsch; Italienisch und alle anderen wählt man selbst dazu. */
 @Composable
 internal fun TvFreeSenders(form: ProfileFormState) {
     val s = LocalAppStyle.current

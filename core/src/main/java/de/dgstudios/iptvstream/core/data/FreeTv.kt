@@ -12,7 +12,24 @@ import de.dgstudios.iptvstream.core.util.StreamHeaders
  */
 object FreeTv {
     const val BASE = "https://iptv-org.github.io/iptv/languages/"
+    /** Handy: Deutsch und Italienisch vorausgewählt. */
     const val DEFAULT_LANGUAGES = "deu,ita"
+
+    /** Fernseher: erstmal nur Deutsch, alles andere wählt man selbst dazu. */
+    const val TV_DEFAULT_LANGUAGES = "deu"
+
+    fun defaultLanguages(isTv: Boolean): String = if (isTv) TV_DEFAULT_LANGUAGES else DEFAULT_LANGUAGES
+
+    /** Die TV-App hat die Paket-ID de.dgstudios.iptvstream.tv (ggf. mit Suffix). */
+    fun isTvPackage(packageName: String): Boolean = packageName.contains(".iptvstream.tv")
+
+    /**
+     * Einmalige Umstellung am Fernseher: Wer noch die alte, automatisch gesetzte Vorgabe
+     * (Deutsch + Italienisch) hat, bekommt nur Deutsch. Jede andere Auswahl bleibt.
+     * Rückgabe: neue Sprachliste oder null, wenn nichts zu tun ist.
+     */
+    fun tvMigration(currentUrl: String): String? =
+        if (encodeLanguages(currentUrl.split(',')) == DEFAULT_LANGUAGES) TV_DEFAULT_LANGUAGES else null
     const val NO_GEO = "nogeo"
     const val PROFILE_NAME = "Freie Sender"
 
@@ -51,6 +68,12 @@ object FreeTv {
         "hin" to "https://epgshare01.online/epgshare01/epg_ripper_IN1.xml.gz",
     )
 
+    /** Zusätzliche Programmführer für die deutsche Liste; beim Import auf die Sender der Liste gefiltert. */
+    val GERMAN_EXTRA_EPG = listOf(
+        "https://epgshare01.online/epgshare01/epg_ripper_AT1.xml.gz",
+        "https://epgshare01.online/epgshare01/epg_ripper_CH1.xml.gz",
+    )
+
     data class EpgPlan(val providerUrls: List<String>, val wantGermanGuide: Boolean)
 
     /** Welche Programmführer für die gewählten Sprachen geladen werden. */
@@ -58,6 +81,10 @@ object FreeTv {
         val langs = languages.map { it.lowercase() }.toSet()
         val urls = LinkedHashSet<String>()
         var german = false
+        if ("deu" in langs) {
+            // Österreichische und Schweizer Sender in der deutschen Liste (ORF III, Okto, W24, TeleZüri …).
+            urls += GERMAN_EXTRA_EPG
+        }
         for (code in languages) {
             when (val u = EPG_BY_LANG[code.lowercase()]) {
                 null -> if (code.lowercase() == "deu") german = true

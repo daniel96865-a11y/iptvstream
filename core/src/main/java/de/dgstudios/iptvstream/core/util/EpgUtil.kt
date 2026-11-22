@@ -92,7 +92,8 @@ object EpgMatcher {
 
     /** Ländercode aus Vorsatz (`[DE]`, `DE:`, `|DE|`) oder Endung (`.de`), sonst null. */
     fun countryOf(raw: String): String? {
-        val s = raw.lowercase().trim()
+        // iptv-org-IDs wie „okto.at@SD“: das Land steht vor dem @.
+        val s = raw.lowercase().trim().substringBefore('@')
         prefixRegex.find(s)?.let { m ->
             val code = m.value.filter { it.isLetter() }
             if (code.isNotEmpty()) return code
@@ -156,6 +157,20 @@ object GermanGuide {
         "servustv" to "servustvosterreich",
         "servustvaustria" to "servustvosterreich",
         "nickjunior" to "nickjr",
+        // Dritte Programme (iptv-org: „hr-fernsehen“, „NDR Fernsehen Niedersachsen“ → ID ndrfernsehen.de@…)
+        "hrfernsehen" to "hr",
+        "mdrfernsehen" to "mdr",
+        "ndrfernsehen" to "ndr",
+        "wdrfernsehen" to "wdr",
+        "brfernsehen" to "br",
+        "rbbfernsehen" to "rbb",
+        "srfernsehen" to "swrsr",
+        "swrfernsehenbadenwurttemberg" to "swrsr",
+        "swrfernsehenrheinlandpfalz" to "swrsr",
+        "euronewsgerman" to "euronews",
+        "nickelodeon" to "nick",
+        "qvczwei" to "qvc2",
+        "anixehdserie" to "anixe",
     )
 
     fun isKey(key: String): Boolean = key.startsWith(PREFIX)

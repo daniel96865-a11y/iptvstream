@@ -131,13 +131,31 @@ class FreeTvTest {
     fun epgPlanForDeutschAndItalienisch() {
         val plan = FreeTv.epgPlan(listOf("deu", "ita"))
         assertTrue(plan.wantGermanGuide)
-        assertEquals(1, plan.providerUrls.size)
-        assertTrue(plan.providerUrls[0].contains("IT1"))
+        // Deutsch: AT/CH für österreichische und Schweizer Sender, dazu IT.
+        assertEquals(3, plan.providerUrls.size)
+        assertTrue(plan.providerUrls.any { it.contains("IT1") })
         val onlyDe = FreeTv.epgPlan(listOf("deu"))
         assertTrue(onlyDe.wantGermanGuide)
-        assertTrue(onlyDe.providerUrls.isEmpty())
+        assertEquals(FreeTv.GERMAN_EXTRA_EPG, onlyDe.providerUrls)
         val onlyIt = FreeTv.epgPlan(listOf("ita"))
         assertFalse(onlyIt.wantGermanGuide)
         assertTrue(onlyIt.providerUrls[0].contains("IT1"))
+    }
+
+    @Test
+    fun tvDefaultIsGermanOnlyPhoneKeepsItalian() {
+        assertEquals("deu", FreeTv.defaultLanguages(isTv = true))
+        assertEquals("deu,ita", FreeTv.defaultLanguages(isTv = false))
+        assertTrue(FreeTv.isTvPackage("de.dgstudios.iptvstream.tv"))
+        assertFalse(FreeTv.isTvPackage("de.dgstudios.iptvstream"))
+    }
+
+    @Test
+    fun tvMigrationOnlyTouchesOldDefault() {
+        assertEquals("deu", FreeTv.tvMigration("deu,ita"))
+        assertEquals(null, FreeTv.tvMigration("deu"))
+        assertEquals(null, FreeTv.tvMigration("ita"))
+        assertEquals(null, FreeTv.tvMigration("deu,ita,eng"))
+        assertEquals(null, FreeTv.tvMigration("ita,deu"))
     }
 }

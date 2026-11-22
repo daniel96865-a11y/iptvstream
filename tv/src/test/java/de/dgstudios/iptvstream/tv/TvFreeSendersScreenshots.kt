@@ -11,6 +11,7 @@ import app.cash.paparazzi.Paparazzi
 import com.android.resources.Density
 import com.android.resources.ScreenOrientation
 import com.android.resources.UiMode
+import de.dgstudios.iptvstream.core.data.FreeTv
 import de.dgstudios.iptvstream.core.settings.AppSettings
 import de.dgstudios.iptvstream.core.ui.AppBackground
 import de.dgstudios.iptvstream.core.ui.AppTheme
@@ -36,8 +37,8 @@ class TvFreeSendersScreenshots {
             AppTheme(AppSettings(), isTv = true) {
                 AppBackground {
                     Column(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 27.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        val form = ProfileFormState(null, startFree = true)
-                        form.toggleLanguage("eng")
+                        // Fernseher: nur Deutsch vorgewählt.
+                        val form = ProfileFormState(null, startFree = true, freeDefault = FreeTv.TV_DEFAULT_LANGUAGES)
                         TvTitle("Neues Profil")
                         TvFreeSenders(form)
                     }

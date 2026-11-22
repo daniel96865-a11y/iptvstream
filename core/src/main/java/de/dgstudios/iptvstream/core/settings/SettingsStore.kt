@@ -84,5 +84,8 @@ class SettingsStore(private val context: Context) {
         fun channelOrderPrefix(profileId: Long) = "ch_order_${profileId}_"
         /** Zuletzt genutztes Nicht-Frei-Profil, damit der Schalter „Meine Sender“ zurückfindet. */
         const val LAST_PROVIDER_PROFILE = "last_provider_profile"
+
+        /** Fernseher: Freie Sender einmalig von Deutsch+Italienisch auf nur Deutsch umgestellt. */
+        const val FREE_TV_DE_ONLY = "free_tv_de_only_v1"
     }
 }

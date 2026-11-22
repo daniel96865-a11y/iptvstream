@@ -24,6 +24,7 @@ import kotlinx.coroutines.launch
 /** App-weiter Zustand: Einstellungen, Profile, Synchronisierung und automatischer Start. */
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val c = app.container
+    private val isTv = FreeTv.isTvPackage(app.packageName)
 
     val settings: StateFlow<AppSettings?> = c.settings.flow
         .map<AppSettings, AppSettings?> { it }
@@ -58,7 +59,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
         }
-        viewModelScope.launch { ensureFreeProfile() }
+        viewModelScope.launch {
+            migrateTvFreeLanguages()
+            ensureFreeProfile()
+        }
     }
 
     fun consumeAutoStart() {
@@ -116,7 +120,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Legt einmalig das Profil „Freie Sender“ mit Deutsch und Italienisch an,
+     * Fernseher, einmalig: Die frühere automatische Vorgabe Deutsch+Italienisch wird zu nur Deutsch.
+     * Eine andere, selbst gewählte Auswahl bleibt unverändert; danach wird nie wieder umgestellt.
+     */
+    private suspend fun migrateTvFreeLanguages() {
+        if (!isTv || c.settings.getRaw(SettingsStore.FREE_TV_DE_ONLY) != null) return
+        val free = c.repo.allProfiles().firstOrNull { it.type == ProfileType.FREE }
+        val next = free?.let { FreeTv.tvMigration(it.url) }
+        if (free != null && next != null) {
+            c.repo.saveProfile(free.copy(url = next))
+            c.repo.launchSync(free.id)
+        }
+        c.settings.set(SettingsStore.FREE_TV_DE_ONLY, "1")
+    }
+
+    /**
+     * Legt einmalig das Profil „Freie Sender“ an (Handy: Deutsch+Italienisch, Fernseher: nur Deutsch),
      * ohne das aktive Anbieter-Profil zu wechseln.
      */
     suspend fun ensureFreeProfile(): Long {
@@ -126,7 +145,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             ProfileEntity(
                 name = FreeTv.PROFILE_NAME,
                 type = ProfileType.FREE,
-                url = FreeTv.DEFAULT_LANGUAGES,
+                url = FreeTv.defaultLanguages(isTv),
             ),
         )
         c.repo.launchSync(id)

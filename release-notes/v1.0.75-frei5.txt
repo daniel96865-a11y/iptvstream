@@ -1,0 +1,11 @@
+Vorabversion 1.0.75-frei5 (nur zum Testen)
+
+Freie Sender
+- Fernseher: Vorgewählt ist jetzt nur Deutsch. Italienisch und alle anderen Sprachen wählst du selbst dazu (Einstellungen → Freie Sender → Sprachen). Wer noch die alte automatische Vorgabe Deutsch + Italienisch hatte, wird einmalig auf nur Deutsch umgestellt; eine eigene andere Auswahl bleibt.
+- Handy: unverändert Deutsch + Italienisch vorgewählt.
+
+Programmführer (EPG) für Freie Sender
+- Behoben: War „Deutscher Programmführer“ auf „Aus“ gestellt, hatten die deutschen Freien Sender gar kein EPG. Für Freie Sender wird der deutsche Programmführer jetzt immer genutzt.
+- Mehr Sender mit Programm: hr, MDR, NDR, WDR, BR, rbb, SR/SWR (auch die Regionalvarianten), Euronews, Nickelodeon u. a. werden jetzt erkannt.
+- Zusätzlich österreichische und Schweizer Programmdaten (Okto, W24, Tirol TV, Ländle TV, TeleZüri, SRF info …). Es werden nur die Sender gespeichert, die in deiner Liste sind.
+- Fällt eine Programmdatei aus, bleiben die anderen erhalten.

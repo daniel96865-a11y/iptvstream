@@ -399,10 +399,15 @@ fun NumberOverlay(text: String, modifier: Modifier = Modifier) {
 // ---------------------------------------------------------------------- Profil-Formular
 
 /** Formularzustand, den Handy- und TV-Oberfläche gleichermaßen verwenden. */
-class ProfileFormState(private val initial: ProfileEntity?, startFree: Boolean = false) {
+class ProfileFormState(
+    private val initial: ProfileEntity?,
+    startFree: Boolean = false,
+    /** Vorauswahl der Sprachen bei Freien Sendern: Handy Deutsch+Italienisch, Fernseher nur Deutsch. */
+    private val freeDefault: String = FreeTv.DEFAULT_LANGUAGES,
+) {
     var name by mutableStateOf(initial?.name ?: "")
     var type by mutableStateOf(initial?.type ?: if (startFree) ProfileType.FREE else ProfileType.XTREAM)
-    var url by mutableStateOf(initial?.url ?: if (startFree) FreeTv.DEFAULT_LANGUAGES else "")
+    var url by mutableStateOf(initial?.url ?: if (startFree) freeDefault else "")
     var username by mutableStateOf(initial?.username ?: "")
     var password by mutableStateOf(initial?.password ?: "")
     var epgUrl by mutableStateOf(initial?.epgUrl ?: "")
@@ -412,13 +417,13 @@ class ProfileFormState(private val initial: ProfileEntity?, startFree: Boolean =
     val isEdit: Boolean get() = initial != null
     val isFree: Boolean get() = type == ProfileType.FREE
 
-    /** Wechselt die Art. Freie Sender bringen eigene Vorgaben mit (Deutsch, Italienisch). */
+    /** Wechselt die Art. Freie Sender bringen eigene Vorgaben mit (siehe [freeDefault]). */
     fun chooseType(t: String) {
         if (t == type) return
         val wasFree = type == ProfileType.FREE
         type = t
         if (t == ProfileType.FREE) {
-            url = FreeTv.DEFAULT_LANGUAGES
+            url = freeDefault
             username = ""
             password = ""
             epgUrl = ""
