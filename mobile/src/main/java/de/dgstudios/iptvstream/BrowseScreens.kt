@@ -1,5 +1,8 @@
 package de.dgstudios.iptvstream
 
+import de.dgstudios.iptvstream.core.ui.scrollToItemSafe
+import de.dgstudios.iptvstream.core.ui.clampIndex
+
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.draw.clipToBounds
@@ -221,7 +224,7 @@ fun CategoryPicker(
     }
     var open by remember { mutableStateOf(false) }
     val outerBottom = drawerSystemBottom()
-    val listState = rememberLazyListState(drawerIndex, drawerOffset)
+    val listState = rememberLazyListState(drawerIndex.coerceAtLeast(0), drawerOffset.coerceAtLeast(0))
     LaunchedEffect(listState) {
         snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
             .collect { (i, o) -> onDrawerScroll(i, o) }
@@ -321,7 +324,7 @@ private fun CategoryDrawer(
     val listBottom = maxOf(drawerSystemBottom(), outerBottom) + 48.dp
     LaunchedEffect(browsingAll, selected, entries) {
         if (!browsingAll) {
-            filterState.scrollToItem(0)
+            filterState.scrollToItemSafe(0)
             return@LaunchedEffect
         }
         val index = entries.indexOfFirst { it.first == selected }
@@ -508,14 +511,14 @@ private suspend fun LazyListState.reveal(index: Int) {
         val vis = info.visibleItemsInfo.find { it.index == index } ?: return false
         return vis.offset >= info.viewportStartOffset && vis.offset + vis.size <= info.viewportEndOffset
     }
-    if (!visibleFully()) scrollToItem(index)
+    if (!visibleFully()) scrollToItemSafe(index)
     val info = layoutInfo
     val first = info.visibleItemsInfo.firstOrNull()
     if (first != null && first.index != index && first.offset < info.viewportStartOffset) {
         val shown = first.size - (info.viewportStartOffset - first.offset)
-        if (shown in 1 until 24) scrollToItem(first.index + 1)
+        if (shown in 1 until 24) scrollToItemSafe(first.index + 1)
     }
-    if (!visibleFully()) scrollToItem(index)
+    if (!visibleFully()) scrollToItemSafe(index)
 }
 
 /** Suche und „Weiterschauen“ oben in Live TV (Design „Glas & Verlauf“). Die Suche öffnet den Such-Tab. */
@@ -680,7 +683,7 @@ fun LiveScreen(
         )
         if (!restored) return@Column
 
-        val listState = rememberLazyListState(vm.scrollIndex, vm.scrollOffset)
+        val listState = rememberLazyListState(vm.scrollIndex.coerceAtLeast(0), vm.scrollOffset.coerceAtLeast(0))
         val reorder = rememberReorderableLazyListState(
             listState,
             scrollThresholdPadding = PaddingValues(bottom = bottomPad),
@@ -695,12 +698,13 @@ fun LiveScreen(
         val hasItems = localItems.isNotEmpty()
         LaunchedEffect(hasItems, selected) {
             if (!hasItems) return@LaunchedEffect
-            listState.scrollToItem(vm.scrollIndex.coerceAtMost(items.lastIndex), vm.scrollOffset)
+            // Beim Profilwechsel ist „items“ schon leer, „localItems“ noch nicht: nach der sichtbaren Liste begrenzen.
+            listState.scrollToItemSafe(clampIndex(vm.scrollIndex, localItems.size), vm.scrollOffset)
             // Zurück aus dem Player: der zuletzt gespielte Sender bleibt sichtbar.
             vm.takeReturnTarget(items)?.let { t ->
                 val visible = listState.layoutInfo.visibleItemsInfo
                 if (visible.none { it.index == t }) {
-                    listState.scrollToItem((t - 1).coerceAtLeast(0))
+                    listState.scrollToItemSafe((t - 1).coerceAtLeast(0))
                     vm.onScroll(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
                 }
             }
@@ -983,11 +987,11 @@ private fun <T> PosterBrowse(
         )
         if (!restored) return@Column
 
-        val gridState = rememberLazyGridState(vm.scrollIndex, vm.scrollOffset)
+        val gridState = rememberLazyGridState(vm.scrollIndex.coerceAtLeast(0), vm.scrollOffset.coerceAtLeast(0))
         val hasItems = items.isNotEmpty()
         LaunchedEffect(hasItems, selected) {
             if (!hasItems) return@LaunchedEffect
-            gridState.scrollToItem(vm.scrollIndex.coerceAtMost(items.lastIndex), vm.scrollOffset)
+            gridState.scrollToItemSafe(clampIndex(vm.scrollIndex, items.size), vm.scrollOffset)
             snapshotFlow { gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset }
                 .collect { (i, o) -> vm.onScroll(i, o) }
         }

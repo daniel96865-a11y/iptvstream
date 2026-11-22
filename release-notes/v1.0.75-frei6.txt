@@ -1,0 +1,4 @@
+Vorabversion 1.0.75-frei6 (nur zum Testen)
+
+Behoben: Absturz am Handy beim schnellen Hin- und Herschalten zwischen „Meine Sender“ und „Freie Sender“. Die Senderliste war beim Wechsel kurz leer und die gemerkte Scrollposition wurde ungültig.
+Alle Listen (Handy und Fernseher) springen jetzt nur noch auf gültige Positionen.

@@ -1,5 +1,7 @@
 package de.dgstudios.iptvstream.tv
 
+import de.dgstudios.iptvstream.core.ui.scrollToItemSafe
+
 import de.dgstudios.iptvstream.core.ui.AccentBar
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -661,11 +663,11 @@ class FirstFocus {
 /** Scrollt zum Index, falls er gerade nicht sichtbar ist (damit er zusammengesetzt und fokussierbar wird). */
 suspend fun androidx.compose.foundation.lazy.LazyListState.ensureVisible(index: Int) {
     val last = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
-    if (index < firstVisibleItemIndex || index > last) scrollToItem((index - 2).coerceAtLeast(0))
+    if (index < firstVisibleItemIndex || index > last) scrollToItemSafe((index - 2).coerceAtLeast(0))
 }
 
 suspend fun androidx.compose.foundation.lazy.grid.LazyGridState.ensureVisible(index: Int) {
-    if (layoutInfo.visibleItemsInfo.none { it.index == index }) scrollToItem((index - 4).coerceAtLeast(0))
+    if (layoutInfo.visibleItemsInfo.none { it.index == index }) scrollToItemSafe((index - 4).coerceAtLeast(0))
 }
 
 /**
