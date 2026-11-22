@@ -1,0 +1,4 @@
+IPTVstream 1.0.76
+
+Behoben: Absturz am Handy beim Hin- und Herschalten zwischen „Meine Sender“ und „Freie Sender“.
+Freie Sender: frei empfangbare Sender ohne Anbieter, mit Programmführer (EPG). Am Fernseher ist nur Deutsch vorgewählt, weitere Sprachen wählst du selbst.

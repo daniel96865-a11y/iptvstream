@@ -2,6 +2,9 @@
 
 package de.dgstudios.iptvstream.tv
 
+import de.dgstudios.iptvstream.core.ui.scrollToItemSafe
+
+
 import de.dgstudios.iptvstream.core.ui.AccentBar
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
@@ -137,7 +140,7 @@ private fun <T> PosterBrowse(
     val catItemsRef = rememberUpdatedState(catItems)
     val openButton = remember { FocusRequester() }
     var drawerOpen by remember { mutableStateOf(false) }
-    val drawerListState = rememberLazyListState(vm.drawerIndex, vm.drawerOffset)
+    val drawerListState = rememberLazyListState(vm.drawerIndex.coerceAtLeast(0), vm.drawerOffset.coerceAtLeast(0))
     val drawerBottom = drawerSystemBottom()
     var railOpen by remember { mutableStateOf(true) }
     var railHold by remember { mutableStateOf(false) }
@@ -158,7 +161,7 @@ private fun <T> PosterBrowse(
             vm.focusIndex = 0
             vm.onScroll(0, 0)
             scope.launch {
-                gridState.scrollToItem(0)
+                gridState.scrollToItemSafe(0)
                 escapeRef.value()
             }
         }
@@ -184,7 +187,7 @@ private fun <T> PosterBrowse(
             withFrameNanos { }
             catListState.ensureVisible(ci)
             val landed = catReg.focus(ci, tries = 40) || run {
-                catListState.scrollToItem(ci)
+                catListState.scrollToItemSafe(ci)
                 catReg.focus(ci, tries = 40)
             }
             if (!landed) onEscapeUp()
@@ -206,10 +209,10 @@ private fun <T> PosterBrowse(
         }
         val idx = gridState.firstVisibleItemIndex.coerceIn(0, list.lastIndex)
         if (gridState.layoutInfo.visibleItemsInfo.none { it.index == idx }) {
-            gridState.scrollToItem(idx)
+            gridState.scrollToItemSafe(idx)
         }
         val landed = gridReg.focus(idx) || run {
-            gridState.scrollToItem(0)
+            gridState.scrollToItemSafe(0)
             gridReg.focus(0)
         }
         if (!landed) {
@@ -238,10 +241,10 @@ private fun <T> PosterBrowse(
 
     suspend fun focusGridIndex(target: Int): Boolean {
         if (gridState.layoutInfo.visibleItemsInfo.none { it.index == target }) {
-            gridState.scrollToItem(target)
+            gridState.scrollToItemSafe(target)
         }
         if (gridReg.focus(target)) return true
-        gridState.scrollToItem(target)
+        gridState.scrollToItemSafe(target)
         return gridReg.focus(target)
     }
 
@@ -306,7 +309,7 @@ private fun <T> PosterBrowse(
             try {
                 if (!catListState.slideInNeighbor(target, anim)) catListState.ensureVisible(target)
                 if (!catReg.focus(target)) {
-                    catListState.scrollToItem(target)
+                    catListState.scrollToItemSafe(target)
                     if (!catReg.focus(target)) onEscapeUp()
                 }
                 follow.list(scope, catListState, target, anim)
@@ -331,14 +334,14 @@ private fun <T> PosterBrowse(
         first.pending = false
         vm.focusIndex = 0
         vm.onScroll(0, 0)
-        gridState.scrollToItem(0)
+        gridState.scrollToItemSafe(0)
     }
 
     LaunchedEffect(items, pendingFrom) {
         val p = pendingFrom ?: return@LaunchedEffect
         if (items !== p) {
             pendingFrom = null
-            gridState.scrollToItem(0)
+            gridState.scrollToItemSafe(0)
             if (items.isNotEmpty() && gridReg.focus(0)) {
                 withFrameNanos { }
                 if (!drawer && !railHold) railOpen = false

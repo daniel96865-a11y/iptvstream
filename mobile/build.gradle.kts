@@ -46,8 +46,8 @@ android {
         minSdk = 24
         // Play verlangt für Handy-Apps seit 31.08.2026 API 36, für Android TV reicht 34.
         targetSdk = if (playBuild) 36 else 35
-        versionCode = 83
-        versionName = "1.0.75"
+        versionCode = 85
+        versionName = "1.0.76"
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a")
         }

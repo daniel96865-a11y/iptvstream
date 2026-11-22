@@ -2,6 +2,9 @@
 
 package de.dgstudios.iptvstream.tv
 
+import de.dgstudios.iptvstream.core.ui.scrollToItemSafe
+
+
 import de.dgstudios.iptvstream.core.ui.AccentBar
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -322,7 +325,7 @@ fun TvCategoryDrawer(
     }
     LaunchedEffect(browsingAll, selected, items) {
         if (!browsingAll) {
-            filterState.scrollToItem(0)
+            filterState.scrollToItemSafe(0)
             return@LaunchedEffect
         }
         val idx = items.indexOfFirst { it.id == selected }.coerceAtLeast(0)
@@ -354,14 +357,14 @@ private suspend fun LazyListState.reveal(index: Int) {
         val vis = info.visibleItemsInfo.find { it.index == index } ?: return false
         return vis.offset >= info.viewportStartOffset && vis.offset + vis.size <= info.viewportEndOffset
     }
-    if (!visibleFully()) scrollToItem(index)
+    if (!visibleFully()) scrollToItemSafe(index)
     val info = layoutInfo
     val first = info.visibleItemsInfo.firstOrNull()
     if (first != null && first.index != index && first.offset < info.viewportStartOffset) {
         val shown = first.size - (info.viewportStartOffset - first.offset)
-        if (shown in 1 until 24) scrollToItem(first.index + 1)
+        if (shown in 1 until 24) scrollToItemSafe(first.index + 1)
     }
-    if (!visibleFully()) scrollToItem(index)
+    if (!visibleFully()) scrollToItemSafe(index)
 }
 
 
@@ -440,7 +443,7 @@ fun TvLiveScreen(
     val drawer = settings.categoryDrawer
     val openButton = remember { FocusRequester() }
     var drawerOpen by remember { mutableStateOf(false) }
-    val drawerListState = rememberLazyListState(vm.drawerIndex, vm.drawerOffset)
+    val drawerListState = rememberLazyListState(vm.drawerIndex.coerceAtLeast(0), vm.drawerOffset.coerceAtLeast(0))
     val drawerBottom = drawerSystemBottom()
     val returning = remember { vm.returnPending }
     var railOpen by remember { mutableStateOf(!returning) }
@@ -469,7 +472,7 @@ fun TvLiveScreen(
             vm.focusIndex = 0
             vm.onScroll(0, 0)
             scope.launch {
-                listState.scrollToItem(0)
+                listState.scrollToItemSafe(0)
                 escapeRef.value()
             }
         }
@@ -495,7 +498,7 @@ fun TvLiveScreen(
             withFrameNanos { }
             catListState.ensureVisible(ci)
             val landed = catReg.focus(ci, tries = 40) || run {
-                catListState.scrollToItem(ci)
+                catListState.scrollToItemSafe(ci)
                 catReg.focus(ci, tries = 40)
             }
             if (!landed) onEscapeUp()
@@ -517,10 +520,10 @@ fun TvLiveScreen(
         }
         val idx = listState.firstVisibleItemIndex.coerceIn(0, list.lastIndex)
         if (listState.layoutInfo.visibleItemsInfo.none { it.index == idx }) {
-            listState.scrollToItem(idx)
+            listState.scrollToItemSafe(idx)
         }
         val landed = listReg.focus(idx) || run {
-            listState.scrollToItem(0)
+            listState.scrollToItemSafe(0)
             listReg.focus(0)
         }
         if (!landed) {
@@ -566,10 +569,10 @@ fun TvLiveScreen(
                 return@launch
             }
             if (listState.layoutInfo.visibleItemsInfo.none { it.index == target } && !listState.slideInNeighbor(target, anim)) {
-                listState.scrollToItem(target)
+                listState.scrollToItemSafe(target)
             }
             if (!listReg.focus(target)) {
-                listState.scrollToItem(target)
+                listState.scrollToItemSafe(target)
                 if (!listReg.focus(target) && delta < 0) onEscapeUp()
             }
             follow.list(scope, listState, target, anim)
@@ -587,7 +590,7 @@ fun TvLiveScreen(
             try {
                 if (!catListState.slideInNeighbor(target, anim)) catListState.ensureVisible(target)
                 if (!catReg.focus(target)) {
-                    catListState.scrollToItem(target)
+                    catListState.scrollToItemSafe(target)
                     if (!catReg.focus(target)) onEscapeUp()
                 }
                 follow.list(scope, catListState, target, anim)
@@ -624,7 +627,7 @@ fun TvLiveScreen(
         if (returning && vm.returnPending) return@LaunchedEffect
         vm.focusIndex = 0
         vm.onScroll(0, 0)
-        listState.scrollToItem(0)
+        listState.scrollToItemSafe(0)
     }
 
     // Zurück aus dem Player: Liste und Fokus auf den zuletzt gespielten Sender setzen.
@@ -637,14 +640,14 @@ fun TvLiveScreen(
         }
         first.pending = false
         vm.focusIndex = target
-        listState.scrollToItem((target - 2).coerceAtLeast(0))
+        listState.scrollToItemSafe((target - 2).coerceAtLeast(0))
         vm.onScroll(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
         withFrameNanos { }
         withFrameNanos { }
         withFrameNanos { }
         move.launch(scope) {
             if (!listReg.focus(target, tries = 40)) {
-                listState.scrollToItem(target)
+                listState.scrollToItemSafe(target)
                 listReg.focus(target, tries = 40)
             }
         }
@@ -655,7 +658,7 @@ fun TvLiveScreen(
         val p = pendingFrom ?: return@LaunchedEffect
         if (items !== p) {
             pendingFrom = null
-            listState.scrollToItem(0)
+            listState.scrollToItemSafe(0)
             if (items.isNotEmpty() && listReg.focus(0)) {
                 withFrameNanos { }
                 if (!drawer && !railHold) railOpen = false
