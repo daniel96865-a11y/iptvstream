@@ -13,6 +13,7 @@ Mit `-Pdistribution=play`:
 | TV-Manifest | leanback `required=false` | leanback `required=true`, Banner „IPTVstream“ (`tv/src/play/res`) |
 | Einstellung „Kennung gegenüber dem Anbieter“ | Option „IPTV Smarters“ vorhanden | Option ausgeblendet (alter Wert → Browser-Kennung) |
 | „Deutscher Programmführer aus dem Netz“ (epgshare01) | Standard „Als Ersatz“ | Standard „Aus“ |
+| Freie Sender (iptv-org) inkl. EPG (epgshare01 DE/AT/CH/IT) | Handy DE+IT, TV nur DE | gleich; EPG der Freien Sender läuft auch bei „Aus“ |
 | Tests | `core/src/githubTest` | `core/src/playTest` (`FakeAppUpdateManager`) |
 
 Die UI (`UpdateHost`, Dialoge) liegt gemeinsam in `core/src/main/…/update/`. Beide Updater haben dieselbe Klasse `UpdateChecker` mit gleicher Oberfläche.
