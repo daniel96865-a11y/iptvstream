@@ -217,7 +217,8 @@ private fun SettingsRows(
     onChange: (String, String) -> Unit,
     onAction: (String) -> Unit,
 ) {
-    section.items.forEachIndexed { i, def ->
+    // „Bildschirmrand (nur TV)“ betrifft nur den Fernseher.
+    section.items.filterNot { it.id == "tv_margin" }.forEachIndexed { i, def ->
         if (i > 0) {
             Box(Modifier.fillMaxWidth().height(1.dp).padding(horizontal = 18.dp).background(Color.White.copy(alpha = 0.08f)))
         }

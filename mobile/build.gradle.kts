@@ -39,8 +39,8 @@ android {
         applicationId = "de.dgstudios.iptvstream"
         minSdk = 24
         targetSdk = 36
-        versionCode = 87
-        versionName = "1.0.77-ctx1"
+        versionCode = 88
+        versionName = "1.0.77-ctx2"
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a")
         }
@@ -90,9 +90,7 @@ android {
         jniLibs.excludes += setOf("**/x86/**", "**/x86_64/**")
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
-    // Paparazzi 1.3.5 (Layoutlib) kennt compileSdk 36 noch nicht; 2.x bräuchte Java 21 in CI.
-    // Die README-Screenshots entstehen darum vorerst nicht im normalen Testlauf (wie im Play-Zweig).
-    testOptions.unitTests.all { test -> test.exclude("**/*Screenshots*") }
+    // Screenshot-Tests (Paparazzi 2.x, braucht Java 21 zum Bauen) laufen wieder mit.
     lint {
         abortOnError = true
         checkReleaseBuilds = true
@@ -112,4 +110,19 @@ dependencies {
     // Chromecast-Sender (Handy → TV): Standard-Empfänger, eigene Auswahl im Glas-Look.
     implementation("com.google.android.gms:play-services-cast-framework:22.2.0")
     implementation("androidx.mediarouter:mediarouter:1.8.1")
+}
+
+// Paparazzi 1.3.5 nimmt android.os.Build aus der android.jar des compileSdk; die von API 36 passt nicht
+// zur mitgelieferten Layoutlib. Für die Unit-Tests darum an derselben Stelle die android.jar von API 35
+// (wie bis 1.0.76). Fehlt die Plattform, laufen die Screenshot-Tests nicht mit.
+tasks.withType<Test>().configureEach {
+    val legacy = File(android.sdkDirectory, "platforms/android-35/android.jar")
+    // Screenshots nur auf Wunsch (-PwithScreenshots): Layoutlib 1.3.5 ist mit API 36 nicht ganz stabil.
+    if (!legacy.isFile || !project.hasProperty("withScreenshots")) {
+        exclude("**/*Screenshots*")
+    } else {
+        doFirst {
+            classpath = files(classpath.files.map { if (it.name == "android.jar") legacy else it })
+        }
+    }
 }

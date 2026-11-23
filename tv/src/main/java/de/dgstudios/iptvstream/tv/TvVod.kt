@@ -525,7 +525,7 @@ fun TvMovieDetail(onPlay: () -> Unit) {
         val d = detail
         val resume = progress?.positionMs ?: 0L
         RiseIn {
-        Row(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 40.dp)) {
+        Row(Modifier.fillMaxSize().tvSafePadding(minVertical = 40.dp)) {
             Poster(m.poster, Modifier.width(240.dp).height(360.dp).clip(RoundedCornerShape(16.dp)))
             Spacer(Modifier.width(32.dp))
             Column(Modifier.weight(1f)) {
@@ -614,7 +614,7 @@ fun TvSeriesDetail(onPlay: () -> Unit) {
 
         LazyColumn(
             Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 48.dp, vertical = 36.dp),
+            contentPadding = tvSafeContentPadding(minVertical = 36.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item {

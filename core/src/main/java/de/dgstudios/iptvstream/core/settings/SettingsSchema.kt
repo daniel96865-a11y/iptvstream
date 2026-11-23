@@ -74,6 +74,17 @@ object SettingsSchema {
                     "theme", "Darstellung",
                     listOf(Option("dark", "Dunkel"), Option("light", "Hell"), Option("system", "System")), "dark",
                 ),
+                ChoiceDef(
+                    "tv_margin", "Bildschirmrand (nur TV)",
+                    listOf(
+                        Option("small", "Klein (2,5 %)"),
+                        Option("normal", "Normal (5 %)"),
+                        Option("more", "Größer (7,5 %)"),
+                        Option("max", "Maximal (10 %)"),
+                    ),
+                    "normal",
+                    "Ist oben oder rechts etwas abgeschnitten, einen größeren Rand wählen. Viele Fernseher schneiden das Bild an den Rändern ab (Overscan).",
+                ),
             ),
         ),
         SettingsSection(

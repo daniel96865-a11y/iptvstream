@@ -389,7 +389,7 @@ private fun TvPlayerContent(vm: PlayerViewModel, ctrl: PlayerController, ui: Pla
             Column(
                 Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 48.dp, bottom = 40.dp)
+                    .padding(end = tvSafe.horizontal, bottom = maxOf(tvSafe.vertical, 40.dp))
                     .background(Color(0xE6101420), RoundedCornerShape(20.dp))
                     .padding(20.dp),
             ) {
@@ -542,7 +542,7 @@ private fun ArchivePanel(
     val now = System.currentTimeMillis()
     Column(
         Modifier
-            .padding(end = 48.dp, top = 27.dp, bottom = 27.dp)
+            .padding(end = tvSafe.horizontal, top = tvSafe.vertical, bottom = tvSafe.vertical)
             .width(520.dp)
             .fillMaxHeight()
             .background(s.backgroundColors[0], RoundedCornerShape(22.dp))
@@ -655,7 +655,7 @@ private fun SettingsPanel(
 
     Column(
         Modifier
-            .padding(end = 48.dp, top = 27.dp, bottom = 27.dp)
+            .padding(end = tvSafe.horizontal, top = tvSafe.vertical, bottom = tvSafe.vertical)
             .width(460.dp)
             .fillMaxHeight()
             .background(Color(0xEE0E1322), RoundedCornerShape(22.dp))

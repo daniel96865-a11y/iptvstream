@@ -1,0 +1,11 @@
+Testversion 1.0.77-ctx2 (Vorabversion)
+
+Fernseher:
+- Nichts wird mehr am Rand abgeschnitten: Die Oberfläche bleibt im sicheren Bereich (Overscan).
+- Neu in Einstellungen → Design: „Bildschirmrand (nur TV)“ – Klein, Normal, Größer, Maximal.
+  Ist oben oder rechts noch etwas abgeschnitten, „Größer“ oder „Maximal“ wählen.
+- Die Tab-Leiste passt jetzt ganz auf den Bildschirm (auch „Einstellungen“ und „Browser“).
+- „Freie Sender“ ist mit der Fernbedienung erreichbar: Runter von den Tabs auf „Meine Sender“/„Freie Sender“,
+  Links/Rechts wechselt, Runter geht in die Kategorien, Hoch zurück.
+
+Enthält alles aus 1.0.77-ctx1.
