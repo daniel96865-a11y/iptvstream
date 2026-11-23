@@ -20,6 +20,7 @@ import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.decoder.ffmpeg.FfmpegAudioRenderer
+import androidx.media3.decoder.ffmpeg.FfmpegLibrary
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -99,18 +100,45 @@ class AppRenderersFactory(
     private val passthrough: Boolean,
     private val decoderChoice: VideoDecoderChoice,
     private val audioChoice: AudioDecoderChoice = AudioDecoderChoice(),
+    /** Einstellung „Video- und Audioverarbeitung“ ([DecoderMode]). */
+    private val decoderMode: String = DecoderMode.HW,
 ) : DefaultRenderersFactory(context) {
     init {
+        // Scheitert der erste Decoder beim Start, probiert Media3 von selbst den nächsten aus der Liste.
         setEnableDecoderFallback(true)
         // Ton: gescheiterte Decoder überspringen, im letzten Schritt nur noch FFmpeg (Software).
+        // Bild und Ton: Reihenfolge Hardware/Software nach der Einstellung.
         setMediaCodecSelector { mime, secure, tunneling ->
-            val all = MediaCodecSelector.DEFAULT.getDecoderInfos(mime, secure, tunneling)
-            if (MimeTypes.isAudio(mime)) audioChoice.select(mime, all) { it.name } else all
+            val all = DecoderMode.order(decoderMode, MediaCodecSelector.DEFAULT.getDecoderInfos(mime, secure, tunneling)) {
+                it.softwareOnly
+            }
+            if (MimeTypes.isAudio(mime)) {
+                if (DecoderMode.audioFfmpegOnly(decoderMode, ffmpegSupports(mime))) {
+                    emptyList()
+                } else {
+                    audioChoice.select(mime, all) { it.name }
+                }
+            } else {
+                all
+            }
         }
-        setExtensionRendererMode(EXTENSION_RENDERER_MODE_ON)
+        setExtensionRendererMode(
+            when (DecoderMode.extensionMode(decoderMode)) {
+                DecoderMode.EXTENSION_OFF -> EXTENSION_RENDERER_MODE_OFF
+                DecoderMode.EXTENSION_PREFER -> EXTENSION_RENDERER_MODE_PREFER
+                else -> EXTENSION_RENDERER_MODE_ON
+            },
+        )
         // Harte Referenz: DefaultRenderersFactory lädt den Renderer nur per Reflection.
         check(FfmpegAudioRenderer::class.java.constructors.isNotEmpty())
     }
+
+    private fun ffmpegSupports(mime: String): Boolean =
+        try {
+            FfmpegLibrary.isAvailable() && FfmpegLibrary.supportsFormat(mime)
+        } catch (_: Throwable) {
+            false
+        }
 
     @Suppress("DEPRECATION")
     override fun buildAudioSink(
@@ -192,6 +220,8 @@ class PlayerController(
     private var selectedAudioId: String? = null
 
     private val versionName = installedVersionName(context)
+    /** „Video- und Audioverarbeitung“, gilt ab dem nächsten Start des Players. */
+    private val decoderMode = DecoderMode.normalize(settings.decoder)
     private val audioDecoders = AudioDecoderChoice()
     private var audioDecoderStage = 0
     private val videoDecoders = VideoDecoderChoice()
@@ -245,15 +275,21 @@ class PlayerController(
 
         // Pro Sender kann eine eigene Kennung/Referer gelten (iptv-org-Listen). Die Fabrik wird je
         // Verbindung neu gebaut und liest die Werte des gerade laufenden Senders.
+        // Großzügige Zeitlimits (15 s Aufbau, 15 s Lesen) und Weiterleitungen auch
+        // zwischen https und http folgen (viele Anbieter leiten auf einen http-Server um).
+        val streamClient = okHttp.newBuilder()
+            .connectTimeout(STREAM_CONNECT_TIMEOUT_S, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(STREAM_READ_TIMEOUT_S, java.util.concurrent.TimeUnit.SECONDS)
+            .followRedirects(true)
+            .followSslRedirects(true)
+            .build()
         val httpFactory = DataSource.Factory {
             val extra = streamReferrer?.let { mapOf("Referer" to it) }.orEmpty()
             DefaultDataSource.Factory(
                 context,
                 // Kürzeres Lese-Zeitlimit für Streams: Hängt die Verbindung, kommt nach 15 s ein Fehler
                 // und die Wiederverbindung greift, statt 45 s lang mit leerem Puffer zu warten.
-                OkHttpDataSource.Factory(
-                    okHttp.newBuilder().readTimeout(STREAM_READ_TIMEOUT_S, java.util.concurrent.TimeUnit.SECONDS).build(),
-                ).setUserAgent(streamUserAgent ?: Net.userAgentFor(settings.userAgent))
+                OkHttpDataSource.Factory(streamClient).setUserAgent(streamUserAgent ?: Net.userAgentFor(settings.userAgent))
                     .setDefaultRequestProperties(extra),
             ).createDataSource()
         }
@@ -301,7 +337,7 @@ class PlayerController(
         if (compat) params = params.setMaxVideoSize(CompatMode.MAX_WIDTH, CompatMode.MAX_HEIGHT)
         trackSelector.setParameters(params)
 
-        player = ExoPlayer.Builder(context, AppRenderersFactory(context, settings.passthrough, videoDecoders, audioDecoders))
+        player = ExoPlayer.Builder(context, AppRenderersFactory(context, settings.passthrough, videoDecoders, audioDecoders, decoderMode))
             .setTrackSelector(trackSelector)
             .setLoadControl(loadControl)
             // Media3 (seit 1.9) bricht mit ERROR_CODE_TIMEOUT ab, wenn die Position 10 s steht. Unsere eigenen
@@ -834,14 +870,19 @@ class PlayerController(
             }
         }
 
-        val networkRelated = code in 2000..2004
+        val networkRelated = code in 2000..2004 ||
+            code == PlaybackException.ERROR_CODE_IO_READ_POSITION_OUT_OF_RANGE
+        // Auch bei unklaren Fehlern („Etwas ist schief gelaufen“) den Stream
+        // erst ein paar Mal neu aufsetzen, bevor eine Meldung kommt.
+        val generic = code in 1000..1999
         // ERROR_CODE_TIMEOUT: Player „hängt“ laut Media3 (StuckPlayerException), z. B. nach einem
         // Neustart, wenn der Anbieter die Verbindung geschlossen hat. Still neu verbinden statt Fehlerdialog.
         val stuckTimeout = code == PlaybackException.ERROR_CODE_TIMEOUT
-        if ((networkRelated || parseRelated || stuckTimeout) && tryReconnect()) return
+        if ((networkRelated || parseRelated || stuckTimeout || generic) && tryReconnect()) return
 
+        val hint = if (code in 4001..4004 || code in 3001..3004) "\n$DECODER_HINT" else ""
         _state.update {
-            it.copy(loading = false, playing = false, error = "${friendlyError(code)}\n${diagnosisLine()}")
+            it.copy(loading = false, playing = false, error = "${friendlyError(code)}$hint\n${diagnosisLine()}")
         }
     }
 
@@ -879,6 +920,8 @@ class PlayerController(
             }
             1 -> {
                 audioDecoderStage = 2
+                // „Nur Hardware“: kein FFmpeg, gleich den Sender neu starten.
+                if (!DecoderMode.ffmpegAllowed(decoderMode)) return audioDecoderRecovery(mime)
                 audioDecoders.useFfmpegOnly(mime)
                 notice("Ton: Software-Decoder wird geladen …")
                 restartForDecoder()
@@ -1056,7 +1099,7 @@ class PlayerController(
         val wait = ReconnectBackoff.waitMs(reconnectAttempts, live)
         if (ReconnectBackoff.showNotice(reconnectAttempts, live)) {
             notice(
-                "Verbindung unterbrochen – neuer Versuch $reconnectAttempts/$MAX_RECONNECTS …\n${diagnosisLine()}",
+                "Verbinde neu … Versuch $reconnectAttempts von $MAX_RECONNECTS\n${diagnosisLine()}",
                 wait + 3_500,
             )
         }
@@ -1212,11 +1255,14 @@ class PlayerController(
 
     private companion object {
         const val MAX_RECONNECTS = 8
+        const val DECODER_HINT =
+            "Tipp: Einstellungen → Player → „Video- und Audioverarbeitung“ umstellen (z. B. „Software bevorzugen“)."
         const val MAX_BEHIND_LIVE_WINDOW = 3
         const val FROZEN_FRAMES_MS = 8_000L
         const val EOF_RECONNECT_BUFFER_MS = 5_000L
         const val BUFFER_STUCK_MS = 10_000L
         const val STREAM_READ_TIMEOUT_S = 15L
+        const val STREAM_CONNECT_TIMEOUT_S = 15L
         const val STALL_AUDIO_SUSPECT_BUFFER_MS = 2_000L
         const val STUCK_PLAYING_TIMEOUT_MS = 30_000
     }

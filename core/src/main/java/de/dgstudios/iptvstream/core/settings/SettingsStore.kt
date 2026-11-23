@@ -35,6 +35,8 @@ data class AppSettings(val raw: Map<String, String> = emptyMap()) {
     val passthrough: Boolean get() = on("passthrough")
     val buffer: String get() = get("buffer")
     val compat: String get() = get("compat")
+    /** „Video- und Audioverarbeitung“: hw_only, hw, sw, sw_only. */
+    val decoder: String get() = get("decoder")
     val resize: String get() = get("resize")
     val reconnect: Boolean get() = on("reconnect")
     val liveFormat: String get() = get("live_format")

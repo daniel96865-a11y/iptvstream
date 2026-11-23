@@ -1,0 +1,11 @@
+Testversion 1.0.78-player1 (Vorabversion, nur zum Testen)
+
+Player wie bei den bewährten IPTV-Playern:
+- Neu in Einstellungen → Player: „Video- und Audioverarbeitung“ – Hardware bevorzugen (Standard), Software bevorzugen, Nur Hardware, Nur Software.
+  Bleibt ein Sender stumm oder schwarz, „Software bevorzugen“ probieren.
+- Ton im Software-Modus über FFmpeg zuerst (AC3, E-AC3, DTS, MP2 …), Bild mit Software-Decoder zuerst.
+- Stabilere Verbindung: 15 Sekunden Zeit zum Verbinden, Weiterleitungen zwischen https und http werden befolgt.
+- Bei unklaren Wiedergabefehlern wird der Sender erst neu aufgebaut, bevor eine Meldung kommt („Verbinde neu … Versuch 3 von 8“).
+- Bei Format-Fehlern zeigt die Meldung einen Tipp zur neuen Einstellung.
+
+Enthält alles aus 1.0.77-ctx2.
