@@ -127,6 +127,17 @@ object SettingsSchema {
                     "Für stabilen 5.1-Ton ausgeschaltet lassen. Eingeschaltet wird AC3/E-AC3 direkt an den Receiver gegeben.",
                 ),
                 ChoiceDef(
+                    "decoder", "Video- und Audioverarbeitung",
+                    listOf(
+                        Option("hw", "Hardware bevorzugen"),
+                        Option("sw", "Software bevorzugen"),
+                        Option("hw_only", "Nur Hardware"),
+                        Option("sw_only", "Nur Software"),
+                    ),
+                    "hw",
+                    "Standard: Gerätedecoder zuerst, Software (FFmpeg für AC3/E-AC3/DTS) springt ein. Bleibt ein Sender stumm oder schwarz, „Software bevorzugen“ probieren. Mit Software-Ton wird AC3 nicht an den Receiver durchgereicht. Wirkt ab dem nächsten Sender.",
+                ),
+                ChoiceDef(
                     "buffer", "Puffergröße",
                     listOf(Option("small", "Klein (schnell)"), Option("medium", "Mittel"), Option("large", "Groß (stabil)")),
                     "medium",
