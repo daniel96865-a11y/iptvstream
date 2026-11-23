@@ -272,7 +272,7 @@ private fun TvHome(
                     // „Browser“ passt nicht mehr neben die fünf Tabs: die Leiste rollt mit dem Fokus.
                     .horizontalScroll(rememberScrollState())
                     .onFocusChanged { inTabs = it.hasFocus }
-                    .focusProperties { enter = { tabRequesters[tab.ordinal] } }
+                    .focusProperties { onEnter = { tabRequesters[tab.ordinal].requestFocus() } }
                     .focusGroup()
                     .onPreviewKeyEvent { ev ->
                         if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionDown) {

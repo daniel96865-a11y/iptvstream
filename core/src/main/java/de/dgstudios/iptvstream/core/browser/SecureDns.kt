@@ -74,9 +74,40 @@ object SecureDns {
             .readTimeout(5, TimeUnit.SECONDS)
             .callTimeout(8, TimeUnit.SECONDS)
             .build()
-        val b = DnsOverHttps.Builder().client(client).url(url.toHttpUrlOrNull()!!).includeIPv6(true)
-        if (bootstrap.isNotEmpty()) b.bootstrapDnsHosts(bootstrap.map { InetAddress.getByName(it) })
+        val b = DnsOverHttps.Builder().url(url.toHttpUrlOrNull()!!).includeIPv6(true)
+        if (bootstrap.isNotEmpty()) {
+            b.client(client).bootstrapDnsHosts(bootstrap.map { InetAddress.getByName(it) })
+        } else {
+            // Eigener Anbieter: Dessen Name wird nicht über das (evtl. gefilterte) Provider-DNS
+            // aufgelöst, sondern zuerst verschlüsselt über Cloudflare/Quad9 (feste IPs), erst
+            // zuletzt über das System-DNS. Eine IP-Adresse in der Adresse geht direkt.
+            b.client(client.newBuilder().dns(bootstrapResolver(client)).build())
+        }
         return SecureResolver(b.build(), Dns.SYSTEM, onFallback)
+    }
+
+    /** Löst den Namen eines eigenen DoH-Anbieters auf: Cloudflare → Quad9 → System-DNS. */
+    internal fun bootstrapResolver(client: OkHttpClient, system: Dns = Dns.SYSTEM): Dns {
+        val known = PROVIDERS.filter { it.id == CLOUDFLARE || it.id == QUAD9 }.map { p ->
+            DnsOverHttps.Builder().client(client).url(p.url.toHttpUrlOrNull()!!).includeIPv6(true)
+                .bootstrapDnsHosts(p.bootstrap.map { InetAddress.getByName(it) }).build()
+        }
+        return BootstrapDns(known, system)
+    }
+}
+
+/** Nimmt die erste Antwort der Reihe nach; Namen im Heimnetz/IP-Adressen direkt über [system]. */
+internal class BootstrapDns(private val resolvers: List<Dns>, private val system: Dns) : Dns {
+    override fun lookup(hostname: String): List<InetAddress> {
+        if (SecureDns.useSystem(hostname)) return system.lookup(hostname)
+        for (r in resolvers) {
+            try {
+                val a = r.lookup(hostname)
+                if (a.isNotEmpty()) return a
+            } catch (_: Exception) {
+            }
+        }
+        return system.lookup(hostname)
     }
 }
 

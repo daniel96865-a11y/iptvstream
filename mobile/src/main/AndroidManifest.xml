@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
@@ -15,7 +16,11 @@
         android:supportsRtl="true"
         android:networkSecurityConfig="@xml/network_security_config"
         android:theme="@style/Theme.Iptv"
-        android:usesCleartextTraffic="true">
+        android:usesCleartextTraffic="true"
+        android:enableOnBackInvokedCallback="false"
+        tools:targetApi="33">
+        <!-- targetSdk 36: Vorhersagendes Zurück wäre sonst Pflicht und die Zurück-Taste käme im Browser
+             (dispatchKeyEvent) nicht mehr an. Wie in der Play-Version bewusst aus. -->
 
         <activity
             android:name=".MainActivity"

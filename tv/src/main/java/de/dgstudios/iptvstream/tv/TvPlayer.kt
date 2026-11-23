@@ -562,7 +562,9 @@ private fun ArchivePanel(
                 modifier = Modifier.focusRequester(firstFocus).focusable(),
             )
             else -> LazyColumn(Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                itemsIndexed(programmes) { index, programme ->
+                // Stabile Schlüssel (Beginn/Ende), damit Fokus und Scrollposition beim Nachladen bleiben.
+                val keys = uniqueKeys(programmes) { "${it.start}-${it.stop}" }
+                itemsIndexed(programmes, key = { index, _ -> keys[index] }) { index, programme ->
                     val running = programme.stop > now
                     Column(
                         Modifier
@@ -588,6 +590,17 @@ private fun ArchivePanel(
                 }
             }
         }
+    }
+}
+
+/** Eindeutige, stabile LazyColumn-Schlüssel: gleiche Namen (z. B. zwei Tonspuren „Deutsch“) bekommen #2, #3 … */
+internal fun <T> uniqueKeys(items: List<T>, base: (T) -> String): List<String> {
+    val seen = HashMap<String, Int>()
+    return items.map { item ->
+        val k = base(item)
+        val n = (seen[k] ?: 0) + 1
+        seen[k] = n
+        if (n == 1) k else "$k#$n"
     }
 }
 
@@ -651,7 +664,14 @@ private fun SettingsPanel(
         Text("Einstellungen", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(10.dp))
         LazyColumn(Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            itemsIndexed(entries) { index, e ->
+            val keys = uniqueKeys(entries) {
+                when (it) {
+                    is PanelEntry.Header -> "h:" + it.text
+                    is PanelEntry.Info -> "i:" + it.text
+                    is PanelEntry.Option -> "o:" + it.label
+                }
+            }
+            itemsIndexed(entries, key = { index, _ -> keys[index] }, contentType = { _, e -> e::class }) { index, e ->
                 when (e) {
                     is PanelEntry.Header ->
                         Text(e.text, color = s.accent, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 10.dp, start = 4.dp))

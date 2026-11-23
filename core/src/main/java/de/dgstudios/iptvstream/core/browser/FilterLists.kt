@@ -4,6 +4,7 @@ import android.content.Context
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
@@ -52,6 +53,7 @@ object FilterLists {
                 } finally {
                     ready.countDown()
                     loading = false
+                    runWaiting()
                     onChange()
                 }
             }
@@ -59,7 +61,29 @@ object FilterLists {
         if (System.currentTimeMillis() - lastUpdate(app) > MAX_AGE_MS) update(app, http) { onChange() }
     }
 
-    /** Wartet kurz auf die Regeln (für die ersten Anfragen einer Seite). */
+    private val waiting = CopyOnWriteArrayList<() -> Unit>()
+
+    /**
+     * Ruft [block] auf, sobald die Regeln geladen sind (sofort, wenn sie schon da sind), ohne den
+     * aufrufenden Thread zu blockieren. Für DGBridge: Der JavaScript-Thread der Seite darf nicht warten.
+     */
+    fun whenReady(block: () -> Unit) {
+        if (engine != null) {
+            block()
+            return
+        }
+        waiting += block
+        // Falls das Laden genau jetzt fertig wurde: nicht verpassen.
+        if (engine != null && waiting.remove(block)) block()
+    }
+
+    private fun runWaiting() {
+        for (b in waiting) {
+            if (waiting.remove(b)) runCatching { b() }
+        }
+    }
+
+    /** Wartet kurz auf die Regeln (für die ersten Anfragen einer Seite, nicht auf dem Seiten-Thread). */
     fun await(timeoutMs: Long): FilterEngine? {
         engine?.let { return it }
         ready.await(timeoutMs, TimeUnit.MILLISECONDS)

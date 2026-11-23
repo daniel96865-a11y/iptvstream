@@ -375,11 +375,19 @@ class BrowserActivity : ComponentActivity() {
     private class Bridge {
         private fun act(): BrowserActivity? = current
 
+        /**
+         * Läuft auf dem JavaScript-Thread der Seite: darf nie warten. Sind die Regeln noch nicht
+         * geladen, kommt "" zurück und das Ausblende-Skript wird nachgereicht, sobald sie da sind.
+         */
         @JavascriptInterface
         fun css(host: String?): String {
             val a = act() ?: return ""
             if (!a.prefs.adblock) return ""
-            val e = FilterLists.await(1_500) ?: return ""
+            val e = FilterLists.engine
+            if (e == null) {
+                FilterLists.whenReady { a.runOnUiThread { a.injectHideLater() } }
+                return ""
+            }
             return e.genericCss + "\n" + e.siteCss(host)
         }
 
@@ -392,6 +400,9 @@ class BrowserActivity : ComponentActivity() {
         @JavascriptInterface
         fun pageFs(on: Boolean) {
             val a = act() ?: return
+            // Vollbild nur kurz nach einem echten Tipp (Handy) – Seiten dürfen die Leiste nicht von
+            // selbst ausblenden. Verlassen geht immer. Am TV kommen Klicks über die Fernbedienung.
+            if (on && !a.tv && System.currentTimeMillis() - a.lastTap > PAGE_FS_GESTURE_MS) return
             a.runOnUiThread { a.setPageFullscreen(on) }
         }
 
@@ -405,6 +416,13 @@ class BrowserActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    /** Ausblende-CSS nachreichen, wenn die Filterregeln erst nach dem Seitenstart fertig wurden. */
+    private fun injectHideLater() {
+        if (isFinishing || isDestroyed || !::web.isInitialized) return
+        if (!prefs.adblock) return
+        web.evaluateJavascript(BrowserJs.HIDE, null)
     }
 
     private fun setPageFullscreen(on: Boolean) {
@@ -1068,6 +1086,9 @@ class BrowserActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_TV = "tv"
+
+        /** Seiten-Vollbild (DGBridge.pageFs) nur so lange nach dem letzten echten Tipp. */
+        const val PAGE_FS_GESTURE_MS = 30_000L
 
         /** Gerade offene Browser-Aktivität (für die JS-Brücke der weiterlebenden WebView). */
         @Volatile private var current: BrowserActivity? = null

@@ -10,11 +10,12 @@ object BrowserJs {
     const val HIDE = """
 (function(){
   if (window.__dgHide || window.top !== window) return;
-  window.__dgHide = 1;
   try {
     var b = window.DGBridge; if (!b || !b.css) return;
+    // Wartet nicht: Sind die Regeln noch nicht geladen, kommt "" und die App ruft das Skript später erneut.
     var css = b.css(location.hostname || '');
     if (!css) return;
+    window.__dgHide = 1;
     var st = document.createElement('style');
     st.setAttribute('data-dg', 'adblock');
     st.textContent = css;

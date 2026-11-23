@@ -32,6 +32,24 @@ class SecureDnsTest {
     }
 
     @Test
+    fun customProviderBootstrapTriesEncryptedResolversFirst() {
+        val ip = InetAddress.getByName("203.0.113.7")
+        val sys = InetAddress.getByName("198.51.100.1")
+        val calls = mutableListOf<String>()
+        val failing = dns { calls += "a"; throw UnknownHostException("weg") }
+        val working = dns { calls += "b"; listOf(ip) }
+        val system = dns { calls += "sys"; listOf(sys) }
+        assertEquals(listOf(ip), BootstrapDns(listOf(failing, working), system).lookup("dns.example"))
+        assertEquals(listOf("a", "b"), calls)
+        calls.clear()
+        assertEquals(listOf(sys), BootstrapDns(listOf(failing), system).lookup("dns.example"))
+        assertEquals(listOf("a", "sys"), calls)
+        calls.clear()
+        BootstrapDns(listOf(working), system).lookup("fritz.box")
+        assertEquals(listOf("sys"), calls)
+    }
+
+    @Test
     fun customUrlMustBeHttps() {
         assertTrue(SecureDns.validCustomUrl("https://dns.example/dns-query"))
         assertFalse(SecureDns.validCustomUrl("http://dns.example/dns-query"))
