@@ -1,0 +1,12 @@
+Testversion 1.0.76-dns1 (Vorabversion)
+
+Neu im Browser: „Sicheres DNS“ (DNS über HTTPS)
+- Optionale Datenschutz-Einstellung, wie man sie aus Chrome oder Firefox kennt: Namensauflösungen
+  im eingebauten Browser werden verschlüsselt an einen DNS-Anbieter deiner Wahl geschickt.
+- Zur Auswahl: Aus (Standard, System-DNS), Cloudflare, Quad9, Google oder ein eigener Anbieter (https-Adresse).
+- Einschalten: im Browser das Menü öffnen → „Sicheres DNS“.
+- Adressen im Heimnetz (z. B. http://192.168.1.1, fritz.box) laufen weiter über das normale DNS.
+- Ist der gewählte Anbieter nicht erreichbar, wird automatisch das normale DNS verwendet und ein kurzer Hinweis angezeigt.
+- Betrifft nur den eingebauten Browser, nicht die Wiedergabe der Sender.
+
+Enthält außerdem alle Änderungen aus 1.0.75-frei6 (Absturz beim Wechsel zu „Freie Sender“ behoben).

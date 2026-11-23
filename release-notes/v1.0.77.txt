@@ -1,0 +1,11 @@
+Version 1.0.77
+
+Fernseher:
+- Bildschirmrand einstellbar (Klein, Normal, Größer, Maximal), nichts wird am Rand abgeschnitten.
+- Die Tab-Leiste passt ganz auf den Bildschirm.
+- „Freie Sender“ ist mit der Fernbedienung erreichbar (Runter von den Tabs, dann Links/Rechts).
+
+Browser:
+- Optionales „Sicheres DNS“ (DNS über HTTPS): Cloudflare, Quad9, Google oder eigener Anbieter.
+
+Außerdem: Anpassung an Android 16, aktuelle Bibliotheken, stabilere Listen und zuverlässigerer Wechsel zwischen „Meine Sender“ und „Freie Sender“.

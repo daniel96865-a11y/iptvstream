@@ -47,6 +47,8 @@ data class AppSettings(val raw: Map<String, String> = emptyMap()) {
     val epgGerman: String get() = get("epg_de")
     /** true: durchsuchbare Schublade. false: bisherige Kategorieleiste. */
     val categoryDrawer: Boolean get() = get("categories") == "drawer"
+    /** Fernseher: Rand gegen Overscan ("small", "normal", "more", "max"). */
+    val tvMargin: String get() = get("tv_margin")
 }
 
 class SettingsStore(private val context: Context) {

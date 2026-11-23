@@ -1,0 +1,11 @@
+Testversion 1.0.77-ctx1 (Vorabversion)
+
+Technik-Pflege nach einer Prüfung mit aktueller Bibliotheks-Doku:
+- Auf Android 16 (API 36) vorbereitet, aktuelle Bibliotheken (Compose, Kotlin, Browser-Teil, Sentry u. a.).
+- TV: randlose Darstellung wie am Handy, stabilere Listen im Player-Menü.
+- Widget: stabile Sender-IDs.
+- Browser: Werbefilter bremst die Seite beim Start nicht mehr aus; Seiten dürfen
+  nur nach einem Tipp ins Vollbild schalten.
+- Sicheres DNS: ein eigener Anbieter wird jetzt selbst verschlüsselt aufgelöst.
+
+Enthält alles aus 1.0.76-dns1 (Sicheres DNS im Browser).

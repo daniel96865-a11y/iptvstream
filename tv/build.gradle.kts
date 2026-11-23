@@ -38,15 +38,15 @@ val hasReleaseSigning = releaseKeystoreFile != null &&
 
 android {
     namespace = "de.dgstudios.iptvstream.tv"
-    compileSdk = if (playBuild) 36 else 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "de.dgstudios.iptvstream.tv"
         minSdk = 24
         // Play verlangt für Handy-Apps seit 31.08.2026 API 36, für Android TV reicht 34.
-        targetSdk = if (playBuild) 35 else 35
-        versionCode = 85
-        versionName = "1.0.76"
+        targetSdk = 35
+        versionCode = 89
+        versionName = "1.0.77"
         // Play-Variante: nur für Fernseher anbieten (Leanback Pflicht). GitHub-APK bleibt für jedes Gerät installierbar.
         manifestPlaceholders["leanbackRequired"] = if (playBuild) "true" else "false"
         ndk {
@@ -100,9 +100,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
     buildFeatures {
         compose = true
     }
@@ -110,13 +107,17 @@ android {
         jniLibs.excludes += setOf("**/x86/**", "**/x86_64/**")
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
-    if (playBuild) {
-        // Paparazzi (Layoutlib) kennt compileSdk 36 noch nicht. Screenshots entstehen in der Standard-Variante.
-        testOptions.unitTests.all { test -> test.exclude("**/*Screenshots*") }
-    }
+    // Robolectric-Fokus-Tests brauchen Android-Ressourcen. Screenshots nur mit -PwithScreenshots.
+    testOptions.unitTests.isIncludeAndroidResources = true
     lint {
         abortOnError = true
         checkReleaseBuilds = true
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 
@@ -124,4 +125,23 @@ dependencies {
     implementation(project(":core"))
     implementation("com.google.zxing:core:3.5.4")
     testImplementation("junit:junit:4.13.2")
+    // Fokus-Tests (Fernbedienung) ohne Gerät.
+    testImplementation("org.robolectric:robolectric:4.16")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
+}
+
+// Paparazzi 1.3.5 nimmt android.os.Build aus der android.jar des compileSdk; die von API 36 passt nicht
+// zur mitgelieferten Layoutlib. Für die Unit-Tests darum an derselben Stelle die android.jar von API 35
+// (wie bis 1.0.76). Fehlt die Plattform, laufen die Screenshot-Tests nicht mit.
+tasks.withType<Test>().configureEach {
+    val legacy = File(android.sdkDirectory, "platforms/android-35/android.jar")
+    // Screenshots nur auf Wunsch (-PwithScreenshots): Layoutlib 1.3.5 ist mit API 36 nicht ganz stabil.
+    if (!legacy.isFile || !project.hasProperty("withScreenshots")) {
+        exclude("**/*Screenshots*")
+    } else {
+        doFirst {
+            classpath = files(classpath.files.map { if (it.name == "android.jar") legacy else it })
+        }
+    }
 }

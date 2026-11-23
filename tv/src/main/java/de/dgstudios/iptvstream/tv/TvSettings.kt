@@ -248,7 +248,7 @@ fun TvProfilesScreen(mainVm: MainViewModel, onBack: () -> Unit, onEdit: (Long) -
         }
     }
 
-    Column(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 27.dp)) {
+    Column(Modifier.fillMaxSize().tvSafePadding()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             TvTitle("Profile", Modifier.weight(1f))
             TvButton("Zurück", onBack)
@@ -339,7 +339,7 @@ fun TvProfileForm(mainVm: MainViewModel, profileId: Long, first: Boolean, onDone
     Column(
         Modifier
             .fillMaxSize()
-            .padding(horizontal = 48.dp, vertical = 27.dp)
+            .tvSafePadding()
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {

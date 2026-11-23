@@ -34,7 +34,7 @@ object StreamSignal {
         val raw = code?.trim()?.takeIf { it.isNotEmpty() && !it.equals("und", true) && !it.equals("unknown", true) }
             ?: return null
         NAMES[raw.lowercase(Locale.US)]?.let { return it }
-        val locale = if (raw.length == 2 || raw.contains('-')) Locale.forLanguageTag(raw) else Locale(raw)
+        val locale = Locale.forLanguageTag(raw)
         val name = locale.getDisplayLanguage(Locale.GERMAN)
         return name.takeIf { it.isNotBlank() && !it.equals(raw, true) }
     }

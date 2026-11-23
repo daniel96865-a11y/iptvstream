@@ -107,7 +107,7 @@ fun TvLanTransfer(mainVm: MainViewModel, onCancel: () -> Unit, onDone: () -> Uni
     val checking = phase is LanPairingServer.Phase.Checking
 
     Row(
-        Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 27.dp),
+        Modifier.fillMaxSize().tvSafePadding(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (offer != null) {

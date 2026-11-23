@@ -1,6 +1,6 @@
 # Google-Play-Variante (Build-Schalter `-Pdistribution=play`)
 
-Ohne Schalter entsteht wie bisher die GitHub-APK (eigener Updater, `REQUEST_INSTALL_PACKAGES`, targetSdk 35). CI, Release-Workflow und Update-Feeds ändern sich nicht.
+Ohne Schalter entsteht wie bisher die GitHub-APK (eigener Updater, `REQUEST_INSTALL_PACKAGES`, Handy targetSdk 36, TV 35). CI, Release-Workflow und Update-Feeds ändern sich nicht.
 
 Mit `-Pdistribution=play`:
 
@@ -8,7 +8,7 @@ Mit `-Pdistribution=play`:
 |---|---|---|
 | Updates | `core/src/github/…/UpdateChecker.kt`: Feed lesen, APK laden, System-Installer | `core/src/play/…/UpdateChecker.kt`: Play In-App-Updates (`com.google.android.play:app-update:2.1.0`), flexibel, sofort bei Priorität ≥ 4; Android TV: Feed-Abfrage + „Im Play Store öffnen“ |
 | Berechtigung `REQUEST_INSTALL_PACKAGES`, Update-FileProvider | ja | nein (`mobile|tv/src/play/AndroidManifest.xml`) |
-| targetSdk / compileSdk | 35 / 35 | Handy 36, TV 35 / 36 (Play: TV braucht nur 34) |
+| targetSdk / compileSdk | Handy 36, TV 35 / compileSdk 36 | gleich (Play: TV braucht nur 34) |
 | Zurück-Taste | – | Predictive Back aus (`enableOnBackInvokedCallback=false`) |
 | TV-Manifest | leanback `required=false` | leanback `required=true`, Banner „IPTVstream“ (`tv/src/play/res`) |
 | Einstellung „Kennung gegenüber dem Anbieter“ | Option „IPTV Smarters“ vorhanden | Option ausgeblendet (alter Wert → Browser-Kennung) |
@@ -20,7 +20,7 @@ Die UI (`UpdateHost`, Dialoge) liegt gemeinsam in `core/src/main/…/update/`. B
 
 ## Bauen
 ```bash
-# Tests und Lint der Play-Variante (Paparazzi-Screenshots sind dort ausgeschlossen: Layoutlib kennt API 36 noch nicht)
+# Tests und Lint der Play-Variante (Paparazzi-Screenshots nur mit -PwithScreenshots, android-35.jar)
 ./gradlew -Pdistribution=play testDebugUnitTest lintDebug
 
 # signierte AABs (Upload-Schlüssel über die gleichen SIGNING_*-Variablen wie die GitHub-APK)

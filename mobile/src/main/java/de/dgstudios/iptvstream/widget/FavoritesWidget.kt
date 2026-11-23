@@ -120,7 +120,7 @@ class FavoritesWidget : GlanceAppWidget() {
             val columns = (size.width.value / 150f).toInt().coerceIn(1, 4)
             if (columns <= 1 || size.height < 120.dp && columns < 2) {
                 LazyColumn(GlanceModifier.fillMaxSize()) {
-                    items(list, itemId = { it.streamId.hashCode().toLong() }) { ch ->
+                    items(list, itemId = { widgetItemId(it.streamId) }) { ch ->
                         Column {
                             ChannelCell(context, ch, accent)
                             Spacer(GlanceModifier.height(6.dp))
@@ -129,7 +129,7 @@ class FavoritesWidget : GlanceAppWidget() {
                 }
             } else {
                 LazyVerticalGrid(GridCells.Fixed(columns), GlanceModifier.fillMaxSize()) {
-                    items(list, itemId = { it.streamId.hashCode().toLong() }) { ch ->
+                    items(list, itemId = { widgetItemId(it.streamId) }) { ch ->
                         Box(GlanceModifier.padding(3.dp)) { ChannelCell(context, ch, accent) }
                     }
                 }
@@ -196,4 +196,19 @@ class FavoritesWidget : GlanceAppWidget() {
 
 class FavoritesWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = FavoritesWidget()
+}
+
+/**
+ * Stabile Widget-ID je Sender: Xtream-IDs sind Zahlen und werden direkt genommen, sonst (M3U)
+ * ein 64-Bit-FNV-1a-Wert des Textes (weniger Kollisionen als hashCode(), gleich über Neustarts).
+ */
+internal fun widgetItemId(streamId: String): Long {
+    // Glance reserviert stark negative IDs, darum nur Werte ≥ 0.
+    streamId.toLongOrNull()?.takeIf { it >= 0 }?.let { return it }
+    var h = -0x340d631b7bdddcdbL // FNV offset basis 0xcbf29ce484222325
+    for (b in streamId.toByteArray(Charsets.UTF_8)) {
+        h = h xor (b.toLong() and 0xff)
+        h *= 0x100000001b3L
+    }
+    return h and Long.MAX_VALUE
 }

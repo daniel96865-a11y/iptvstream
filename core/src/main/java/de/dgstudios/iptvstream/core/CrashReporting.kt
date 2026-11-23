@@ -19,7 +19,8 @@ internal object CrashReporting {
             SentryAndroid.init(app) { o ->
                 o.dsn = dsn
                 o.environment = if (BuildConfig.DEBUG) "debug" else "production"
-                o.isSendDefaultPii = false
+                // Keine personenbezogenen Daten: sendDefaultPii ist seit Sentry 8.59 veraltet und ab Werk aus.
+                // dataCollection bewusst NICHT setzen – sonst würden dessen (großzügigere) Standards gelten.
                 o.tracesSampleRate = 0.01
                 o.isAttachScreenshot = false
                 o.isAttachViewHierarchy = false

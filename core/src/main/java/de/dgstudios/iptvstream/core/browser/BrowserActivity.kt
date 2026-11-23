@@ -88,6 +88,15 @@ class BrowserActivity : ComponentActivity() {
             override fun handleOnBackPressed() = goBack()
         })
 
+        // Sicheres DNS zuerst einrichten, erst danach die erste Seite laden.
+        // Falls die WebView die Bestätigung schuldig bleibt, nach kurzer Zeit trotzdem starten.
+        val started = java.util.concurrent.atomic.AtomicBoolean(false)
+        val go = Runnable { if (!isDestroyed && started.compareAndSet(false, true)) startContent(reused) }
+        applySecureDns { runOnUiThread(go) }
+        ui.root.postDelayed(go, 2_000)
+    }
+
+    private fun startContent(reused: Boolean) {
         val start = intent.dataString
         when {
             BrowserUrl.isWeb(start) -> open(start!!)
@@ -366,11 +375,19 @@ class BrowserActivity : ComponentActivity() {
     private class Bridge {
         private fun act(): BrowserActivity? = current
 
+        /**
+         * Läuft auf dem JavaScript-Thread der Seite: darf nie warten. Sind die Regeln noch nicht
+         * geladen, kommt "" zurück und das Ausblende-Skript wird nachgereicht, sobald sie da sind.
+         */
         @JavascriptInterface
         fun css(host: String?): String {
             val a = act() ?: return ""
             if (!a.prefs.adblock) return ""
-            val e = FilterLists.await(1_500) ?: return ""
+            val e = FilterLists.engine
+            if (e == null) {
+                FilterLists.whenReady { a.runOnUiThread { a.injectHideLater() } }
+                return ""
+            }
             return e.genericCss + "\n" + e.siteCss(host)
         }
 
@@ -383,6 +400,9 @@ class BrowserActivity : ComponentActivity() {
         @JavascriptInterface
         fun pageFs(on: Boolean) {
             val a = act() ?: return
+            // Vollbild nur kurz nach einem echten Tipp (Handy) – Seiten dürfen die Leiste nicht von
+            // selbst ausblenden. Verlassen geht immer. Am TV kommen Klicks über die Fernbedienung.
+            if (on && !a.tv && System.currentTimeMillis() - a.lastTap > PAGE_FS_GESTURE_MS) return
             a.runOnUiThread { a.setPageFullscreen(on) }
         }
 
@@ -396,6 +416,13 @@ class BrowserActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    /** Ausblende-CSS nachreichen, wenn die Filterregeln erst nach dem Seitenstart fertig wurden. */
+    private fun injectHideLater() {
+        if (isFinishing || isDestroyed || !::web.isInitialized) return
+        if (!prefs.adblock) return
+        web.evaluateJavascript(BrowserJs.HIDE, null)
     }
 
     private fun setPageFullscreen(on: Boolean) {
@@ -480,7 +507,7 @@ class BrowserActivity : ComponentActivity() {
                 !prefs.adblock -> "Werbeblocker aus"
                 e == null -> "Werbeblocker lädt …"
                 else -> "Werbeblocker an · ${"%,d".format(e.ruleCount).replace(',', '.')} Regeln · $stand\nEasyList, EasyList Germany, Peter Lowe"
-            },
+            } + if (prefs.secureDns != SecureDns.OFF && BrowserDns.supported()) "\nSicheres DNS: " + secureDnsLabel() else "",
         )
     }
 
@@ -496,6 +523,7 @@ class BrowserActivity : ComponentActivity() {
             "Adresse eingeben",
             "Werbeblocker: " + if (prefs.adblock) "an" else "aus",
             "Angetipptes Video sofort im Vollbild: " + if (prefs.autoFullscreen) "an" else "aus",
+            "Sicheres DNS: " + secureDnsLabel(),
             "Filterlisten aktualisieren",
             "Browserdaten löschen",
         )
@@ -508,12 +536,82 @@ class BrowserActivity : ComponentActivity() {
                     2 -> showAddressDialog()
                     3 -> toggleAdblock()
                     4 -> toggleAutoFs()
-                    5 -> updateLists()
-                    6 -> clearData()
+                    5 -> showSecureDnsDialog()
+                    6 -> updateLists()
+                    7 -> clearData()
                 }
             }
             .setNegativeButton("Fertig", null)
             .show()
+    }
+
+    // ------------------------------------------------------------ Sicheres DNS
+
+    private fun applySecureDns(done: () -> Unit = {}) {
+        BrowserDns.apply(
+            prefs.secureDns, prefs.secureDnsUrl, http(),
+            onFallback = { toast("Sicheres DNS nicht erreichbar – normales DNS wird verwendet") },
+            done = done,
+        )
+    }
+
+    private fun secureDnsLabel(): String = SecureDns.label(prefs.secureDns, prefs.secureDnsUrl)
+
+    /** Auswahl wie in Chrome/Firefox: Aus, Cloudflare, Quad9, Google oder eigener DoH-Anbieter. */
+    private fun showSecureDnsDialog() {
+        if (!BrowserDns.supported()) {
+            AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Sicheres DNS")
+                .setMessage("Auf diesem Gerät nicht verfügbar: Die Android System WebView ist zu alt. Bitte im Play Store aktualisieren.")
+                .setPositiveButton("OK", null)
+                .show()
+            return
+        }
+        val ids = listOf(SecureDns.OFF) + SecureDns.PROVIDERS.map { it.id } + SecureDns.CUSTOM
+        val labels = ids.map { SecureDns.label(it, if (it == SecureDns.CUSTOM) prefs.secureDnsUrl else "") }.toTypedArray()
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle("Sicheres DNS")
+            .setSingleChoiceItems(labels, ids.indexOf(prefs.secureDns).coerceAtLeast(0)) { d, which ->
+                d.dismiss()
+                val id = ids[which]
+                if (id == SecureDns.CUSTOM) showCustomDnsDialog() else setSecureDns(id)
+            }
+            .setNegativeButton("Abbrechen", null)
+            .show()
+    }
+
+    private fun showCustomDnsDialog() {
+        val input = android.widget.EditText(this).apply {
+            setSingleLine()
+            hint = "https://dns.example/dns-query"
+            setText(prefs.secureDnsUrl)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
+        }
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle("Eigener DNS-über-HTTPS-Anbieter")
+            .setView(input)
+            .setPositiveButton("Übernehmen") { _, _ ->
+                val url = input.text.toString().trim()
+                if (!SecureDns.validCustomUrl(url)) {
+                    toast("Bitte eine https-Adresse eingeben")
+                } else {
+                    prefs.secureDnsUrl = url
+                    setSecureDns(SecureDns.CUSTOM)
+                }
+            }
+            .setNegativeButton("Abbrechen", null)
+            .show()
+    }
+
+    private fun setSecureDns(id: String) {
+        prefs.secureDns = id
+        applySecureDns {
+            runOnUiThread {
+                refreshStatus()
+                toast("Sicheres DNS: " + secureDnsLabel())
+                if (web.url != null) web.reload()
+            }
+        }
     }
 
     private fun toggleAdblock() {
@@ -537,6 +635,7 @@ class BrowserActivity : ComponentActivity() {
         m.add(0, 8, 2, "Startseite")
         m.add(0, 3, 3, "Werbeblocker").apply { isCheckable = true; isChecked = prefs.adblock }
         m.add(0, 4, 4, "Video sofort im Vollbild").apply { isCheckable = true; isChecked = prefs.autoFullscreen }
+        m.add(0, 9, 5, "Sicheres DNS: " + secureDnsLabel())
         m.add(0, 5, 5, "Filterlisten aktualisieren")
         m.add(0, 6, 6, "Browserdaten löschen")
         m.add(0, 7, 7, "Browser schließen")
@@ -550,6 +649,7 @@ class BrowserActivity : ComponentActivity() {
                 6 -> clearData()
                 7 -> closeBrowser()
                 8 -> resetToStart()
+                9 -> showSecureDnsDialog()
             }
             true
         }
@@ -986,6 +1086,9 @@ class BrowserActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_TV = "tv"
+
+        /** Seiten-Vollbild (DGBridge.pageFs) nur so lange nach dem letzten echten Tipp. */
+        const val PAGE_FS_GESTURE_MS = 30_000L
 
         /** Gerade offene Browser-Aktivität (für die JS-Brücke der weiterlebenden WebView). */
         @Volatile private var current: BrowserActivity? = null

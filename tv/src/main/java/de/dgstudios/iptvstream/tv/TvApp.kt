@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -55,6 +56,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -104,6 +106,7 @@ fun TvApp(mainVm: MainViewModel = viewModel()) {
     }
 
     AppTheme(s, isTv = true) {
+        androidx.compose.runtime.CompositionLocalProvider(LocalTvSafe provides tvSafeFor(s.tvMargin)) {
         AppBackground {
             val nav = rememberNavController()
             val ctx = LocalContext.current
@@ -174,9 +177,10 @@ fun TvApp(mainVm: MainViewModel = viewModel()) {
                     TvProfileForm(mainVm = mainVm, profileId = id, first = false, onDone = { nav.popBackStack() })
                 }
             }
-            // Zusätzlicher Rand wegen Overscan, damit die Uhr nie abgeschnitten wird.
-            ClockOverlay(s, Modifier.padding(horizontal = 36.dp, vertical = 15.dp))
+            // Uhr im sicheren Bereich (ClockOverlay hat selbst 12 dp Abstand).
+            ClockOverlay(s, Modifier.padding(horizontal = tvSafe.horizontal - 12.dp, vertical = (tvSafe.vertical - 12.dp).coerceAtLeast(0.dp)))
             UpdateHost(updates, television = true)
+        }
         }
     }
 }
@@ -263,16 +267,18 @@ private fun TvHome(
                     else -> false
                 }
             }
-            .padding(horizontal = 48.dp, vertical = 27.dp),
+            .tvSafePadding(),
     ) {
         Column(Modifier.fillMaxSize()) {
-            Row(
-                Modifier
-                    .padding(end = 110.dp)
-                    // „Browser“ passt nicht mehr neben die fünf Tabs: die Leiste rollt mit dem Fokus.
+            TvTabBar(
+                // Platz für die Uhr oben rechts (Uhr ≈ 60 dp breit + Abstand), sonst volle Breite.
+                reserveEnd = if (s.clockOn && s.clockPos == "tr") 76.dp else 0.dp,
+                modifier = Modifier
+                    // Passt normalerweise ganz hinein (kompakte Tabs). Bei großer Schrift rollt die
+                    // Leiste mit dem Fokus, damit kein Tab dauerhaft abgeschnitten bleibt.
                     .horizontalScroll(rememberScrollState())
                     .onFocusChanged { inTabs = it.hasFocus }
-                    .focusProperties { enter = { tabRequesters[tab.ordinal] } }
+                    .focusProperties { onEnter = { tabRequesters[tab.ordinal].requestFocus() } }
                     .focusGroup()
                     .onPreviewKeyEvent { ev ->
                         if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionDown) {
@@ -287,19 +293,10 @@ private fun TvHome(
                             false
                         }
                     },
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                for (t in TvTab.entries) {
-                    TabButton(
-                        t = t,
-                        selected = t == tab,
-                        requester = tabRequesters[t.ordinal],
-                        onFocus = { tab = t },
-                    )
-                }
-                val context = LocalContext.current
-                BrowserButton { de.dgstudios.iptvstream.core.browser.BrowserActivity.start(context, tv = true) }
-            }
+                tab = tab,
+                requesters = tabRequesters,
+                onTab = { tab = it },
+            )
             Spacer(Modifier.height(10.dp))
             TvStatusLine(sync, epg)
             Box(Modifier.weight(1f)) {
@@ -336,35 +333,67 @@ private fun TvHome(
     }
 }
 
+/** Tab-Leiste (Live TV … Einstellungen, Browser). Fokus-Logik kommt über [modifier] vom Aufrufer. */
+@Composable
+internal fun TvTabBar(
+    reserveEnd: Dp,
+    modifier: Modifier,
+    tab: TvTab,
+    requesters: List<FocusRequester>,
+    onTab: (TvTab) -> Unit,
+) {
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().padding(end = reserveEnd)) {
+        // Bei großem Bildschirmrand wird es eng: erst „Browser“ nur als Symbol, dann Tabs ohne Symbol.
+        // Reicht es trotzdem nicht (z. B. große Schrift), rollt die Leiste mit dem Fokus.
+        val compactBrowser = maxWidth < 775.dp
+        val noIcons = maxWidth < 710.dp
+        Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            for (t in TvTab.entries) {
+                TabButton(
+                    t = t,
+                    selected = t == tab,
+                    requester = requesters[t.ordinal],
+                    onFocus = { onTab(t) },
+                    showIcon = !noIcons,
+                )
+            }
+            val context = LocalContext.current
+            BrowserButton(compact = compactBrowser) { de.dgstudios.iptvstream.core.browser.BrowserActivity.start(context, tv = true) }
+        }
+    }
+}
+
 /** Menüpunkt „Browser“ (Beta) neben den Tabs: öffnet den eingebauten Browser, wechselt keinen Tab. */
 @Composable
-internal fun BrowserButton(onClick: () -> Unit) {
+internal fun BrowserButton(compact: Boolean = false, onClick: () -> Unit) {
     val s = LocalAppStyle.current
     Row(
         Modifier
             .height(50.dp)
             .tvFocus(onClick = onClick, shape = RoundedCornerShape(25.dp))
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Rounded.Language, contentDescription = null, tint = s.onSurface, modifier = Modifier.size(24.dp))
-        Spacer(Modifier.width(8.dp))
-        Text("Browser", color = s.onSurface, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-        Spacer(Modifier.width(6.dp))
+        Icon(Icons.Rounded.Language, contentDescription = null, tint = s.onSurface, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(5.dp))
+        if (!compact) {
+            Text("Browser", color = s.onSurface, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        }
+        Spacer(Modifier.width(5.dp))
         Text(
             "Beta",
             color = Color.Black,
-            fontSize = 11.sp,
+            fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier
                 .background(Color(0xFF14B8A6), RoundedCornerShape(8.dp))
-                .padding(horizontal = 6.dp, vertical = 1.dp),
+                .padding(horizontal = 5.dp, vertical = 1.dp),
         )
     }
 }
 
 @Composable
-internal fun TabButton(t: TvTab, selected: Boolean, requester: FocusRequester, onFocus: () -> Unit) {
+internal fun TabButton(t: TvTab, selected: Boolean, requester: FocusRequester, onFocus: () -> Unit, showIcon: Boolean = true) {
     val s = LocalAppStyle.current
     Row(
         Modifier
@@ -376,11 +405,13 @@ internal fun TabButton(t: TvTab, selected: Boolean, requester: FocusRequester, o
                 requester = requester,
                 selected = selected,
             )
-            .padding(horizontal = 22.dp),
+            .padding(horizontal = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(t.icon, contentDescription = null, tint = s.onSurface, modifier = Modifier.size(24.dp))
-        Spacer(Modifier.width(8.dp))
-        Text(t.label, color = s.onSurface, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        if (showIcon) {
+            Icon(t.icon, contentDescription = null, tint = s.onSurface, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(5.dp))
+        }
+        Text(t.label, color = s.onSurface, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
 }

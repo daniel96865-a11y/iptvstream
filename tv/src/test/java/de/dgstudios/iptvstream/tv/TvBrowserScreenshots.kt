@@ -51,7 +51,7 @@ class TvBrowserScreenshots {
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
                             for (t in TvTab.entries) {
-                                TabButton(t = t, selected = t == TvTab.LIVE, requester = androidx.compose.ui.focus.FocusRequester(), onFocus = {})
+                                TabButton(t = t, selected = t == TvTab.LIVE, requester = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }, onFocus = {})
                             }
                             BrowserButton {}
                         }

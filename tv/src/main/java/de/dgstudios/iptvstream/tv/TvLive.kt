@@ -228,14 +228,16 @@ fun TvCategoryDrawer(
     val browsingAll = query.isBlank()
     val rowShape = RoundedCornerShape(14.dp)
     val listBottom = maxOf(drawerSystemBottom(), outerBottom) + 48.dp
+    val safe = tvSafe
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Row(Modifier.fillMaxSize()) {
             Column(
                 Modifier
-                    .width(480.dp)
+                    .width(462.dp + maxOf(18.dp, safe.horizontal))
                     .fillMaxHeight()
                     .background(s.backgroundColors[0])
-                    .padding(horizontal = 18.dp, vertical = 16.dp),
+                    // Hintergrund bis zum Rand, Inhalt im sicheren Bereich (Overscan).
+                    .padding(start = maxOf(18.dp, safe.horizontal), end = 18.dp, top = maxOf(16.dp, safe.vertical), bottom = 16.dp),
             ) {
                 Text("Kategorien", color = s.onSurface, fontSize = 26.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(12.dp))
@@ -368,20 +370,81 @@ private suspend fun LazyListState.reveal(index: Int) {
 }
 
 
+/** Fokus-Ziele der Quellen-Leiste („Meine Sender“ / „Freie Sender“). */
+internal class SourceBarFocus {
+    val mine = FocusRequester()
+    val free = FocusRequester()
+}
+
+/**
+ * Quellen-Leiste unter den Tabs. Fernbedienung: Links/Rechts wechselt zwischen den Chips,
+ * Hoch geht zur Tab-Leiste, Runter in Kategorien bzw. Senderliste.
+ */
 @Composable
-private fun TvLiveSourceBar(mainVm: MainViewModel) {
+private fun TvLiveSourceBar(
+    mainVm: MainViewModel,
+    focus: SourceBarFocus,
+    onUp: () -> Unit,
+    onDown: () -> Unit,
+) {
     val active by mainVm.active.collectAsStateWithLifecycle()
     val profiles by mainVm.profiles.collectAsStateWithLifecycle()
     val freeOn = active.profile?.type == de.dgstudios.iptvstream.core.data.db.ProfileType.FREE
     val hasProvider = profiles.any { it.type != de.dgstudios.iptvstream.core.data.db.ProfileType.FREE }
+    TvSourceChips(
+        hasProvider = hasProvider,
+        freeOn = freeOn,
+        focus = focus,
+        onMine = { mainVm.switchLiveSource(false) },
+        onFree = { mainVm.switchLiveSource(true) },
+        onUp = onUp,
+        onDown = onDown,
+    )
+}
+
+/** Die beiden Chips (ohne ViewModel, damit ein Test die Fokus-Wege prüfen kann). */
+@Composable
+internal fun TvSourceChips(
+    hasProvider: Boolean,
+    freeOn: Boolean,
+    focus: SourceBarFocus,
+    onMine: () -> Unit,
+    onFree: () -> Unit,
+    onUp: () -> Unit,
+    onDown: () -> Unit,
+) {
+    val upDown = Modifier.onPreviewKeyEvent { ev ->
+        if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+        when (ev.key) {
+            Key.DirectionUp -> { onUp(); true }
+            Key.DirectionDown -> { onDown(); true }
+            else -> false
+        }
+    }
     Row(
         Modifier.padding(start = 6.dp, bottom = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         if (hasProvider) {
-            TvButton("Meine Sender", { mainVm.switchLiveSource(false) }, selected = !freeOn)
+            TvButton(
+                "Meine Sender", onMine,
+                modifier = upDown.focusProperties {
+                    right = focus.free
+                    left = FocusRequester.Cancel
+                },
+                requester = focus.mine,
+                selected = !freeOn,
+            )
         }
-        TvButton("Freie Sender", { mainVm.switchLiveSource(true) }, selected = freeOn)
+        TvButton(
+            "Freie Sender", onFree,
+            modifier = upDown.focusProperties {
+                left = if (hasProvider) focus.mine else FocusRequester.Cancel
+                right = FocusRequester.Cancel
+            },
+            requester = focus.free,
+            selected = freeOn,
+        )
     }
 }
 
@@ -452,6 +515,26 @@ fun TvLiveScreen(
     val follow = remember { ScrollFollow() }
     val anim = LocalAppStyle.current.animations
     val escapeRef = rememberUpdatedState(onEscapeUp)
+    val sourceFocus = remember { SourceBarFocus() }
+    val activeNow by mainVm.active.collectAsStateWithLifecycle()
+    val freeOnRef = rememberUpdatedState(activeNow.profile?.type == de.dgstudios.iptvstream.core.data.db.ProfileType.FREE)
+    val profilesNow by mainVm.profiles.collectAsStateWithLifecycle()
+    val hasProviderRef = rememberUpdatedState(profilesNow.any { it.type != de.dgstudios.iptvstream.core.data.db.ProfileType.FREE })
+
+    /** Fokus auf den gewählten Quellen-Chip. false, wenn die Leiste (noch) nicht da ist. */
+    fun focusSourceBar(): Boolean {
+        val target = if (freeOnRef.value || !hasProviderRef.value) sourceFocus.free else sourceFocus.mine
+        return try {
+            target.requestFocus()
+        } catch (_: IllegalStateException) {
+            false
+        }
+    }
+
+    /** Hoch aus der Liste: erst zu „Meine Sender“/„Freie Sender“, von dort zur Tab-Leiste. */
+    fun escapeUp() {
+        if (!focusSourceBar()) onEscapeUp()
+    }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         // Der erste Start zählt nicht: erst die Rückkehr aus dem Hintergrund setzt die Liste zurück.
@@ -487,7 +570,7 @@ fun TvLiveScreen(
     suspend fun focusCategoryNow() {
         val catsNow = catItemsRef.value
         if (catsNow.isEmpty()) {
-            onEscapeUp()
+            escapeUp()
             return
         }
         railHold = true
@@ -501,7 +584,7 @@ fun TvLiveScreen(
                 catListState.scrollToItemSafe(ci)
                 catReg.focus(ci, tries = 40)
             }
-            if (!landed) onEscapeUp()
+            if (!landed) escapeUp()
         } finally {
             railHold = false
         }
@@ -527,7 +610,7 @@ fun TvLiveScreen(
             listReg.focus(0)
         }
         if (!landed) {
-            onEscapeUp()
+            escapeUp()
             return
         }
         // Erst fokussieren, danach zuklappen. Sonst sucht der Fokus durch alle Sender.
@@ -560,10 +643,10 @@ fun TvLiveScreen(
                         try {
                             openButton.requestFocus()
                         } catch (_: IllegalStateException) {
-                            onEscapeUp()
+                            escapeUp()
                         }
                     } else {
-                        onEscapeUp()
+                        escapeUp()
                     }
                 }
                 return@launch
@@ -573,7 +656,7 @@ fun TvLiveScreen(
             }
             if (!listReg.focus(target)) {
                 listState.scrollToItemSafe(target)
-                if (!listReg.focus(target) && delta < 0) onEscapeUp()
+                if (!listReg.focus(target) && delta < 0) escapeUp()
             }
             follow.list(scope, listState, target, anim)
         }
@@ -583,7 +666,7 @@ fun TvLiveScreen(
         move.launch(scope) {
             val target = index + delta
             if (target !in catItemsRef.value.indices) {
-                if (delta < 0) onEscapeUp()
+                if (delta < 0) escapeUp()
                 return@launch
             }
             railHold = true
@@ -591,7 +674,7 @@ fun TvLiveScreen(
                 if (!catListState.slideInNeighbor(target, anim)) catListState.ensureVisible(target)
                 if (!catReg.focus(target)) {
                     catListState.scrollToItemSafe(target)
-                    if (!catReg.focus(target)) onEscapeUp()
+                    if (!catReg.focus(target)) escapeUp()
                 }
                 follow.list(scope, catListState, target, anim)
             } finally {
@@ -618,7 +701,11 @@ fun TvLiveScreen(
             vm.selectCategory(id)
         }
     }
-    RegisterEntry(entry) { enterFromTab() }
+    // Runter aus der Tab-Leiste: zuerst auf die Quellen-Chips, damit „Freie Sender“ erreichbar ist.
+    RegisterEntry(entry) {
+        first.pending = false
+        if (!focusSourceBar()) enterFromTab()
+    }
 
     // Nicht tief in die Liste springen: das hat den Fokus ohne Weg nach oben gefangen.
     LaunchedEffect(restored) {
@@ -725,7 +812,7 @@ fun TvLiveScreen(
 
     if (drawer) {
         Column(Modifier.fillMaxSize()) {
-            TvLiveSourceBar(mainVm)
+            TvLiveSourceBar(mainVm, sourceFocus, onUp = onEscapeUp, onDown = ::enterFromTab)
             val moveName = movingChannel?.name ?: cats.firstOrNull { it.id == movingCategory }?.name
             if (moveName != null) {
                 TvMoveHintBar(
@@ -766,7 +853,7 @@ fun TvLiveScreen(
         }
     } else {
         Column(Modifier.fillMaxSize()) {
-            TvLiveSourceBar(mainVm)
+            TvLiveSourceBar(mainVm, sourceFocus, onUp = onEscapeUp, onDown = ::enterFromTab)
             val moveNameSplit = movingChannel?.name ?: cats.firstOrNull { it.id == movingCategory }?.name
             if (moveNameSplit != null) {
                 TvMoveHintBar(
