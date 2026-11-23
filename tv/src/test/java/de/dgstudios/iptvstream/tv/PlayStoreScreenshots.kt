@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -85,7 +86,10 @@ class PlayStoreScreenshots {
     @Composable
     private fun Tabs(selected: TvTab) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            for (t in TvTab.entries) TabButton(t = t, selected = t == selected, requester = FocusRequester(), onFocus = {})
+            for (tab in TvTab.entries) {
+                val requester = remember(tab) { FocusRequester() }
+                TabButton(t = tab, selected = tab == selected, requester = requester, onFocus = {})
+            }
         }
     }
 
