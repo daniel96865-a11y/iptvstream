@@ -7,6 +7,14 @@
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- Externer Player (VLC, MX …) als Ausweg: Android 11+ zeigt sonst keine passenden Apps an. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="video/*" />
+        </intent>
+    </queries>
+
     <application>
         <!-- Eingebauter Browser (Beta). Drehen ohne Neustart, damit die Seite nicht neu lädt. -->
         <activity

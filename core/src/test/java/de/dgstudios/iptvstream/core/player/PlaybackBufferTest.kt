@@ -33,9 +33,14 @@ class PlaybackBufferTest {
     }
 
     @Test
-    fun liveStartNeedsRealHeadroom() {
-        assertEquals(2_500 to 4_000, PlaybackBuffer.liveStart("small"))
-        assertEquals(4_000 to 6_000, PlaybackBuffer.liveStart("medium"))
-        assertEquals(6_000 to 10_000, PlaybackBuffer.liveStart("large"))
+    fun liveStartIsFastOnZapAndSafeAfterStall() {
+        assertEquals(300 to 4_000, PlaybackBuffer.liveStart("small"))
+        assertEquals(500 to 6_000, PlaybackBuffer.liveStart("medium"))
+        assertEquals(800 to 10_000, PlaybackBuffer.liveStart("large"))
+        for (b in listOf("small", "medium", "large")) {
+            val (zap, after) = PlaybackBuffer.liveStart(b)
+            assert(zap < 1_000) { "Senderwechsel muss unter 1 s Vorlauf bleiben" }
+            assert(after > zap)
+        }
     }
 }

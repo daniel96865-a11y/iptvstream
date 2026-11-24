@@ -50,6 +50,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.animation.core.tween
+import android.app.Activity
+import android.os.Build
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -59,7 +63,11 @@ import de.dgstudios.iptvstream.core.data.PlayKind
 import de.dgstudios.iptvstream.core.data.db.EpgEntity
 import de.dgstudios.iptvstream.core.player.AudioBoost
 import de.dgstudios.iptvstream.core.player.PlayerController
+import de.dgstudios.iptvstream.core.player.ExternalPlayer
+import de.dgstudios.iptvstream.core.player.StreamStats
+import de.dgstudios.iptvstream.core.ui.DelayedSpinner
 import de.dgstudios.iptvstream.core.ui.LiveBufferBar
+import de.dgstudios.iptvstream.core.ui.StreamInfoOverlay
 import de.dgstudios.iptvstream.core.ui.LocalAppStyle
 import de.dgstudios.iptvstream.core.ui.NumberOverlay
 import de.dgstudios.iptvstream.core.ui.VideoSurface
@@ -74,6 +82,12 @@ import de.dgstudios.iptvstream.core.vm.PlayerViewModel
 import kotlinx.coroutines.delay
 
 private enum class PMode { HIDDEN, CONTROLS, PANEL, ARCHIVE }
+
+/** „Letzter Sender“-Taste vieler Fernbedienungen (KeyEvent.KEYCODE_LAST_CHANNEL, ab Android 9 benannt). */
+private const val KEY_LAST_CHANNEL = 229
+
+/** So lange (Wiederholungen der Taste) muss ◄ gehalten werden, um zum vorigen Sender zu springen. */
+private const val LONG_PRESS_REPEATS = 4
 
 @Composable
 fun TvPlayerScreen(onBack: () -> Unit) {
@@ -129,6 +143,48 @@ private fun TvPlayerContent(vm: PlayerViewModel, ctrl: PlayerController, ui: Pla
     val numEntry = rememberNumberEntry { n -> vm.zapNumber(n) }
     val offerActive = ui.nextOfferSeconds > 0
     val hasError = st.error != null
+    var infoOn by remember { mutableStateOf(ui.settings.streamInfo) }
+    LaunchedEffect(infoOn) { ctrl.setInfoVisible(infoOn) }
+    val context = LocalContext.current
+
+    // Bildwiederholrate „Immer“: Fernseher auf eine zur Bildrate passende Rate schalten, beim Verlassen zurück.
+    val fps = st.info.fps
+    DisposableEffect(ui.settings.afr, fps, st.videoWidth) {
+        val activity = context as? Activity
+        if (ui.settings.afr == "always" && fps != null && activity != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val window = activity.window
+            val display = window.decorView.display
+            val current = display?.mode
+            if (display != null && current != null) {
+                val sameSize = display.supportedModes.filter {
+                    it.physicalWidth == current.physicalWidth && it.physicalHeight == current.physicalHeight
+                }
+                val rate = StreamStats.pickRefreshRate(fps, sameSize.map { it.refreshRate })
+                val mode = sameSize.firstOrNull { it.refreshRate == rate }
+                if (mode != null && mode.modeId != window.attributes.preferredDisplayModeId) {
+                    window.attributes = window.attributes.also { it.preferredDisplayModeId = mode.modeId }
+                }
+            }
+        }
+        onDispose {}
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            val activity = context as? Activity
+            if (activity != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+                activity.window.attributes.preferredDisplayModeId != 0
+            ) {
+                activity.window.attributes = activity.window.attributes.also { it.preferredDisplayModeId = 0 }
+            }
+        }
+    }
+
+    fun openExternal() {
+        val url = ctrl.currentStreamUrl() ?: return
+        if (!ExternalPlayer.open(context, url, item?.title, ctrl.currentUserAgent())) {
+            vm.toast("Kein externer Player gefunden (z. B. VLC installieren)")
+        }
+    }
 
     // Zurück: Panel schließen, sonst Player verlassen (ExoPlayer wird mit dem ViewModel freigegeben).
     BackHandler {
@@ -219,6 +275,10 @@ private fun TvPlayerContent(vm: PlayerViewModel, ctrl: PlayerController, ui: Pla
                 }
                 true
             }
+            code == KEY_LAST_CHANNEL -> {
+                if (isLive) vm.jumpBack()
+                true
+            }
             code == AKey.KEYCODE_MENU -> {
                 mode = PMode.PANEL
                 true
@@ -275,7 +335,12 @@ private fun TvPlayerContent(vm: PlayerViewModel, ctrl: PlayerController, ui: Pla
                 true
             }
             code == AKey.KEYCODE_DPAD_LEFT -> {
-                if (liveEdge) show() else seek(-step)
+                // Live: kurz drücken zeigt die Leiste, lang halten springt zum vorigen Sender.
+                if (liveEdge) {
+                    if (rep == 0) show() else if (rep == LONG_PRESS_REPEATS) vm.jumpBack()
+                } else {
+                    seek(-step)
+                }
                 true
             }
             else -> false
@@ -301,8 +366,14 @@ private fun TvPlayerContent(vm: PlayerViewModel, ctrl: PlayerController, ui: Pla
                 .focusable(),
         )
 
-        if (st.loading && !hasError) {
-            CircularProgressIndicator(Modifier.align(Alignment.Center), color = Color.White, strokeWidth = 4.dp)
+        DelayedSpinner(st.loading && !hasError, Modifier.align(Alignment.Center), strokeWidth = 4.dp)
+
+        if (infoOn) {
+            StreamInfoOverlay(
+                st.info,
+                Modifier.align(Alignment.TopStart).padding(start = tvSafe.horizontal, top = tvSafe.vertical),
+                fontSize = 15.sp,
+            )
         }
 
         val notice = st.notice ?: ui.toast
@@ -320,10 +391,11 @@ private fun TvPlayerContent(vm: PlayerViewModel, ctrl: PlayerController, ui: Pla
             )
         }
 
+        // Infoleiste beim Umschalten ohne Einblend-Verzögerung.
         AnimatedVisibility(
             visible = mode == PMode.CONTROLS,
             modifier = Modifier.align(Alignment.BottomCenter),
-            enter = fadeIn(),
+            enter = fadeIn(tween(80)),
             exit = fadeOut(),
         ) {
             ControlsBar(
@@ -356,6 +428,16 @@ private fun TvPlayerContent(vm: PlayerViewModel, ctrl: PlayerController, ui: Pla
         ) {
             SettingsPanel(
                 vm, ctrl, ui, st.resize, st.audioTracks, st.textTracks, st.textEnabled, isLive, panelFocus,
+                infoOn = infoOn,
+                onToggleInfo = { infoOn = !infoOn },
+                onExternal = {
+                    mode = PMode.CONTROLS
+                    openExternal()
+                },
+                onJumpBack = {
+                    vm.jumpBack()
+                    mode = PMode.CONTROLS
+                },
                 onArchive = { mode = PMode.ARCHIVE },
                 onLive = {
                     vm.returnToLive()
@@ -473,9 +555,9 @@ private fun ControlsBar(
                 Spacer(Modifier.height(10.dp))
                 Text(
                     if (ui.archive) {
-                        "▲▼ Sender   ·   ► Zurückblicken   ·   Zahlen: Sender direkt wählen"
+                        "▲▼ Sender   ·   ◄ halten: voriger Sender   ·   ► Zurückblicken   ·   Zahlen: Sender direkt"
                     } else {
-                        "▲▼ Sender   ·   ► Einstellungen   ·   Zahlen: Sender direkt wählen"
+                        "▲▼ Sender   ·   ◄ halten: voriger Sender   ·   ► Einstellungen   ·   Zahlen: Sender direkt"
                     },
                     color = Color(0x99FFFFFF),
                     fontSize = 15.sp,
@@ -621,11 +703,18 @@ private fun SettingsPanel(
     textEnabled: Boolean,
     isLive: Boolean,
     firstFocus: FocusRequester,
+    infoOn: Boolean,
+    onToggleInfo: () -> Unit,
+    onExternal: () -> Unit,
+    onJumpBack: () -> Unit,
     onArchive: () -> Unit,
     onLive: () -> Unit,
 ) {
     val s = LocalAppStyle.current
     val entries = buildList {
+        if (isLive && ui.canJumpBack) {
+            add(PanelEntry.Option("↩ Voriger Sender" + (ui.previousTitle?.let { ": $it" } ?: ""), false, onJumpBack))
+        }
         if (ui.archive) add(PanelEntry.Option("Zurückblicken", false, onArchive))
         if (ui.catchingUp) add(PanelEntry.Option("Zum Live-TV", false, onLive))
         if (isLive) {
@@ -650,6 +739,9 @@ private fun SettingsPanel(
         add(PanelEntry.Option("Aus", !textEnabled) { ctrl.selectText(null) })
         for (t in text) add(PanelEntry.Option(t.label, t.selected && textEnabled) { ctrl.selectText(t.id) })
         if (text.isEmpty()) add(PanelEntry.Info("Keine Untertitel verfügbar"))
+        add(PanelEntry.Header("Mehr"))
+        add(PanelEntry.Option("Stream-Infos anzeigen", infoOn, onToggleInfo))
+        add(PanelEntry.Option("In externem Player öffnen (VLC …)", false, onExternal))
     }
     val firstOption = entries.indexOfFirst { it is PanelEntry.Option }
 

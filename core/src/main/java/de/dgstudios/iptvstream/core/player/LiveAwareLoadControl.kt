@@ -11,8 +11,10 @@ import androidx.media3.exoplayer.trackselection.ExoTrackSelection
 import androidx.media3.exoplayer.upstream.Allocator
 
 /**
- * Wie [delegate], aber bei Live-Sendern erst mit einem echten Vorlauf starten bzw. nach einem
- * Hänger weiterspielen ([PlaybackBuffer.liveStart]). Filme und Serien bleiben unverändert schnell.
+ * Wie [delegate], aber bei Live-Sendern: beim Senderwechsel sofort mit kleinem Vorlauf starten,
+ * nach einem Hänger erst mit großem Vorlauf weiterspielen ([PlaybackBuffer.liveStart]).
+ * [stalled] bleibt für den laufenden Sender gesetzt, auch über eine Neuverbindung hinweg.
+ * Filme und Serien bleiben beim Verhalten von [delegate].
  */
 @UnstableApi
 class LiveAwareLoadControl(
@@ -20,11 +22,12 @@ class LiveAwareLoadControl(
     private val liveStartMs: Int,
     private val liveAfterRebufferMs: Int,
     private val isLive: () -> Boolean,
+    private val stalled: () -> Boolean = { false },
 ) : LoadControl {
 
     override fun shouldStartPlayback(parameters: LoadControl.Parameters): Boolean {
         if (!isLive()) return delegate.shouldStartPlayback(parameters)
-        val needMs = if (parameters.rebuffering) liveAfterRebufferMs else liveStartMs
+        val needMs = if (parameters.rebuffering || stalled()) liveAfterRebufferMs else liveStartMs
         val bufferedUs = Util.getPlayoutDurationForMediaDuration(parameters.bufferedDurationUs, parameters.playbackSpeed)
         return bufferedUs >= needMs * 1_000L
     }

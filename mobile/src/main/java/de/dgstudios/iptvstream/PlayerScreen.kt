@@ -62,6 +62,7 @@ import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
+import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -119,6 +120,13 @@ import de.dgstudios.iptvstream.core.ui.formatProgrammeRange
 import de.dgstudios.iptvstream.core.vm.PlayerUi
 import de.dgstudios.iptvstream.core.vm.PlayerViewModel
 import kotlinx.coroutines.delay
+import androidx.activity.ComponentActivity
+import androidx.core.app.PictureInPictureModeChangedInfo
+import androidx.core.util.Consumer
+import android.os.Build
+import de.dgstudios.iptvstream.core.player.ExternalPlayer
+import de.dgstudios.iptvstream.core.ui.DelayedSpinner
+import de.dgstudios.iptvstream.core.ui.StreamInfoOverlay
 
 private fun Context.findActivity(): Activity? {
     var c: Context? = this
@@ -210,10 +218,33 @@ fun PlayerScreen(onBack: () -> Unit) {
 
     LaunchedEffect(ui.noRequest) { if (ui.noRequest) leave() }
 
+    // Bild-in-Bild: Beim Verlassen der App (Home-Taste) läuft der Sender im kleinen Fenster weiter.
+    val activity = context.findActivity() as? ComponentActivity
+    var inPip by remember { mutableStateOf(activity?.isInPictureInPictureMode == true) }
+    DisposableEffect(activity) {
+        val listener = Consumer<PictureInPictureModeChangedInfo> { inPip = it.isInPictureInPictureMode }
+        activity?.addOnPictureInPictureModeChangedListener(listener)
+        onDispose { activity?.removeOnPictureInPictureModeChangedListener(listener) }
+    }
+    val pipAllowed = ui.settings.pip && controller != null && ui.ready
+    DisposableEffect(activity, pipAllowed) {
+        PlayerPip.allow(activity, pipAllowed)
+        onDispose { PlayerPip.allow(activity, false) }
+    }
+
     val ctrl = controller
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         if (ctrl == null) {
             CircularProgressIndicator(Modifier.align(Alignment.Center), color = Color.White)
+        } else if (inPip) {
+            val pst by ctrl.state.collectAsStateWithLifecycle()
+            VideoSurface(
+                player = ctrl.player,
+                resize = pst.resize,
+                videoWidth = pst.videoWidth,
+                videoHeight = pst.videoHeight,
+                modifier = Modifier.fillMaxSize(),
+            )
         } else {
             PlayerContent(
                 vm, ctrl, ui, leave,
@@ -254,6 +285,15 @@ private fun PlayerContent(
     val appCtx = LocalContext.current.applicationContext
     var castPicker by remember { mutableStateOf(false) }
     var lastCastKey by remember { mutableStateOf<String?>(null) }
+    var infoOn by remember { mutableStateOf(ui.settings.streamInfo) }
+    LaunchedEffect(infoOn) { ctrl.setInfoVisible(infoOn) }
+    val ctx = LocalContext.current
+    fun openExternal() {
+        val url = ctrl.currentStreamUrl() ?: return
+        if (!ExternalPlayer.open(ctx, url, item?.title, ctrl.currentUserAgent())) {
+            vm.toast("Kein externer Player gefunden (z. B. VLC installieren)")
+        }
+    }
 
     // Chromecast-Suche nur, solange der Schalter in den Einstellungen an ist.
     LaunchedEffect(castOn) {
@@ -322,8 +362,16 @@ private fun PlayerContent(
                 },
         )
 
-        if (st.loading && st.error == null) {
-            CircularProgressIndicator(Modifier.align(Alignment.Center), color = Color.White, strokeWidth = 3.dp)
+        DelayedSpinner(st.loading && st.error == null, Modifier.align(Alignment.Center))
+
+        if (infoOn) {
+            StreamInfoOverlay(
+                st.info,
+                Modifier
+                    .align(Alignment.TopStart)
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .padding(start = 16.dp, top = if (showControls) 76.dp else 12.dp),
+            )
         }
 
         // Hinweise (Audiowechsel, Wiederverbindung …)
@@ -427,6 +475,17 @@ private fun PlayerContent(
                                             overflow = TextOverflow.Ellipsis,
                                         )
                                     }
+                                }
+                                if (isLive && ui.canJumpBack) {
+                                    GlassIconButton(
+                                        Icons.Rounded.SwapHoriz,
+                                        "Voriger Sender" + (ui.previousTitle?.let { ": $it" } ?: ""),
+                                        {
+                                            vm.jumpBack()
+                                            interaction++
+                                        },
+                                    )
+                                    Spacer(Modifier.width(8.dp))
                                 }
                                 if (isLive) {
                                     GlassIconButton(
@@ -690,6 +749,18 @@ private fun PlayerContent(
                 }
                 if (st.textTracks.isEmpty()) {
                     Text("Keine Untertitel verfügbar", color = s.onSurfaceDim, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+                }
+                SheetTitle("Mehr")
+                if (isLive && ui.canJumpBack) {
+                    TrackRow("Voriger Sender" + (ui.previousTitle?.let { ": $it" } ?: ""), false) {
+                        sheet = false
+                        vm.jumpBack()
+                    }
+                }
+                TrackRow("Stream-Infos anzeigen", infoOn) { infoOn = !infoOn }
+                TrackRow("In externem Player öffnen (VLC …)", false) {
+                    sheet = false
+                    openExternal()
                 }
             }
         }

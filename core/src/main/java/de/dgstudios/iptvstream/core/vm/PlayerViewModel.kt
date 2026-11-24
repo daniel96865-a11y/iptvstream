@@ -49,6 +49,9 @@ data class PlayerUi(
     val catchingUp: Boolean = false,
     /** Gemerkte Tonverstärkung für den laufenden Sender, Film oder die Serie. */
     val audioBoost: String = AudioBoost.OFF,
+    /** Es gibt einen vorher gesehenen Sender, zu dem man zurückspringen kann. */
+    val canJumpBack: Boolean = false,
+    val previousTitle: String? = null,
 )
 
 /**
@@ -78,6 +81,13 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private var toastJob: Job? = null
     /** Laufendes Umschalten inkl. Fortschritt-Lesen, damit ein langsamer Zap load() nicht nachholt. */
     private var playJob: Job? = null
+    /** Aktueller Stand aller Einstellungen, damit beim Umschalten nichts gelesen werden muss. */
+    @Volatile private var latest: AppSettings = AppSettings()
+    /** Zuletzt gesehener Live-Sender vor dem aktuellen (Stream-ID) und der aktuelle. */
+    private var previousChannelId: String? = null
+    private var previousChannelTitle: String? = null
+    private var currentChannelId: String? = null
+    private var currentChannelTitle: String? = null
 
     init {
         viewModelScope.launch { start() }
@@ -98,7 +108,10 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         profile = p
-        settings = c.settings.current()
+        latest = c.settings.current()
+        // Player-Werte dieser Playlist (Puffer, Kennung, Live-Format, Decoder) haben Vorrang.
+        settings = latest.forProfile(p.id)
+        viewModelScope.launch { c.settings.flow.collect { latest = it } }
 
         when (req) {
             is LiveRequest -> {
@@ -182,11 +195,21 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             if (pr != null && pr.positionMs > 10_000) startMs = (pr.positionMs - 2_000).coerceAtLeast(0)
         }
         coroutineContext.ensureActive()
-        val boost = savedBoost(item)
-        coroutineContext.ensureActive()
+        // Kein Warten vor load(): Tonverstärkung kommt aus dem gemerkten Einstellungsstand.
+        val boost = savedBoostNow(item)
         ctrl.setAudioBoost(boost)
         ctrl.load(item, startMs)
-        coroutineContext.ensureActive()
+        if (item.kind == PlayKind.LIVE) {
+            val id = channels.getOrNull(i)?.streamId
+            if (id != null && id != currentChannelId) {
+                if (currentChannelId != null) {
+                    previousChannelId = currentChannelId
+                    previousChannelTitle = currentChannelTitle
+                }
+                currentChannelId = id
+                currentChannelTitle = item.title
+            }
+        }
         _ui.update {
             it.copy(
                 ready = true,
@@ -200,8 +223,11 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                 archive = archive,
                 catchingUp = false,
                 audioBoost = boost,
+                canJumpBack = previousChannelId != null,
+                previousTitle = previousChannelTitle,
             )
         }
+        coroutineContext.ensureActive()
         if (item.kind == PlayKind.LIVE) {
             repo.saveProgress(p.id, item, 0, 0)
             c.settings.set(SettingsStore.lastChannelKey(p.id), item.id)
@@ -227,6 +253,24 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         if (size == 0) return
         if (isLive) playIndex((index - 1 + size) % size)
         else if (index > 0) playIndex(index - 1)
+    }
+
+    /** Zum vorher gesehenen Sender zurückspringen (und beim nächsten Mal wieder zurück). */
+    fun jumpBack() {
+        val p = profile ?: return
+        if (!isLive) return
+        val target = previousChannelId ?: return
+        val i = channels.indexOfFirst { it.streamId == target }
+        if (i >= 0) {
+            playIndex(i)
+            return
+        }
+        launchPlay {
+            channels = repo.channels(p.id, Cat.ALL).first()
+            coroutineContext.ensureActive()
+            val j = channels.indexOfFirst { it.streamId == target }
+            if (j >= 0) playLoaded(j, false) else showToast("Voriger Sender nicht gefunden")
+        }
     }
 
     /** Sender über Zahleneingabe aufrufen. */
@@ -316,6 +360,12 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { c.settings.set(AudioBoost.key(p.id, item), level) }
     }
 
+    private fun savedBoostNow(item: PlayItem): String {
+        val p = profile ?: return AudioBoost.OFF
+        val saved = latest.raw[AudioBoost.key(p.id, item)] ?: return AudioBoost.OFF
+        return if (AudioBoost.choices.any { it.first == saved }) saved else AudioBoost.OFF
+    }
+
     private suspend fun savedBoost(item: PlayItem): String {
         val p = profile ?: return AudioBoost.OFF
         val saved = c.settings.getRaw(AudioBoost.key(p.id, item)) ?: return AudioBoost.OFF
@@ -346,6 +396,9 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             next()
         }
     }
+
+    /** Kurzer Hinweis im Player. */
+    fun toast(text: String) = showToast(text)
 
     private fun showToast(text: String) {
         _ui.update { it.copy(toast = text) }
