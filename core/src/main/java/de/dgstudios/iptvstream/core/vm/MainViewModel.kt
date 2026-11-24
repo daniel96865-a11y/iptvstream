@@ -12,9 +12,11 @@ import de.dgstudios.iptvstream.core.data.db.ProfileEntity
 import de.dgstudios.iptvstream.core.data.db.ProfileType
 import de.dgstudios.iptvstream.core.data.FreeTv
 import de.dgstudios.iptvstream.core.settings.AppSettings
+import de.dgstudios.iptvstream.core.settings.PlaylistOverrides
 import de.dgstudios.iptvstream.core.settings.SettingsStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
@@ -26,7 +28,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val c = app.container
     private val isTv = FreeTv.isTvPackage(app.packageName)
 
-    val settings: StateFlow<AppSettings?> = c.settings.flow
+    val settings: StateFlow<AppSettings?> = combine(c.settings.flow, c.active) { s, a ->
+        s.copy(activeProfileId = a.profile?.id)
+    }
         .map<AppSettings, AppSettings?> { it }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
@@ -70,6 +74,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun set(key: String, value: String) {
+        // Player-Werte „nur für diese Playlist“ landen unter dem Schlüssel der aktiven Playlist.
+        val base = PlaylistOverrides.baseOf(key)
+        if (base != null) {
+            val pid = c.active.value.profile?.id ?: return
+            viewModelScope.launch {
+                if (value == PlaylistOverrides.GLOBAL) {
+                    c.settings.remove(PlaylistOverrides.storageKey(pid, base))
+                } else {
+                    c.settings.set(PlaylistOverrides.storageKey(pid, base), value)
+                }
+            }
+            return
+        }
         viewModelScope.launch { c.settings.set(key, value) }
     }
 

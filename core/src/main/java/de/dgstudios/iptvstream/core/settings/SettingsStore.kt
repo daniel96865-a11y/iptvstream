@@ -14,8 +14,32 @@ import kotlinx.coroutines.flow.map
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
 /** Alle Werte liegen als Strings im DataStore; Standardwerte kommen aus [SettingsSchema]. */
-data class AppSettings(val raw: Map<String, String> = emptyMap()) {
-    fun get(id: String): String = raw[id] ?: SettingsSchema.defaultOf(id)
+data class AppSettings(
+    val raw: Map<String, String> = emptyMap(),
+    /** Aktive Playlist. Nur damit die Einstellungsseite deren eigene Player-Werte zeigt. */
+    val activeProfileId: Long? = null,
+) {
+    fun get(id: String): String {
+        val base = PlaylistOverrides.baseOf(id)
+        if (base != null) {
+            val pid = activeProfileId ?: return PlaylistOverrides.GLOBAL
+            return raw[PlaylistOverrides.storageKey(pid, base)] ?: PlaylistOverrides.GLOBAL
+        }
+        return raw[id] ?: SettingsSchema.defaultOf(id)
+    }
+
+    /**
+     * Werte für den Player dieser Playlist: Puffer, Kennung, Live-Format und Decoder dürfen pro
+     * Playlist abweichen. „Wie allgemein“ (oder nichts gespeichert) nimmt den allgemeinen Wert.
+     */
+    fun forProfile(profileId: Long): AppSettings {
+        val merged = HashMap(raw)
+        for (base in PlaylistOverrides.KEYS) {
+            val v = raw[PlaylistOverrides.storageKey(profileId, base)]
+            if (!v.isNullOrBlank() && v != PlaylistOverrides.GLOBAL) merged[base] = v
+        }
+        return AppSettings(merged, profileId)
+    }
     fun on(id: String): Boolean = get(id) == "on"
     fun int(id: String, def: Int = 0): Int = get(id).toIntOrNull() ?: def
     fun raw(id: String): String? = raw[id]
@@ -51,6 +75,29 @@ data class AppSettings(val raw: Map<String, String> = emptyMap()) {
     val categoryDrawer: Boolean get() = get("categories") == "drawer"
     /** Fernseher: Rand gegen Overscan ("small", "normal", "more", "max"). */
     val tvMargin: String get() = get("tv_margin")
+    /** Fernseher: Bildwiederholrate an das Video anpassen ("off", "seamless", "always"). */
+    val afr: String get() = get("afr")
+    /** Handy: beim Verlassen der App als kleines Fenster weiterspielen. */
+    val pip: Boolean get() = on("pip")
+    /** Stream-Infos (Auflösung, FPS, Bitrate, Decoder, Umschaltzeit) im Player einblenden. */
+    val streamInfo: Boolean get() = on("stream_info")
+}
+
+/** Player-Einstellungen, die eine Playlist (ein Profil) selbst festlegen kann. */
+object PlaylistOverrides {
+    val KEYS = listOf("buffer", "user_agent", "live_format", "decoder")
+    const val GLOBAL = "global"
+    private const val PREFIX = "pl_"
+
+    /** Schlüssel in der Einstellungsseite, z. B. "pl_buffer". */
+    fun uiId(base: String) = PREFIX + base
+
+    /** Gespeicherter Schlüssel je Playlist, z. B. "pl_7_buffer". */
+    fun storageKey(profileId: Long, base: String) = "$PREFIX${profileId}_$base"
+
+    /** "pl_buffer" → "buffer"; alles andere → null. */
+    fun baseOf(id: String): String? =
+        if (id.startsWith(PREFIX)) id.removePrefix(PREFIX).takeIf { it in KEYS } else null
 }
 
 class SettingsStore(private val context: Context) {

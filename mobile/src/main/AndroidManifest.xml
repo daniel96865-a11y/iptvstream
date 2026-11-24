@@ -24,6 +24,7 @@
 
         <activity
             android:name=".MainActivity"
+            android:supportsPictureInPicture="true"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|keyboard|smallestScreenSize|density|uiMode"
             android:exported="true"
             android:launchMode="singleTask"

@@ -1,0 +1,17 @@
+Testversion 1.0.79-zap1 (Vorabversion, nur zum Testen)
+
+Schnelleres Umschalten:
+- Beim Senderwechsel startet das Bild schon nach 0,3–0,8 Sekunden Puffer (vorher 2,5–6 s). Erst wenn ein Sender einmal hängt, wird für diesen Sender der große Puffer genommen.
+- HLS-Sender starten näher am Live-Geschehen statt 40 Sekunden dahinter.
+- Der alte Sender wird sofort beendet (wichtig bei Anbietern mit nur einer Verbindung), Verbindungen werden wiederverwendet.
+- Ladekreis erscheint erst nach 0,4 s, die Infoleiste blendet ohne Verzögerung ein.
+
+Neu:
+- Voriger Sender: Handy – Knopf oben im Player bzw. im Menü; TV – ◄ gedrückt halten, Taste „Letzter Sender“ oder im Menü.
+- Stream-Infos (Auflösung, Bildrate, Bitrate, Decoder, Umschaltzeit): Einstellungen → Player oder im Player-Menü.
+- Einstellungen pro Playlist (Puffer, User-Agent, Live-Format, Decoder): Einstellungen → „Player für diese Playlist“.
+- „In externem Player öffnen (VLC …)“ im Player-Menü als Ausweg.
+- TV: „Bildwiederholrate anpassen“ (Aus / Nur ohne Bildaussetzer / Immer).
+- Handy: Bild-in-Bild beim Verlassen der App (abschaltbar).
+
+Enthält alles aus 1.0.78-player1.

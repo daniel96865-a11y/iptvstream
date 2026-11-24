@@ -1,7 +1,11 @@
 package de.dgstudios.iptvstream
 
+import android.app.Activity
+import android.app.PictureInPictureParams
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
+import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -13,7 +17,43 @@ object WidgetLaunch {
     val pending = MutableStateFlow<Pair<Long, String>?>(null)
 }
 
+/**
+ * Bild-in-Bild für den Player. Der Player-Bildschirm schaltet es frei, solange ein Sender läuft;
+ * ab Android 12 wechselt das System selbst, davor [MainActivity.onUserLeaveHint].
+ */
+object PlayerPip {
+    @Volatile var allowed = false
+        private set
+
+    fun params(autoEnter: Boolean): PictureInPictureParams? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return null
+        val b = PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) b.setAutoEnterEnabled(autoEnter).setSeamlessResizeEnabled(true)
+        return b.build()
+    }
+
+    fun allow(activity: Activity?, on: Boolean) {
+        allowed = on
+        if (activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        runCatching { params(on)?.let { activity.setPictureInPictureParams(it) } }
+    }
+}
+
 class MainActivity : ComponentActivity() {
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        // Ab Android 12 erledigt das setAutoEnterEnabled.
+        if (!PlayerPip.allowed || Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) return
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                PlayerPip.params(false)?.let { enterPictureInPictureMode(it) }
+            } else {
+                @Suppress("DEPRECATION")
+                enterPictureInPictureMode()
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)

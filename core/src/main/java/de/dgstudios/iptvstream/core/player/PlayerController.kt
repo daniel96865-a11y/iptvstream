@@ -4,6 +4,8 @@ import android.app.ActivityManager
 import android.content.Context
 import android.content.res.Configuration
 import android.os.Handler
+import android.os.SystemClock
+import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.Format
@@ -17,10 +19,13 @@ import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.HttpDataSource
+import androidx.media3.datasource.TransferListener
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.decoder.ffmpeg.FfmpegAudioRenderer
 import androidx.media3.decoder.ffmpeg.FfmpegLibrary
+import androidx.media3.exoplayer.DefaultLivePlaybackSpeedControl
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -57,6 +62,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import java.util.ArrayList
+import java.util.concurrent.atomic.AtomicLong
 
 data class TrackOption(
     val id: String,
@@ -87,6 +93,10 @@ data class PlayerState(
     val signalAudio: String? = null,
     val resize: String = "fit",
     val ended: Boolean = false,
+    /** Stream-Infos für die Einblendung (nur aktualisiert, solange sie sichtbar ist). */
+    val info: StreamInfo = StreamInfo(),
+    /** Zeit vom Senderwechsel bis zum ersten Bild in ms, null bis zum ersten Bild. */
+    val firstFrameMs: Long? = null,
 )
 
 /**
@@ -254,12 +264,41 @@ class PlayerController(
     private var lastRendered = 0
     private var dropWindowSince = 0L
 
+    /** Fernseher (UI-Modus). Bildwiederholraten-Einstellung gilt nur dort. */
+    private val television: Boolean
+    /** Der laufende Live-Sender ist einmal hängengeblieben: ab jetzt großer Vorlauf ([LiveAwareLoadControl]). */
+    @Volatile private var stalledLive = false
+    /** Seit dem letzten Öffnen lief der Sender schon einmal (READY). */
+    private var hadReady = false
+    /** Zeitpunkt des Senderwechsels (elapsedRealtime), 0 nach dem ersten Bild. */
+    private var zapStartedAt = 0L
+    private val zapTimes = ArrayDeque<Long>()
+    /** Über das Netz geladene Bytes (alle Verbindungen des Players). */
+    private val bytesLoaded = AtomicLong()
+    private var rateBytes = 0L
+    private var rateAt = 0L
+    private var networkKbps: Int? = null
+    private var fpsFrames = -1
+    private var fpsAt = 0L
+    private var measuredFps: Float? = null
+    /** Stream-Infos laufend messen (Einstellung oder vom Bildschirm eingeschaltet). */
+    @Volatile private var infoVisible = settings.streamInfo
+
+    private val byteCounter = object : TransferListener {
+        override fun onTransferInitializing(source: DataSource, dataSpec: DataSpec, isNetwork: Boolean) {}
+        override fun onTransferStart(source: DataSource, dataSpec: DataSpec, isNetwork: Boolean) {}
+        override fun onBytesTransferred(source: DataSource, dataSpec: DataSpec, isNetwork: Boolean, bytesTransferred: Int) {
+            if (isNetwork) bytesLoaded.addAndGet(bytesTransferred.toLong())
+        }
+        override fun onTransferEnd(source: DataSource, dataSpec: DataSpec, isNetwork: Boolean) {}
+    }
+
     init {
         // Ältere Fire-TV-Decoder können bei H.264-Zwischenzeilenbild stehen bleiben,
         // ohne dass Media3 einen Fehler meldet. Deshalb H.264 dort von Anfang an per Software,
         // aber UHD behält unten weiterhin den Hardware-Decoder, wenn einer verfügbar ist.
         val memoryClass = (context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager)?.memoryClass ?: 0
-        val television = context.resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK ==
+        television = context.resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK ==
             Configuration.UI_MODE_TYPE_TELEVISION
         compat = CompatMode.enabled(
             settings.compat,
@@ -277,6 +316,9 @@ class PlayerController(
         // Verbindung neu gebaut und liest die Werte des gerade laufenden Senders.
         // Großzügige Zeitlimits (15 s Aufbau, 15 s Lesen) und Weiterleitungen auch
         // zwischen https und http folgen (viele Anbieter leiten auf einen http-Server um).
+        // newBuilder() teilt Verbindungspool und Dispatcher mit dem App-Client: Beim Umschalten werden
+        // offene Keep-Alive-Verbindungen zum Anbieter (Weiterleitung, HLS-Playlist/Segmente) wiederverwendet,
+        // DNS und Verbindungsaufbau entfallen dann.
         val streamClient = okHttp.newBuilder()
             .connectTimeout(STREAM_CONNECT_TIMEOUT_S, java.util.concurrent.TimeUnit.SECONDS)
             .readTimeout(STREAM_READ_TIMEOUT_S, java.util.concurrent.TimeUnit.SECONDS)
@@ -290,7 +332,8 @@ class PlayerController(
                 // Kürzeres Lese-Zeitlimit für Streams: Hängt die Verbindung, kommt nach 15 s ein Fehler
                 // und die Wiederverbindung greift, statt 45 s lang mit leerem Puffer zu warten.
                 OkHttpDataSource.Factory(streamClient).setUserAgent(streamUserAgent ?: Net.userAgentFor(settings.userAgent))
-                    .setDefaultRequestProperties(extra),
+                    .setDefaultRequestProperties(extra)
+                    .setTransferListener(byteCounter),
             ).createDataSource()
         }
         // Live-TS: Beendet der Anbieter die Verbindung, wird sofort neu geöffnet, ohne den Player anzufassen.
@@ -330,6 +373,7 @@ class PlayerController(
             liveStartMs = liveStartMs,
             liveAfterRebufferMs = liveAfterRebufferMs,
             isLive = { liveMode },
+            stalled = { stalledLive },
         )
 
         var params = trackSelector.buildUponParameters().setMaxAudioChannelCount(maxChannels)
@@ -340,6 +384,13 @@ class PlayerController(
         player = ExoPlayer.Builder(context, AppRenderersFactory(context, settings.passthrough, videoDecoders, audioDecoders, decoderMode))
             .setTrackSelector(trackSelector)
             .setLoadControl(loadControl)
+            // HLS-Live startet nah an der Live-Kante (Vorgabe der Playlist). Nach jedem Hänger rückt der
+            // Zielabstand um 2 s nach hinten, damit derselbe Sender danach stabil läuft.
+            .setLivePlaybackSpeedControl(
+                DefaultLivePlaybackSpeedControl.Builder()
+                    .setTargetLiveOffsetIncrementOnRebufferMs(2_000)
+                    .build(),
+            )
             // Media3 (seit 1.9) bricht mit ERROR_CODE_TIMEOUT ab, wenn die Position 10 s steht. Unsere eigenen
             // Wächter (Hänger 6 s, Standbild 8 s, Puffer 10 s) sollen zuerst greifen und neu verbinden.
             .setStuckPlayingDetectionTimeoutMs(STUCK_PLAYING_TIMEOUT_MS)
@@ -356,7 +407,10 @@ class PlayerController(
         // WLAN und CPU während der Wiedergabe wach halten. Ohne diese Sperre geht das WLAN nach ein paar
         // Minuten in den Stromsparmodus, der Strom kommt stockend und der Sender hängt.
         player.setWakeMode(C.WAKE_MODE_NETWORK)
-        if (compat || DevicePlayback.conservativeVideo()) {
+        // Bildwiederholrate: Am Fernseher nach Einstellung (Aus / nur nahtlos / immer). „Immer“ schaltet
+        // die TV-App selbst über den Bildschirmmodus um; Media3 bleibt dabei aus. Auf dem Handy wie bisher.
+        val afr = if (television) settings.afr else "seamless"
+        if (afr != "seamless" || compat || DevicePlayback.conservativeVideo()) {
             player.setVideoChangeFrameRateStrategy(C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF)
         }
 
@@ -386,6 +440,14 @@ class PlayerController(
         }
         current?.let { saveProgress(it, force = true) }
         reconnectJob?.cancel()
+        // Alten Sender sofort freigeben: Verbindung schließen, bevor die neue aufgeht (viele Anbieter
+        // erlauben nur eine Verbindung gleichzeitig).
+        if (current != null) player.stop()
+        zapStartedAt = SystemClock.elapsedRealtime()
+        stalledLive = false
+        hadReady = false
+        fpsFrames = -1
+        measuredFps = null
         fallback.reset()
         maxChannels = if (settings.surround) 6 else 2
         initialAudioDone = false
@@ -398,7 +460,12 @@ class PlayerController(
         frames.reset()
         dropWindowSince = 0L
         bufferingSince = 0L
+        // Decoder bleiben beim Umschalten oft dieselben (keine neue Initialisierung): Namen behalten.
+        val keptVideoDecoder = diag.videoDecoder
+        val keptAudioDecoder = diag.audioDecoder
         diag.reset()
+        diag.videoDecoder = keptVideoDecoder
+        diag.audioDecoder = keptAudioDecoder
         audioDecoderStage = 0
         playingSince = 0L
         lastTracks = Tracks.EMPTY
@@ -432,15 +499,14 @@ class PlayerController(
             .apply {
                 if (Urls.isHls(item.url)) setMimeType(MimeTypes.APPLICATION_M3U8)
                 if (live) {
-                    // Ohne Zielabstand holt der Player zum Live-Rand auf und wirft den Puffer
-                    // wieder auf wenige Segmente zusammen, auch wenn groß 90 Sekunden erlaubt.
+                    // Schnell umschalten: HLS startet beim Abstand, den die Playlist vorgibt (nah an der
+                    // Live-Kante), statt bis zu 90 s dahinter. Nach einem Hänger rückt der Abstand nach hinten
+                    // (setLivePlaybackSpeedControl), höchstens bis zur Puffergröße.
                     setLiveConfiguration(
                         MediaItem.LiveConfiguration.Builder()
-                            .setMinOffsetMs(4_000L.coerceAtMost(liveBufferMaxMs))
-                            .setTargetOffsetMs(liveBufferMaxMs)
                             .setMaxOffsetMs(liveBufferMaxMs)
-                            .setMinPlaybackSpeed(0.98f)
-                            .setMaxPlaybackSpeed(1.02f)
+                            .setMinPlaybackSpeed(0.97f)
+                            .setMaxPlaybackSpeed(1.03f)
                             .build(),
                     )
                 }
@@ -452,7 +518,7 @@ class PlayerController(
                 audioTracks = emptyList(), textTracks = emptyList(), positionMs = 0, durationMs = 0,
                 bufferedMs = 0, bufferMaxMs = if (liveEdge(item)) liveBufferMaxMs else 0L,
                 videoWidth = 0, videoHeight = 0, signalVideo = null, signalAudio = null,
-                isLive = liveEdge(item),
+                isLive = liveEdge(item), firstFrameMs = null,
             )
         }
         player.setMediaItem(mediaItem, if (startMs > 0) startMs else C.TIME_UNSET)
@@ -656,9 +722,16 @@ class PlayerController(
         override fun onPlaybackStateChanged(playbackState: Int) {
             when (playbackState) {
                 Player.STATE_READY -> {
+                    hadReady = true
                     _state.update { it.copy(loading = false, error = null) }
                 }
-                Player.STATE_BUFFERING -> _state.update { it.copy(loading = true) }
+                Player.STATE_BUFFERING -> {
+                    if (hadReady && liveMode && !stalledLive) {
+                        stalledLive = true
+                        diag.event("Hänger: ab jetzt größerer Vorlauf")
+                    }
+                    _state.update { it.copy(loading = true) }
+                }
                 Player.STATE_ENDED -> {
                     // Ein Live-Sender endet nie. Schließt der Anbieter die Verbindung (Zeit- oder
                     // Verbindungslimit), läuft der Puffer leer und der Player meldet "Ende": neu verbinden.
@@ -673,9 +746,15 @@ class PlayerController(
             }
         }
 
+        override fun onRenderedFirstFrame() {
+            recordFirstFrame()
+        }
+
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             if (isPlaying) {
                 if (playingSince == 0L) playingSince = System.currentTimeMillis()
+                // Reine Radiosender haben kein Bild: dann zählt der Start der Wiedergabe.
+                if (!player.currentTracks.isTypeSupported(C.TRACK_TYPE_VIDEO)) recordFirstFrame()
             }
             _state.update { it.copy(playing = isPlaying) }
         }
@@ -1094,6 +1173,7 @@ class PlayerController(
         if (!settings.reconnect) return false
         if (reconnectAttempts >= MAX_RECONNECTS) return false
         reconnectAttempts++
+        if (liveMode) stalledLive = true
         diag.event("Neuverbindung $reconnectAttempts, Puffer ${player.totalBufferedDuration / 1000} s, ${diag.lastIssue ?: "ohne Fehler"}")
         val live = liveEdge(current)
         val wait = ReconnectBackoff.waitMs(reconnectAttempts, live)
@@ -1184,6 +1264,7 @@ class PlayerController(
                     )
                 }
                 refreshSignal()
+                if (infoVisible) refreshInfo()
                 val now = System.currentTimeMillis()
                 val running = player.isPlaying && !inBackground
                 if (stall.observe(now, running, player.currentPosition)) {
@@ -1235,6 +1316,75 @@ class PlayerController(
         }
     }
 
+    /** Stream-Infos laufend messen und anzeigen (Einblendung an/aus). */
+    fun setInfoVisible(visible: Boolean) {
+        infoVisible = visible
+        if (visible) refreshInfo()
+    }
+
+    /** Laufende Senderadresse für einen externen Player (null, wenn nichts läuft). */
+    fun currentStreamUrl(): String? = current?.let { StreamHeaders.parse(it.url).url }
+
+    /** Kennung, mit der der laufende Sender geöffnet wurde (für externe Player). */
+    fun currentUserAgent(): String = streamUserAgent ?: Net.userAgentFor(settings.userAgent)
+
+    private fun recordFirstFrame() {
+        val started = zapStartedAt
+        if (started == 0L) return
+        zapStartedAt = 0L
+        val ms = SystemClock.elapsedRealtime() - started
+        zapTimes.addLast(ms)
+        while (zapTimes.size > 20) zapTimes.removeFirst()
+        val median = StreamStats.median(zapTimes.toList())
+        Log.i(TAG, "Umschaltzeit bis zum ersten Bild: $ms ms (Median $median ms, ${diag.format ?: "?"}, Puffer ${settings.buffer})")
+        diag.event("Erstes Bild nach $ms ms")
+        _state.update { it.copy(firstFrameMs = ms) }
+        if (infoVisible) refreshInfo()
+    }
+
+    private fun refreshInfo() {
+        if (released) return
+        val now = SystemClock.elapsedRealtime()
+        val bytes = bytesLoaded.get()
+        if (rateAt == 0L) {
+            rateAt = now
+            rateBytes = bytes
+        } else if (now - rateAt >= 2_000) {
+            networkKbps = StreamStats.kbps(bytes - rateBytes, now - rateAt)
+            rateAt = now
+            rateBytes = bytes
+        }
+        val rendered = renderedFrames()
+        if (rendered != null && player.isPlaying) {
+            if (fpsFrames < 0 || rendered < fpsFrames) {
+                fpsFrames = rendered
+                fpsAt = now
+            } else if (now - fpsAt >= 2_000) {
+                val raw = (rendered - fpsFrames) * 1000f / (now - fpsAt)
+                StreamStats.normalizeFps(raw)?.let { measuredFps = it }
+                fpsFrames = rendered
+                fpsAt = now
+            }
+        }
+        val vf = player.videoFormat
+        val size = player.videoSize
+        val reported = vf?.frameRate?.takeIf { it > 0f }
+        val bitrate = (vf?.averageBitrate?.takeIf { it > 0 } ?: vf?.bitrate?.takeIf { it > 0 })?.let { it / 1000 }
+        val info = StreamInfo(
+            resolution = if (size.width > 0 && size.height > 0) "${size.width}×${size.height}" else null,
+            fps = reported ?: measuredFps,
+            videoKbps = bitrate,
+            networkKbps = networkKbps,
+            videoDecoder = diag.videoDecoder,
+            audioDecoder = diag.audioDecoder,
+            firstFrameMs = _state.value.firstFrameMs,
+            medianFirstFrameMs = StreamStats.median(zapTimes.toList()),
+            droppedFrames = diag.dropped,
+            bufferedMs = player.totalBufferedDuration,
+        )
+        _state.update { if (it.info == info) it else it.copy(info = info) }
+    }
+
     /** Live-Rand. Archiv einer vergangenen Sendung bleibt spulbar. */
     private fun liveEdge(item: PlayItem?): Boolean = item != null && item.kind == PlayKind.LIVE && !item.catchup
 
@@ -1254,6 +1404,7 @@ class PlayerController(
     }
 
     private companion object {
+        const val TAG = "IPTVstream"
         const val MAX_RECONNECTS = 8
         const val DECODER_HINT =
             "Tipp: Einstellungen → Player → „Video- und Audioverarbeitung“ umstellen (z. B. „Software bevorzugen“)."

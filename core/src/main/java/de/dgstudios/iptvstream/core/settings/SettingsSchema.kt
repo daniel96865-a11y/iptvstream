@@ -39,6 +39,28 @@ data class SettingsSection(
 
 object SettingsSchema {
     private val onOff = listOf(Option("on", "Ein"), Option("off", "Aus"))
+    private val decoderOptions = listOf(
+        Option("hw", "Hardware bevorzugen"),
+        Option("sw", "Software bevorzugen"),
+        Option("hw_only", "Nur Hardware"),
+        Option("sw_only", "Nur Software"),
+    )
+    private val bufferOptions =
+        listOf(Option("small", "Klein (schnell)"), Option("medium", "Mittel"), Option("large", "Groß (stabil)"))
+    private val liveFormatOptions = listOf(Option("ts", "MPEG-TS (schnell)"), Option("m3u8", "HLS (kompatibel)"))
+    private val userAgentOptions = listOf(
+        Option("chrome", "Browser (Standard)"),
+        Option("vlc", "VLC"),
+        Option("okhttp", "Android-App"),
+        Option("smarters", "IPTV Smarters"),
+    )
+    private val asGlobal = Option(PlaylistOverrides.GLOBAL, "Wie allgemein")
+
+    /** Einstellungen, die nur auf dem Fernseher gelten (das Handy blendet sie aus). */
+    val tvOnly = setOf("tv_margin", "afr")
+
+    /** Einstellungen, die nur auf dem Handy gelten (der Fernseher blendet sie aus). */
+    val phoneOnly = setOf("pip", "cast")
 
     val accentNames = listOf("Blau", "Violett", "Türkis", "Grün", "Orange", "Rot", "Violett-Cyan")
     val backgroundNames = listOf("Mitternacht", "Ozean", "Aurora", "Sonnenuntergang", "Graphit", "Glas")
@@ -128,20 +150,15 @@ object SettingsSchema {
                 ),
                 ChoiceDef(
                     "decoder", "Video- und Audioverarbeitung",
-                    listOf(
-                        Option("hw", "Hardware bevorzugen"),
-                        Option("sw", "Software bevorzugen"),
-                        Option("hw_only", "Nur Hardware"),
-                        Option("sw_only", "Nur Software"),
-                    ),
+                    decoderOptions,
                     "hw",
                     "Standard: Gerätedecoder zuerst, Software (FFmpeg für AC3/E-AC3/DTS) springt ein. Bleibt ein Sender stumm oder schwarz, „Software bevorzugen“ probieren. Mit Software-Ton wird AC3 nicht an den Receiver durchgereicht. Wirkt ab dem nächsten Sender.",
                 ),
                 ChoiceDef(
                     "buffer", "Puffergröße",
-                    listOf(Option("small", "Klein (schnell)"), Option("medium", "Mittel"), Option("large", "Groß (stabil)")),
+                    bufferOptions,
                     "medium",
-                    "Klein hält etwa 15 Sekunden vor, groß bis zu 90. Der Sender liegt dann weiter hinter der Live-Sendung.",
+                    "Beim Umschalten startet das Bild immer sofort (unter 1 Sekunde Vorlauf). Hängt ein Sender, baut der Player danach mehr Vorlauf auf: klein bis etwa 15 Sekunden, groß bis zu 90.",
                 ),
                 ChoiceDef(
                     "resize", "Bildmodus",
@@ -157,7 +174,7 @@ object SettingsSchema {
                 ChoiceDef("reconnect", "Automatisch neu verbinden", onOff, "on"),
                 ChoiceDef(
                     "live_format", "Live-Format",
-                    listOf(Option("ts", "MPEG-TS (schnell)"), Option("m3u8", "HLS (kompatibel)")), "ts",
+                    liveFormatOptions, "ts",
                 ),
                 ChoiceDef(
                     "seamless", "Nahtlose Neuverbindung (Test)", onOff, "off",
@@ -165,16 +182,43 @@ object SettingsSchema {
                 ),
                 ChoiceDef(
                     "user_agent", "Kennung gegenüber dem Anbieter",
-                    listOf(
-                        Option("chrome", "Browser (Standard)"),
-                        Option("vlc", "VLC"),
-                        Option("okhttp", "Android-App"),
-                        Option("smarters", "IPTV Smarters"),
-                    ),
+                    userAgentOptions,
                     "chrome",
                     "Manche Anbieter behandeln Player unterschiedlich. Wirkt ab dem nächsten Sender.",
                 ),
+                ChoiceDef(
+                    "stream_info", "Stream-Infos anzeigen", onOff, "off",
+                    "Auflösung, Bildrate, Bitrate, Decoder und Umschaltzeit oben links im Bild.",
+                ),
+                ChoiceDef(
+                    "afr", "Bildwiederholrate anpassen (nur TV)",
+                    listOf(
+                        Option("off", "Aus"),
+                        Option("seamless", "Nur ohne Bildaussetzer"),
+                        Option("always", "Immer (kurz schwarz)"),
+                    ),
+                    "seamless",
+                    "Schaltet den Fernseher auf die Bildrate des Senders (z. B. 50 Hz), gegen Ruckeln bei Kameraschwenks. „Immer“ kann beim Umschalten kurz schwarz werden. Nur wenn Gerät und Fernseher es unterstützen.",
+                ),
+                ChoiceDef(
+                    "pip", "Bild-in-Bild (nur Handy)", onOff, "on",
+                    "Beim Verlassen der App läuft der Sender in einem kleinen Fenster weiter.",
+                ),
                 ChoiceDef("cast", "Chromecast", onOff, "on", "Videos auf Fernseher oder Chromecast senden (nur Handy)"),
+            ),
+        ),
+        SettingsSection(
+            "playlist", "Player für diese Playlist",
+            listOf(
+                InfoDef("playlist_info", "Gilt nur für die aktive Playlist", ""),
+                ChoiceDef(PlaylistOverrides.uiId("buffer"), "Puffergröße", listOf(asGlobal) + bufferOptions, PlaylistOverrides.GLOBAL),
+                ChoiceDef(PlaylistOverrides.uiId("user_agent"), "Kennung gegenüber dem Anbieter", listOf(asGlobal) + userAgentOptions, PlaylistOverrides.GLOBAL),
+                ChoiceDef(PlaylistOverrides.uiId("live_format"), "Live-Format", listOf(asGlobal) + liveFormatOptions, PlaylistOverrides.GLOBAL),
+                ChoiceDef(
+                    PlaylistOverrides.uiId("decoder"), "Video- und Audioverarbeitung",
+                    listOf(asGlobal) + decoderOptions, PlaylistOverrides.GLOBAL,
+                    "Wirkt ab dem nächsten Öffnen des Players.",
+                ),
             ),
         ),
         SettingsSection(
