@@ -38,8 +38,8 @@ android {
         applicationId = "de.dgstudios.iptvstream.tv"
         minSdk = 24
         targetSdk = 35
-        versionCode = 89
-        versionName = "1.0.77"
+        versionCode = 90
+        versionName = "1.0.78-buffer1"
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a")
         }
