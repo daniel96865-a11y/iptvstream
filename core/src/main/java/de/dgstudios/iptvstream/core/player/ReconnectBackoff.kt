@@ -8,6 +8,12 @@ object ReconnectBackoff {
         return if (live) (n * 1_000L).coerceAtMost(3_000L) else (1_000L shl (n - 1).coerceAtMost(3))
     }
 
+    /** Anbieter meldet ein Verbindungslimit: mindestens 3 s warten, damit er die alte Verbindung freigibt. */
+    fun waitMs(attempt: Int, live: Boolean, limited: Boolean): Long =
+        if (limited) maxOf(waitMs(attempt, live), LIMIT_WAIT_MS) else waitMs(attempt, live)
+
+    const val LIMIT_WAIT_MS = 3_000L
+
     /** Live: die ersten zwei Versuche still, erst danach ein Hinweis. */
     fun showNotice(attempt: Int, live: Boolean): Boolean = !live || attempt > 2
 }

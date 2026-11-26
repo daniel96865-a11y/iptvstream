@@ -38,4 +38,18 @@ class PlaybackBufferTest {
         assertEquals(4_000 to 6_000, PlaybackBuffer.liveStart("medium"))
         assertEquals(6_000 to 10_000, PlaybackBuffer.liveStart("large"))
     }
+
+    @Test
+    fun startStaysAsIn1077AndCushionFitsTheBuffer() {
+        // Start unverändert wie 1.0.77.
+        assertEquals(2_500 to 4_000, PlaybackBuffer.liveStart("small"))
+        assertEquals(4_000 to 6_000, PlaybackBuffer.liveStart("medium"))
+        assertEquals(6_000 to 10_000, PlaybackBuffer.liveStart("large"))
+        for (b in listOf("small", "medium", "large")) {
+            val (_, max, _) = PlaybackBuffer.spec(b)
+            val (base, _, cap) = PlaybackBuffer.cushion(b)
+            org.junit.Assert.assertTrue("Ziel unter dem Höchstpuffer: Laden pausiert nie", cap <= max - 3_000)
+            org.junit.Assert.assertTrue("Ziel über dem Startvorlauf", base > PlaybackBuffer.liveStart(b).first)
+        }
+    }
 }

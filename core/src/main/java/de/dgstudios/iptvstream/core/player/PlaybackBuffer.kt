@@ -63,4 +63,14 @@ object PlaybackBuffer {
         "large" -> 6_000 to 10_000
         else -> 4_000 to 6_000
     }
+
+    /**
+     * Live-TS: Ziel-Vorlauf für [LiveCushion] (Grundwert, Zuschlag je Hänger, Obergrenze). Bleibt unter dem
+     * Höchstpuffer ([spec]), damit das Laden nie pausiert.
+     */
+    fun cushion(setting: String): Triple<Long, Long, Long> = when (setting) {
+        "small" -> Triple(6_000L, 3_000L, 12_000L)
+        "large" -> Triple(15_000L, 5_000L, 40_000L)
+        else -> Triple(10_000L, 5_000L, 25_000L)
+    }
 }

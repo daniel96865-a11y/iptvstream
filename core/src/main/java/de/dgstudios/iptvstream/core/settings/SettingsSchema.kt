@@ -149,6 +149,10 @@ object SettingsSchema {
                     listOf(Option("ts", "MPEG-TS (schnell)"), Option("m3u8", "HLS (kompatibel)")), "ts",
                 ),
                 ChoiceDef(
+                    "live_slow", "Live-Vorlauf aufbauen", onOff, "on",
+                    "Live-Sender (MPEG-TS) laufen nach dem Start kaum merklich langsamer (97 %, bei unter 2 s Vorlauf 95 %), bis genug Vorlauf da ist (etwa 6 / 10 / 15 s je nach Puffergröße, nach Hängern mehr). Der Start selbst bleibt unverändert. Ohne Wirkung bei Ton-Durchleitung an den AV-Receiver.",
+                ),
+                ChoiceDef(
                     "seamless", "Nahtlose Neuverbindung (Test)", onOff, "off",
                     "Öffnet bei Streamende sofort eine neue Verbindung im laufenden Player. Kann Bildruckeln auslösen, wenn der Anbieter Daten wiederholt. Standard aus: dann verbindet die Wiederverbindung neu.",
                 ),

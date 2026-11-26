@@ -1,0 +1,14 @@
+Testversion 1.0.78-puffer3 (Vorabversion, nur zum Testen)
+
+Basis ist wieder die bewährte 1.0.77. Start, Umschalten, Kennung, Live-Format und Decoder sind unverändert wie in 1.0.77.
+Die Testversionen 1.0.79-zap1/-puffer1/-puffer2 sind damit überholt.
+
+Nur für den Puffer neu:
+- „Live-Vorlauf aufbauen“ (Einstellungen → Player, Standard an): Live-Sender (MPEG-TS) laufen nach dem Start kaum merklich langsamer (97 %, unter 2 s Vorlauf 95 %, Tonhöhe bleibt gleich), bis etwa 6 / 10 / 15 s Vorlauf da sind (Puffergröße klein / mittel / groß). Läuft der Puffer trotzdem leer, wächst das Ziel (bis 12 / 25 / 40 s). Abschaltbar.
+- Neuverbindung erst, wenn 10 Sekunden lang wirklich keine Daten mehr kommen; langsames Nachladen wirft den Puffer nicht mehr weg.
+- Beendet der Anbieter die Verbindung, läuft der Restpuffer bis ~0,75 s weiter (vorher Neustart schon bei 5 s Rest).
+- Bei einer Neuverbindung wird die alte Verbindung sofort geschlossen (nicht erst nach 15 s).
+- Meldet der Anbieter „Verbindung belegt“ (HTTP 403, 406, 429, 509 …), wartet die App 2–4 s zwischen den Versuchen statt sofort zu wiederholen.
+- HLS/DASH-Segmentenden zählen nicht mehr als Streamende.
+
+Hinweis: versionCode 94, damit es sich über die 1.0.79-Testversionen installieren lässt.
