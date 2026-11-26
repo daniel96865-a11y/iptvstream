@@ -20,6 +20,9 @@ class LiveAwareLoadControl(
     private val liveStartMs: Int,
     private val liveAfterRebufferMs: Int,
     private val isLive: () -> Boolean,
+    /** Live: Höchstpuffer und Byte-Grenze wie im [delegate]. 0 = Hysterese des Delegaten unverändert. */
+    private val liveMaxMs: Long = 0L,
+    private val targetBytes: Int = Int.MAX_VALUE,
 ) : LoadControl {
 
     override fun shouldStartPlayback(parameters: LoadControl.Parameters): Boolean {
@@ -29,8 +32,18 @@ class LiveAwareLoadControl(
         return bufferedUs >= needMs * 1_000L
     }
 
-    override fun shouldContinueLoading(parameters: LoadControl.Parameters): Boolean =
-        delegate.shouldContinueLoading(parameters)
+    /**
+     * Media3 hört bei vollem Puffer auf zu lesen und fängt erst unter dem Mindestpuffer wieder an (z. B. 40 s → 8 s,
+     * also über 30 s Pause). Bei einem Live-Strom ruht die Verbindung dann so lange; manche Anbieter kappen oder
+     * drosseln eine Verbindung, die nicht gelesen wird. Live darum schon knapp unter dem Höchstpuffer weiterlesen
+     * (Pause nur etwa [LIVE_RESUME_GAP_MS]). Die Byte-Grenze bleibt (Speicher).
+     */
+    override fun shouldContinueLoading(parameters: LoadControl.Parameters): Boolean {
+        val base = delegate.shouldContinueLoading(parameters)
+        if (base || liveMaxMs <= 0L || !isLive()) return base
+        if (delegate.getAllocator(parameters.playerId).totalBytesAllocated >= targetBytes) return false
+        return parameters.bufferedDurationUs < (liveMaxMs - LIVE_RESUME_GAP_MS) * 1_000L
+    }
 
     override fun onPrepared(playerId: PlayerId) = delegate.onPrepared(playerId)
 
@@ -57,4 +70,8 @@ class LiveAwareLoadControl(
         mediaPeriodId: MediaSource.MediaPeriodId,
         bufferedDurationUs: Long,
     ): Boolean = delegate.shouldContinuePreloading(playerId, timeline, mediaPeriodId, bufferedDurationUs)
+
+    companion object {
+        const val LIVE_RESUME_GAP_MS = 2_000L
+    }
 }

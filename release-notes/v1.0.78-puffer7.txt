@@ -1,0 +1,11 @@
+Testversion 1.0.78-puffer7 (Vorabversion, nur zum Testen)
+
+Basis 1.0.77, Start unverändert. Gegenüber puffer6:
+- Ursache des Leerlaufens: Beendet der Anbieter die Verbindung, hat der Player bisher gewartet, bis der Puffer fast leer war (0,75 s), und erst dann neu verbunden. Der Neustart braucht ein paar Sekunden – daher „Puffer sinkt bis 0, Bild steht kurz, geht weiter“. Der Stillstand-Wächter aus puffer6 hat das nicht gesehen, weil der Player nach einem Ende nicht mehr lädt.
+- Neu: Bei Anbieter-Ende wird sofort eine neue Verbindung als nächstes Stück angeschlossen, während der restliche Puffer weiterläuft. Der Player wechselt dann ohne Neustart dorthin (eigener Extraktor, eigene Zeitachse – kein Anhängen in den laufenden Strom).
+- Hängt die Verbindung (offen, aber keine Daten bzw. nur ein paar Füllbytes), wird sie nach etwa 3 s abgebrochen und genauso angeschlossen.
+- Liefern mehrere neue Verbindungen nacheinander praktisch nichts, wird nicht weiter angeschlossen; dann greift die normale Wiederverbindung (mit den Pausen bei 403/406/429/509).
+- Live: Bei vollem Puffer pausierte das Laden bisher, bis nur noch der Mindestpuffer übrig war (über 30 s ohne Lesen). Jetzt wird schon 2 s unter dem Höchstpuffer weitergelesen, damit die Verbindung nicht lange ruht.
+- Puffer-Diagnose: „Stillstand x s“ (seit wann kein Byte kam), „angeschlossen n×“, „Laden pausiert“.
+
+versionCode 98.

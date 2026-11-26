@@ -19,6 +19,8 @@ object BufferDiag {
         stallMs: Long = 0L,
         lastFix: String? = null,
         decoderNote: String? = null,
+        chains: Int = 0,
+        loadPaused: Boolean = false,
     ): String = buildList {
         add(format)
         add("Puffer ${sec(bufferedMs)}" + (targetMs?.let { " / Ziel ${sec(it)}" } ?: ""))
@@ -29,6 +31,8 @@ object BufferDiag {
         add("leer ${rebuffers}×")
         add("neu ${reconnects}×")
         if (seamless > 0) add("nahtlos ${seamless}×")
+        if (chains > 0) add("angeschlossen ${chains}×")
+        if (loadPaused) add("Laden pausiert")
         if (stallMs >= 1_000L) add("Stillstand ${sec(stallMs)}")
         lastFix?.let { add("zuletzt: $it") }
         decoderNote?.let { add("Decoder: $it") }

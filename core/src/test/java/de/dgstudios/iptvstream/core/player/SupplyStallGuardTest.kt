@@ -17,7 +17,7 @@ class SupplyStallGuardTest {
 
     @Test fun flowingBytesNeverKick() {
         val g = SupplyStallGuard()
-        for (t in 0L..20_000L step 500L) assertFalse(g.observe(t, true, t))
+        for (t in 0L..20_000L step 500L) assertFalse(g.observe(t, true, t * 100))
     }
 
     @Test fun fullBufferPauseIsNotAStall() {
@@ -45,8 +45,16 @@ class SupplyStallGuardTest {
         val g = SupplyStallGuard()
         g.observe(0, true, 1)
         assertTrue(g.observe(3_000, true, 1))
-        assertFalse(g.observe(3_500, true, 2))
+        assertFalse(g.observe(3_500, true, 10_000))
         assertEquals(0, g.kicks)
-        assertTrue(g.observe(6_500, true, 2))
+        assertTrue(g.observe(6_500, true, 10_000))
+    }
+
+    @Test fun tricklingFillBytesAreStillAStall() {
+        val g = SupplyStallGuard()
+        g.observe(0, true, 0)
+        assertFalse(g.observe(1_000, true, 188))
+        assertFalse(g.observe(2_000, true, 376))
+        assertTrue(g.observe(3_000, true, 564))
     }
 }

@@ -22,6 +22,10 @@ class ReconnectingDataSource(
     private val factory: DataSource.Factory,
     private val enabled: () -> Boolean,
     private val onReconnect: (bytes: Long, millis: Long) -> Unit,
+    /** Live-TS: ein absichtlich abgebrochener Stillstand darf als Ende gelten (unabhängig von [enabled]). */
+    private val stallEnabled: () -> Boolean = { false },
+    /** Wurde die laufende Verbindung wegen Daten-Stillstand abgebrochen? True genau einmal pro Abbruch. */
+    private val takeStallKick: () -> Boolean = { false },
     private val clock: () -> Long = System::currentTimeMillis,
     private val sleep: (Long) -> Unit = {
         try {
@@ -35,6 +39,7 @@ class ReconnectingDataSource(
     private var upstream: DataSource? = null
     private var spec: DataSpec? = null
     private var active = false
+    private var stallActive = false
     private var openedAt = 0L
     private var bytesThisConnection = 0L
     private var emptyReopens = 0
@@ -46,7 +51,9 @@ class ReconnectingDataSource(
 
     override fun open(dataSpec: DataSpec): Long {
         spec = dataSpec
-        active = enabled() && dataSpec.position == 0L && dataSpec.length == C.LENGTH_UNSET.toLong()
+        val endless = dataSpec.position == 0L && dataSpec.length == C.LENGTH_UNSET.toLong()
+        active = enabled() && endless
+        stallActive = stallEnabled() && endless
         emptyReopens = 0
         return openUpstream(dataSpec)
     }
@@ -69,7 +76,17 @@ class ReconnectingDataSource(
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
         while (true) {
             val source = upstream ?: return C.RESULT_END_OF_INPUT
-            val n = source.read(buffer, offset, length)
+            val n = try {
+                source.read(buffer, offset, length)
+            } catch (e: IOException) {
+                // Absichtlich abgebrochen, weil der Anbieter nichts mehr schickte: wie ein normales Ende
+                // melden. Der Player schließt dann eine neue Verbindung als eigenes Stück an (kein Anhängen
+                // in denselben Extraktor, kein Zeitsprung im Strom).
+                if (!stallActive || !takeStallKick()) throw e
+                try { source.close() } catch (_: IOException) {}
+                upstream = null
+                return C.RESULT_END_OF_INPUT
+            }
             if (n > 0) {
                 bytesThisConnection += n
                 return n
@@ -100,6 +117,7 @@ class ReconnectingDataSource(
 
     override fun close() {
         active = false
+        stallActive = false
         val source = upstream
         upstream = null
         source?.close()

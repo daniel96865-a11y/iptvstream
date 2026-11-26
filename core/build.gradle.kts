@@ -111,4 +111,6 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.12.2")
+    testImplementation("androidx.media3:media3-test-utils:1.9.4")
+    testImplementation("androidx.media3:media3-test-utils-robolectric:1.9.4")
 }

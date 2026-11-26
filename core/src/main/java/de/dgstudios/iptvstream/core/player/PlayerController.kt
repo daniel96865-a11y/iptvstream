@@ -228,9 +228,16 @@ class PlayerController(
     private val stallReconnectOn = settings.stallReconnect
     private var stallReconnectLive = false
     private val stallGuard = SupplyStallGuard()
-    /** Stillstand erkannt; Neuaufbau, sobald der Puffer fast leer ist (oder Daten kommen wieder). */
-    private var stallPending = false
-    private var lastStallRestartAt = 0L
+    /** Gesetzt direkt vor dem absichtlichen Abbruch; [ReconnectingDataSource] meldet dann ein Ende. */
+    private val stallKick = java.util.concurrent.atomic.AtomicBoolean(false)
+    /** Der letzte Abbruch kam von uns (Stillstand), nicht vom Anbieter. Nur für die Diagnose. */
+    @Volatile private var lastEndWasKick = false
+    /** Live-TS: dasselbe MediaItem, das bei einem Ende als nächstes Stück angeschlossen wird. */
+    private var liveMediaItem: MediaItem? = null
+    private var chainCount = 0
+    private var emptyChains = 0
+    private var lastByteCount = -1L
+    private var lastByteAt = 0L
     /** Bis hierhin (elapsedRealtime) darf der Bild-steht-Wächter nicht den Decoder wechseln. */
     private var freezeGraceUntil = 0L
     private var decoderSwitchesThisChannel = 0
@@ -310,6 +317,8 @@ class PlayerController(
             ReconnectingDataSource(
                 httpFactory,
                 enabled = { seamlessLive },
+                stallEnabled = { stallReconnectLive },
+                takeStallKick = { stallKick.getAndSet(false).also { if (it) lastEndWasKick = true } },
                 onReconnect = { bytes, millis ->
                     seamlessCount.incrementAndGet()
                     lastFix = "Anbieter-Ende → nahtlos"
@@ -352,6 +361,8 @@ class PlayerController(
             liveStartMs = liveStartMs,
             liveAfterRebufferMs = liveAfterRebufferMs,
             isLive = { liveMode },
+            liveMaxMs = maxMs.toLong(),
+            targetBytes = bytes,
         )
 
         var params = trackSelector.buildUponParameters().setMaxAudioChannelCount(maxChannels)
@@ -449,8 +460,12 @@ class PlayerController(
         seamlessLive = live && settings.seamless && streamType == C.CONTENT_TYPE_OTHER
         stallReconnectLive = live && stallReconnectOn && streamType == C.CONTENT_TYPE_OTHER
         stallGuard.reset()
-        stallPending = false
-        lastStallRestartAt = 0L
+        stallKick.set(false)
+        lastEndWasKick = false
+        liveMediaItem = null
+        chainCount = 0
+        emptyChains = 0
+        lastByteCount = -1L
         freezeGraceUntil = 0L
         decoderSwitchesThisChannel = 0
         decoderNote = null
@@ -505,6 +520,7 @@ class PlayerController(
                 isLive = liveEdge(item),
             )
         }
+        liveMediaItem = if (stallReconnectLive) mediaItem else null
         player.setMediaItem(mediaItem, if (startMs > 0) startMs else C.TIME_UNSET)
         player.prepare()
         player.playWhenReady = true
@@ -516,6 +532,7 @@ class PlayerController(
         bufferingWatchdog.reset()
         _state.update { it.copy(error = null, loading = true) }
         connections.closeAll()
+        trimToCurrent()
         if (liveEdge(current)) player.seekToDefaultPosition()
         player.prepare()
         player.playWhenReady = true
@@ -706,6 +723,17 @@ class PlayerController(
     // ------------------------------------------------------------------ Listener
 
     private val listener = object : Player.Listener {
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            // Angeschlossenes Stück läuft: das abgespielte vorherige entfernen.
+            if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) return
+            val index = player.currentMediaItemIndex
+            if (index <= 0) return
+            freezeGraceUntil = SystemClock.elapsedRealtime() + FREEZE_GRACE_MS
+            stallGuard.reset()
+            diag.event("Angeschlossene Verbindung läuft (Puffer ${player.totalBufferedDuration / 1000} s)")
+            scope.launch { if (!released && player.currentMediaItemIndex > 0) player.removeMediaItems(0, player.currentMediaItemIndex) }
+        }
+
         override fun onPlaybackStateChanged(playbackState: Int) {
             when (playbackState) {
                 Player.STATE_READY -> {
@@ -844,7 +872,9 @@ class PlayerController(
             if (item != null && liveEdge(item) && streamType(item.url) == C.CONTENT_TYPE_OTHER &&
                 mediaLoadData.dataType == C.DATA_TYPE_MEDIA
             ) {
-                eofPending = true
+                val kicked = lastEndWasKick
+                lastEndWasKick = false
+                if (!chainNextLive(eventTime.windowIndex, loadEventInfo.bytesLoaded, kicked)) eofPending = true
                 diag.event(
                     "Laden beendet: ${loadEventInfo.bytesLoaded / 1024} KB in ${loadEventInfo.loadDurationMs / 1000} s, " +
                         "Puffer ${player.totalBufferedDuration / 1000} s",
@@ -1038,7 +1068,7 @@ class PlayerController(
         val now = SystemClock.elapsedRealtime()
         val streamCause = when {
             now < freezeGraceUntil -> "kurz nach Neuverbindung"
-            stallPending || stallGuard.stalledMs(now) >= 1_000L -> "Daten-Stillstand"
+            stallGuard.stalledMs(now) >= 1_000L -> "Daten-Stillstand"
             player.totalBufferedDuration < FREEZE_MIN_BUFFER_MS -> "Puffer fast leer"
             else -> null
         }
@@ -1250,8 +1280,13 @@ class PlayerController(
      */
     private fun refreshBufferDiag(item: PlayItem) {
         val now = android.os.SystemClock.elapsedRealtime()
-        flow.add(now, player.bufferedPosition, player.currentPosition)
+        // Geladen = Position + gesamter Puffer (auch ein schon angeschlossenes nächstes Stück).
+        flow.add(now, player.currentPosition + player.totalBufferedDuration.coerceAtLeast(0L), player.currentPosition)
         val bytes = bytesLoaded.get()
+        if (bytes != lastByteCount) {
+            lastByteCount = bytes
+            lastByteAt = now
+        }
         if (rateAt == 0L) {
             rateAt = now
             rateBytes = bytes
@@ -1280,7 +1315,10 @@ class PlayerController(
             rebuffers = cushion.rebuffers,
             reconnects = reconnectsThisChannel,
             seamless = seamlessCount.get(),
-            stallMs = stallGuard.stalledMs(now),
+            // Seit wann kein Byte mehr kam – nur, wenn der Player auch Daten will (nicht bei bewusster Ladepause).
+            stallMs = if (player.isLoading || eofPending) now - lastByteAt else 0L,
+            chains = chainCount,
+            loadPaused = live && !player.isLoading && !eofPending && player.playbackState == Player.STATE_READY,
             lastFix = lastFix,
             decoderNote = decoderNote,
         )
@@ -1288,60 +1326,68 @@ class PlayerController(
     }
 
     /**
-     * Live-TS: Der Player will nachladen, aber seit [SupplyStallGuard.THRESHOLD_MS] kommt kein Byte (der Anbieter
-     * hält die Verbindung offen, schickt aber nichts). Erst den Puffer abspielen (vielleicht liefert er wieder),
-     * bei höchstens [STALL_RESTART_BUFFER_MS] Puffer sauber neu aufbauen: alte Verbindung hart schließen, neu
-     * vorbereiten an der Live-Kante – wie die Wiederverbindung aus 1.0.77, nur früher als nach 15 s Lese-Zeitlimit.
-     * Kein Anfügen in den laufenden Strom (das hat in puffer5 den Bilddecoder aus dem Tritt gebracht).
-     * Nicht beim Start (erst nach dem ersten Bild), nicht bei vollem Puffer (der Player lädt dann nicht).
+     * Live-TS: Der Player will nachladen, aber seit [SupplyStallGuard.THRESHOLD_MS] kommt kaum ein Byte (der Anbieter
+     * hält die Verbindung offen, schickt aber nichts). Dann die hängende Verbindung abbrechen; die Datenquelle meldet
+     * das als Ende, und [chainNextLive] schließt sofort eine neue Verbindung als nächstes Stück an, während der
+     * restliche Puffer weiterläuft. Nicht beim Start (erst nach dem ersten Bild), nicht bei vollem Puffer.
      */
     private fun checkSupplyStall() {
         val now = SystemClock.elapsedRealtime()
         val active = stallReconnectLive && readyOnce && !inBackground && player.playWhenReady &&
             player.isLoading && player.playbackState != Player.STATE_IDLE
-        if (stallGuard.observe(now, active, bytesLoaded.get()) && !stallPending) {
-            stallPending = true
-            diag.issue("Kein Datenzulauf seit ${stallGuard.stalledMs(now) / 1000} s")
-            diag.event("Daten-Stillstand bei Puffer ${player.totalBufferedDuration / 1000} s: Neuaufbau bei ≤ ${STALL_RESTART_BUFFER_MS / 1000} s")
+        if (stallGuard.observe(now, active, bytesLoaded.get())) {
+            val stalledS = stallGuard.stalledMs(now) / 1000
+            diag.issue("Kein Datenzulauf seit $stalledS s")
+            stallKick.set(true)
+            val closed = connections.closeAll()
+            if (closed == 0) {
+                stallKick.set(false)
+            } else {
+                lastFix = "Stillstand $stalledS s → neue Verbindung"
+                diag.event("Daten-Stillstand $stalledS s bei Puffer ${player.totalBufferedDuration / 1000} s: Verbindung abgebrochen")
+            }
         }
-        if (!stallPending) return
-        if (stallGuard.kicks == 0) {
-            // Daten kommen wieder: nichts tun.
-            stallPending = false
-            diag.event("Datenzulauf wieder da")
-            return
+        // Daten fließen wieder: eine nicht abgeholte Markierung darf keinen späteren Fehler verdecken.
+        if (stallGuard.kicks == 0) stallKick.set(false)
+    }
+
+    /**
+     * Live-TS: Die Verbindung ist zu Ende (Anbieter hat geschlossen oder wir haben wegen Stillstand abgebrochen).
+     * Statt zu warten, bis der Puffer leer ist, sofort dieselbe Adresse als nächstes Stück der Wiedergabeliste
+     * anhängen. Media3 lädt es, während der Rest des Puffers läuft, und wechselt dann ohne Neustart dorthin
+     * (eigener Extraktor und eigene Zeitachse, kein Sprung im laufenden Strom). Liefern mehrere Verbindungen
+     * nacheinander kaum Daten, wird nicht mehr angeschlossen und die normale Wiederverbindung greift.
+     */
+    private fun chainNextLive(windowIndex: Int, bytes: Long, kicked: Boolean): Boolean {
+        val next = liveMediaItem ?: return false
+        if (released || inBackground || !settings.reconnect) return false
+        // Nur das letzte Stück der Liste bekommt einen Nachfolger.
+        if (windowIndex != player.mediaItemCount - 1) return true
+        emptyChains = if (bytes < CHAIN_MIN_BYTES) emptyChains + 1 else 0
+        if (emptyChains > MAX_EMPTY_CHAINS) {
+            diag.issue("Anbieter liefert nach Neuverbindung nichts")
+            return false
         }
-        val low = player.totalBufferedDuration <= STALL_RESTART_BUFFER_MS ||
-            player.playbackState == Player.STATE_BUFFERING
-        if (!low) return
-        stallPending = false
-        val stalledS = stallGuard.stalledMs(now) / 1000
-        // Schnell hintereinander: über die normale Wiederverbindung (Versuchszähler, Pausen) statt sofort.
-        if (lastStallRestartAt != 0L && now - lastStallRestartAt < STALL_RESTART_SPACING_MS) {
-            lastFix = "Stillstand ${stalledS} s → Wiederverbindung"
-            stallGuard.reset()
-            readyOnce = false
-            if (!tryReconnect()) stuckError("Der Sender liefert keine Daten mehr.")
-            return
-        }
-        lastStallRestartAt = now
-        reconnectsThisChannel++
-        lastFix = "Stillstand ${stalledS} s → Neustart"
-        diag.event("Neustart nach Daten-Stillstand ${stalledS} s, Puffer ${player.totalBufferedDuration / 1000} s")
-        stallGuard.reset()
-        readyOnce = false
-        freezeGraceUntil = now + FREEZE_GRACE_MS
-        bufferingWatchdog.reset()
-        connections.closeAll()
-        stopStream()
-        player.seekToDefaultPosition()
-        player.prepare()
-        player.playWhenReady = true
+        chainCount++
+        lastFix = if (kicked) "Stillstand → angeschlossen" else "Anbieter-Ende → angeschlossen"
+        diag.event("Neue Verbindung angeschlossen ($chainCount.), Puffer ${player.totalBufferedDuration / 1000} s")
+        player.addMediaItem(next)
+        return true
+    }
+
+    /** Vor einem Neuaufbau: nur das laufende Stück behalten. */
+    private fun trimToCurrent() {
+        val n = player.mediaItemCount
+        if (n <= 1) return
+        val i = player.currentMediaItemIndex
+        if (i + 1 < n) player.removeMediaItems(i + 1, n)
+        if (i > 0) player.removeMediaItems(0, i)
     }
 
     /** Player anhalten und offene Stream-Verbindungen sofort schließen (nicht erst nach dem Lese-Zeitlimit). */
     private fun stopStream() {
         player.stop()
+        trimToCurrent()
         val closed = connections.closeAll()
         if (closed > 0) diag.event("Alte Verbindung geschlossen ($closed)")
     }
@@ -1498,8 +1544,9 @@ class PlayerController(
         const val FREEZE_GRACE_MS = 8_000L
         /** Darunter steht das Bild wegen des Stroms, nicht wegen des Decoders. */
         const val FREEZE_MIN_BUFFER_MS = 1_000L
-        const val STALL_RESTART_BUFFER_MS = 2_000L
-        const val STALL_RESTART_SPACING_MS = 20_000L
+        /** Weniger als das in einer Verbindung zählt als „nichts geliefert“. */
+        const val CHAIN_MIN_BYTES = 64L * 1024
+        const val MAX_EMPTY_CHAINS = 2
         const val EOF_RECONNECT_BUFFER_MS = 750L
         const val STREAM_READ_TIMEOUT_S = 15L
         const val STALL_AUDIO_SUSPECT_BUFFER_MS = 2_000L

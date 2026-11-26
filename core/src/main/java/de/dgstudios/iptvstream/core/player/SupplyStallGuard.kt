@@ -11,6 +11,8 @@ package de.dgstudios.iptvstream.core.player
 class SupplyStallGuard(
     private val thresholdMs: Long = THRESHOLD_MS,
     private val maxKicks: Int = MAX_KICKS,
+    /** Weniger neue Bytes zählen nicht als Zulauf (ein paar Füllbytes halten die Verbindung nur am Leben). */
+    private val minBytes: Long = MIN_BYTES,
 ) {
     private var lastBytes = -1L
     private var dataAt = 0L
@@ -37,7 +39,7 @@ class SupplyStallGuard(
             lastBytes = -1L
             return false
         }
-        if (lastBytes < 0L || totalBytes != lastBytes) {
+        if (lastBytes < 0L || totalBytes < lastBytes || totalBytes - lastBytes >= minBytes) {
             if (lastBytes >= 0L) kicks = 0
             lastBytes = totalBytes
             dataAt = nowMs
@@ -54,5 +56,6 @@ class SupplyStallGuard(
     companion object {
         const val THRESHOLD_MS = 3_000L
         const val MAX_KICKS = 3
+        const val MIN_BYTES = 4_096L
     }
 }
