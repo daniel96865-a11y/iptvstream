@@ -3,6 +3,7 @@ package de.dgstudios.iptvstream.core.player
 import android.app.ActivityManager
 import android.content.Context
 import android.content.res.Configuration
+import android.net.Uri
 import android.os.Handler
 import android.os.SystemClock
 import android.util.Log
@@ -17,6 +18,7 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.common.util.Util
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
@@ -238,7 +240,7 @@ class PlayerController(
     private val diag = PlayDiagnostics()
     private val stall = StallDetector()
     private val frames: StallDetector by lazy { StallDetector(frozenFramesMs) }
-    private var bufferingSince = 0L
+    private val bufferingWatchdog = BufferProgressWatchdog()
     @Volatile private var seamlessLive = false
     /** Live-Rand: Player-Thread liest das für den Startvorlauf ([LiveAwareLoadControl]). */
     @Volatile private var liveMode = false
@@ -459,7 +461,7 @@ class PlayerController(
         stall.reset()
         frames.reset()
         dropWindowSince = 0L
-        bufferingSince = 0L
+        bufferingWatchdog.reset()
         // Decoder bleiben beim Umschalten oft dieselben (keine neue Initialisierung): Namen behalten.
         val keptVideoDecoder = diag.videoDecoder
         val keptAudioDecoder = diag.audioDecoder
@@ -490,8 +492,14 @@ class PlayerController(
         val live = liveEdge(item)
         liveMode = live
         eofPending = false
-        seamlessLive = live && settings.seamless && !Urls.isHls(item.url)
-        diag.format = if (Urls.isHls(item.url)) "HLS" else "TS"
+        val streamType = streamType(item.url)
+        seamlessLive = live && settings.seamless && streamType == C.CONTENT_TYPE_OTHER
+        diag.format = when (streamType) {
+            C.CONTENT_TYPE_HLS -> "HLS"
+            C.CONTENT_TYPE_DASH -> "DASH"
+            C.CONTENT_TYPE_OTHER -> "TS"
+            else -> "Adaptiv"
+        }
         diag.agent = settings.userAgent
         val mediaItem = MediaItem.Builder()
             .setUri(hdr.url)
@@ -529,6 +537,7 @@ class PlayerController(
     fun retry() {
         if (released) return
         reconnectAttempts = 0
+        bufferingWatchdog.reset()
         _state.update { it.copy(error = null, loading = true) }
         if (liveEdge(current)) player.seekToDefaultPosition()
         player.prepare()
@@ -542,6 +551,7 @@ class PlayerController(
     fun onBackground() {
         if (released) return
         inBackground = true
+        bufferingWatchdog.reset()
         reconnectJob?.cancel()
         reconnectJob = null
         current?.let { saveProgress(it, force = true) }
@@ -813,6 +823,14 @@ class PlayerController(
             refreshSignal()
         }
 
+        override fun onPositionDiscontinuity(
+            oldPosition: Player.PositionInfo,
+            newPosition: Player.PositionInfo,
+            reason: Int,
+        ) {
+            bufferingWatchdog.reset()
+        }
+
         override fun onPlayerError(error: PlaybackException) {
             handleError(error)
         }
@@ -847,10 +865,10 @@ class PlayerController(
             mediaLoadData: androidx.media3.exoplayer.source.MediaLoadData,
         ) {
             // Bei einem Live-.ts-Stream endet das Laden nur, wenn der Server die Verbindung schließt.
-            // Bei HLS endet jedes Segment und jede Playlist-Abfrage normal: das ist kein Anbieter-Ende
-            // und darf keinen Neustart auslösen.
+            // Bei adaptiven Streams (z. B. HLS und DASH) beendet jedes Segment regulär einen Ladevorgang.
+            // Das ist kein Anbieter-Ende und darf keinen Neustart auslösen.
             val item = current
-            if (liveEdge(item) && item != null && !Urls.isHls(item.url) &&
+            if (item != null && liveEdge(item) && streamType(item.url) == C.CONTENT_TYPE_OTHER &&
                 mediaLoadData.dataType == C.DATA_TYPE_MEDIA
             ) {
                 eofPending = true
@@ -1124,7 +1142,12 @@ class PlayerController(
     private fun onBufferStuck() {
         if (released || inBackground) return
         diag.issue("Puffern ohne Daten")
-        if (tryReconnect()) return
+        val bufferedAtTimeout = player.bufferedPosition
+        val scheduled = tryReconnect {
+            player.playbackState == Player.STATE_BUFFERING && player.playWhenReady &&
+                player.bufferedPosition - bufferedAtTimeout < BufferProgressWatchdog.MIN_PROGRESS_MS
+        }
+        if (scheduled) return
         stuckError("Der Sender lädt nicht weiter.")
     }
 
@@ -1168,7 +1191,7 @@ class PlayerController(
         return null
     }
 
-    private fun tryReconnect(): Boolean {
+    private fun tryReconnect(stillNeeded: () -> Boolean = { true }): Boolean {
         if (inBackground || released) return false
         if (!settings.reconnect) return false
         if (reconnectAttempts >= MAX_RECONNECTS) return false
@@ -1188,6 +1211,12 @@ class PlayerController(
         reconnectJob = scope.launch {
             delay(wait)
             if (released || inBackground) return@launch
+            if (!stillNeeded()) {
+                reconnectAttempts = (reconnectAttempts - 1).coerceAtLeast(0)
+                _state.update { it.copy(loading = player.playbackState == Player.STATE_BUFFERING) }
+                return@launch
+            }
+            bufferingWatchdog.reset()
             if (liveEdge(current)) {
                 // Alte Verbindung sicher schließen, damit der Anbieter kein Verbindungslimit meldet.
                 player.stop()
@@ -1203,6 +1232,7 @@ class PlayerController(
     private fun reconnectNow() {
         if (released || inBackground || !settings.reconnect) return
         diag.event("Neustart bei Puffer ${player.totalBufferedDuration / 1000} s (Anbieter hat beendet)")
+        bufferingWatchdog.reset()
         player.stop()
         player.seekToDefaultPosition()
         player.prepare()
@@ -1283,12 +1313,7 @@ class PlayerController(
                     reconnectNow()
                 }
                 val buffering = player.playbackState == Player.STATE_BUFFERING && player.playWhenReady && !inBackground
-                if (!buffering) {
-                    bufferingSince = 0L
-                } else if (bufferingSince == 0L) {
-                    bufferingSince = now
-                } else if (now - bufferingSince > BUFFER_STUCK_MS) {
-                    bufferingSince = now
+                if (bufferingWatchdog.observe(SystemClock.elapsedRealtime(), buffering, player.bufferedPosition)) {
                     onBufferStuck()
                 }
                 if (player.isPlaying) {
@@ -1385,6 +1410,9 @@ class PlayerController(
         _state.update { if (it.info == info) it else it.copy(info = info) }
     }
 
+    private fun streamType(url: String): Int =
+        if (Urls.isHls(url)) C.CONTENT_TYPE_HLS else Util.inferContentType(Uri.parse(url))
+
     /** Live-Rand. Archiv einer vergangenen Sendung bleibt spulbar. */
     private fun liveEdge(item: PlayItem?): Boolean = item != null && item.kind == PlayKind.LIVE && !item.catchup
 
@@ -1410,8 +1438,7 @@ class PlayerController(
             "Tipp: Einstellungen → Player → „Video- und Audioverarbeitung“ umstellen (z. B. „Software bevorzugen“)."
         const val MAX_BEHIND_LIVE_WINDOW = 3
         const val FROZEN_FRAMES_MS = 8_000L
-        const val EOF_RECONNECT_BUFFER_MS = 5_000L
-        const val BUFFER_STUCK_MS = 10_000L
+        const val EOF_RECONNECT_BUFFER_MS = 750L
         const val STREAM_READ_TIMEOUT_S = 15L
         const val STREAM_CONNECT_TIMEOUT_S = 15L
         const val STALL_AUDIO_SUSPECT_BUFFER_MS = 2_000L
