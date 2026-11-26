@@ -158,7 +158,7 @@ object SettingsSchema {
                     "buffer", "Puffergröße",
                     bufferOptions,
                     "medium",
-                    "Beim Umschalten startet das Bild immer sofort (unter 1 Sekunde Vorlauf). Hängt ein Sender, baut der Player danach mehr Vorlauf auf: klein bis etwa 15 Sekunden, groß bis zu 90.",
+                    "Beim Umschalten startet das Bild nach 0,5 / 1 / 1,5 Sekunden Vorlauf. Danach wächst der Live-Vorlauf auf etwa 6 / 10 / 15 Sekunden, nach Hängern mehr (bis 15 / 25 / 40 s). Groß: stabiler, Live-HLS liegt etwas weiter hinter dem Live-Geschehen.",
                 ),
                 ChoiceDef(
                     "resize", "Bildmodus",
@@ -185,6 +185,10 @@ object SettingsSchema {
                     userAgentOptions,
                     "chrome",
                     "Manche Anbieter behandeln Player unterschiedlich. Wirkt ab dem nächsten Sender.",
+                ),
+                ChoiceDef(
+                    "live_slow", "Live-Vorlauf aufbauen", onOff, "on",
+                    "Spielt Live-Sender nach dem Umschalten kaum merklich langsamer (96 %, bei sehr wenig Vorlauf 92 %), bis genug Vorlauf da ist. Verhindert, dass der Puffer immer wieder leer läuft. Ohne Wirkung bei Ton-Durchleitung an den AV-Receiver.",
                 ),
                 ChoiceDef(
                     "stream_info", "Stream-Infos anzeigen", onOff, "off",

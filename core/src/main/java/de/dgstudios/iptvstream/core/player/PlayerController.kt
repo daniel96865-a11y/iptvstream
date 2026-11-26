@@ -285,6 +285,14 @@ class PlayerController(
     private var measuredFps: Float? = null
     /** Stream-Infos laufend messen (Einstellung oder vom Bildschirm eingeschaltet). */
     @Volatile private var infoVisible = settings.streamInfo
+    /** Live-Vorlauf durch leicht langsamere Wiedergabe aufbauen ([LiveCushion]). */
+    private val cushion: LiveCushion
+    private val cushionOn = settings.liveSlow
+    /** Zuletzt von uns gesetztes Tempo (1 = normal). */
+    private var appliedSpeed = 1f
+    private var lastPlaybackState = Player.STATE_IDLE
+    /** Neuverbindungen auf dem laufenden Sender (Anzeige; der Versuchszähler wird zwischendurch zurückgesetzt). */
+    private var reconnectsThisChannel = 0
 
     private val byteCounter = object : TransferListener {
         override fun onTransferInitializing(source: DataSource, dataSpec: DataSpec, isNetwork: Boolean) {}
@@ -364,7 +372,11 @@ class PlayerController(
         val (minMs, maxMs, wantedBytes) = PlaybackBuffer.spec(settings.buffer)
         val capped = PlaybackBuffer.capBytes(wantedBytes, memoryClass)
         val bytes = if (compat) minOf(capped, CompatMode.BUFFER_BYTES) else capped
-        liveBufferMaxMs = maxMs.toLong()
+        // Live: eigener, größerer Höchstpuffer (mindestens 30 s), siehe PlaybackBuffer.liveMaxMs.
+        val liveMaxMs = PlaybackBuffer.liveMaxMs(settings.buffer)
+        liveBufferMaxMs = liveMaxMs.toLong()
+        val (cushionBase, cushionStep, cushionCap) = PlaybackBuffer.cushion(settings.buffer)
+        cushion = LiveCushion(cushionBase, cushionStep, cushionCap)
         val (liveStartMs, liveAfterRebufferMs) = PlaybackBuffer.liveStart(settings.buffer)
         val loadControl = LiveAwareLoadControl(
             DefaultLoadControl.Builder()
@@ -376,6 +388,9 @@ class PlayerController(
             liveAfterRebufferMs = liveAfterRebufferMs,
             isLive = { liveMode },
             stalled = { stalledLive },
+            liveMaxMs = liveMaxMs,
+            liveMinMs = minMs,
+            targetBytes = bytes,
         )
 
         var params = trackSelector.buildUponParameters().setMaxAudioChannelCount(maxChannels)
@@ -390,7 +405,7 @@ class PlayerController(
             // Zielabstand um 2 s nach hinten, damit derselbe Sender danach stabil läuft.
             .setLivePlaybackSpeedControl(
                 DefaultLivePlaybackSpeedControl.Builder()
-                    .setTargetLiveOffsetIncrementOnRebufferMs(2_000)
+                    .setTargetLiveOffsetIncrementOnRebufferMs(3_000)
                     .build(),
             )
             // Media3 (seit 1.9) bricht mit ERROR_CODE_TIMEOUT ab, wenn die Position 10 s steht. Unsere eigenen
@@ -446,6 +461,13 @@ class PlayerController(
         // erlauben nur eine Verbindung gleichzeitig).
         if (current != null) player.stop()
         zapStartedAt = SystemClock.elapsedRealtime()
+        cushion.reset()
+        reconnectsThisChannel = 0
+        lastPlaybackState = Player.STATE_IDLE
+        if (appliedSpeed != 1f) {
+            appliedSpeed = 1f
+            player.setPlaybackSpeed(1f)
+        }
         stalledLive = false
         hadReady = false
         fpsFrames = -1
@@ -507,11 +529,13 @@ class PlayerController(
             .apply {
                 if (Urls.isHls(item.url)) setMimeType(MimeTypes.APPLICATION_M3U8)
                 if (live) {
-                    // Schnell umschalten: HLS startet beim Abstand, den die Playlist vorgibt (nah an der
-                    // Live-Kante), statt bis zu 90 s dahinter. Nach einem Hänger rückt der Abstand nach hinten
-                    // (setLivePlaybackSpeedControl), höchstens bis zur Puffergröße.
+                    // HLS/DASH: Der Abstand zur Live-Kante ist der größtmögliche Puffer. 12/20/30 s statt der
+                    // Playlist-Vorgabe (oft nur 3 Segmente): mehr Polster, der Start bleibt gleich schnell.
+                    // Nach einem Hänger rückt der Abstand um 3 s nach hinten (setLivePlaybackSpeedControl).
+                    // Media3 kürzt den Abstand selbst auf das Fenster der Playlist.
                     setLiveConfiguration(
                         MediaItem.LiveConfiguration.Builder()
+                            .setTargetOffsetMs(PlaybackBuffer.liveTargetOffsetMs(settings.buffer).toLong().coerceAtMost(liveBufferMaxMs))
                             .setMaxOffsetMs(liveBufferMaxMs)
                             .setMinPlaybackSpeed(0.97f)
                             .setMaxPlaybackSpeed(1.03f)
@@ -733,9 +757,16 @@ class PlayerController(
             when (playbackState) {
                 Player.STATE_READY -> {
                     hadReady = true
+                    lastPlaybackState = playbackState
                     _state.update { it.copy(loading = false, error = null) }
                 }
                 Player.STATE_BUFFERING -> {
+                    // Puffer leer gelaufen (nicht: Neuaufbau nach einer Neuverbindung): Ziel-Vorlauf erhöhen.
+                    if (lastPlaybackState == Player.STATE_READY && liveMode) {
+                        cushion.onRebuffer()
+                        diag.event("Puffer leer (${cushion.rebuffers}.), Ziel-Vorlauf jetzt ${cushion.targetMs / 1000} s")
+                    }
+                    lastPlaybackState = playbackState
                     if (hadReady && liveMode && !stalledLive) {
                         stalledLive = true
                         diag.event("Hänger: ab jetzt größerer Vorlauf")
@@ -1196,6 +1227,7 @@ class PlayerController(
         if (!settings.reconnect) return false
         if (reconnectAttempts >= MAX_RECONNECTS) return false
         reconnectAttempts++
+        reconnectsThisChannel++
         if (liveMode) stalledLive = true
         diag.event("Neuverbindung $reconnectAttempts, Puffer ${player.totalBufferedDuration / 1000} s, ${diag.lastIssue ?: "ohne Fehler"}")
         val live = liveEdge(current)
@@ -1232,6 +1264,7 @@ class PlayerController(
     private fun reconnectNow() {
         if (released || inBackground || !settings.reconnect) return
         diag.event("Neustart bei Puffer ${player.totalBufferedDuration / 1000} s (Anbieter hat beendet)")
+        reconnectsThisChannel++
         bufferingWatchdog.reset()
         player.stop()
         player.seekToDefaultPosition()
@@ -1294,6 +1327,7 @@ class PlayerController(
                     )
                 }
                 refreshSignal()
+                adjustLiveSpeed(live)
                 if (infoVisible) refreshInfo()
                 val now = System.currentTimeMillis()
                 val running = player.isPlaying && !inBackground
@@ -1339,6 +1373,22 @@ class PlayerController(
                 }
             }
         }
+    }
+
+    /**
+     * Live: Tempo nach dem Vorlauf ([LiveCushion]). Nur bei laufender Wiedergabe; Filme, Serien und
+     * Archiv bleiben immer bei normalem Tempo. Media3 hält die Tonhöhe gleich.
+     */
+    private fun adjustLiveSpeed(live: Boolean) {
+        val wanted = when {
+            !live || !cushionOn || inBackground -> 1f
+            player.playbackState != Player.STATE_READY || !player.playWhenReady -> appliedSpeed
+            else -> cushion.speedFor(player.totalBufferedDuration.coerceAtLeast(0L), appliedSpeed)
+        }
+        if (wanted == appliedSpeed) return
+        diag.event(if (wanted < 1f) "Vorlauf aufbauen: Tempo ${(wanted * 100).toInt()} %" else "Vorlauf erreicht: normales Tempo")
+        appliedSpeed = wanted
+        player.setPlaybackSpeed(wanted)
     }
 
     /** Stream-Infos laufend messen und anzeigen (Einblendung an/aus). */
@@ -1406,6 +1456,11 @@ class PlayerController(
             medianFirstFrameMs = StreamStats.median(zapTimes.toList()),
             droppedFrames = diag.dropped,
             bufferedMs = player.totalBufferedDuration,
+            bufferTargetMs = if (liveEdge(current)) cushion.targetMs else null,
+            bufferMaxMs = if (liveEdge(current)) liveBufferMaxMs else null,
+            rebuffers = cushion.rebuffers,
+            reconnects = reconnectsThisChannel,
+            speed = appliedSpeed,
         )
         _state.update { if (it.info == info) it else it.copy(info = info) }
     }

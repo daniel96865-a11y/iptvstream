@@ -34,4 +34,15 @@ class StreamStatsTest {
         assertEquals("8,0 Mbit/s", StreamStats.kbpsLabel(8_000))
         assertEquals("25 fps", StreamStats.fpsLabel(25f))
     }
+
+    @Test fun infoShowsBufferTargetRebuffersAndSpeed() {
+        val lines = StreamInfo(
+            bufferedMs = 7_420, bufferTargetMs = 15_000, bufferMaxMs = 45_000,
+            rebuffers = 1, reconnects = 2, speed = 0.96f,
+        ).lines()
+        org.junit.Assert.assertTrue(lines.contains("Puffer: 7,4 s · Ziel 15,0 s · max. 45,0 s"))
+        org.junit.Assert.assertTrue(lines.contains("Puffer leer: 1× · Neu verbunden: 2× · verworfene Bilder: 0"))
+        org.junit.Assert.assertTrue(lines.contains("Tempo 96 % – Vorlauf wird aufgebaut"))
+        org.junit.Assert.assertTrue(StreamInfo(bufferedMs = 1_000).lines().none { it.startsWith("Tempo") })
+    }
 }

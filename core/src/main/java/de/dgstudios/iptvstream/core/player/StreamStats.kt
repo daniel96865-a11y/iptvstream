@@ -23,6 +23,16 @@ data class StreamInfo(
     val medianFirstFrameMs: Long? = null,
     val droppedFrames: Int = 0,
     val bufferedMs: Long = 0,
+    /** Live: Ziel-Vorlauf, auf den der Player gerade hinarbeitet. */
+    val bufferTargetMs: Long? = null,
+    /** Live: Höchstpuffer. */
+    val bufferMaxMs: Long? = null,
+    /** Wie oft der Puffer auf diesem Sender leer gelaufen ist. */
+    val rebuffers: Int = 0,
+    /** Neuverbindungen auf diesem Sender. */
+    val reconnects: Int = 0,
+    /** Wiedergabetempo (1 = normal; darunter wird Vorlauf aufgebaut). */
+    val speed: Float = 1f,
 ) {
     /** Zeilen für die Einblendung, kurz und ohne leere Werte. */
     fun lines(): List<String> = buildList {
@@ -40,7 +50,16 @@ data class StreamInfo(
             medianFirstFrameMs?.let { "Median ${it} ms" },
         ).joinToString(" · ")
         if (zap.isNotEmpty()) add("Umschaltzeit: $zap")
-        add("Puffer: ${(bufferedMs.coerceAtLeast(0) + 50) / 100 / 10.0} s · verworfene Bilder: $droppedFrames")
+        add(bufferLine())
+        add("Puffer leer: ${rebuffers}× · Neu verbunden: ${reconnects}× · verworfene Bilder: $droppedFrames")
+        if (speed < 1f) add("Tempo ${(speed * 100 + 0.5f).toInt()} % – Vorlauf wird aufgebaut")
+    }
+
+    private fun bufferLine(): String {
+        val parts = mutableListOf("Puffer: ${StreamStats.secondsLabel(bufferedMs)}")
+        bufferTargetMs?.let { parts += "Ziel ${StreamStats.secondsLabel(it)}" }
+        bufferMaxMs?.let { parts += "max. ${StreamStats.secondsLabel(it)}" }
+        return parts.joinToString(" · ")
     }
 }
 
@@ -60,6 +79,10 @@ object StreamStats {
 
     fun kbpsLabel(kbps: Int): String =
         if (kbps >= 1000) String.format(Locale.GERMANY, "%.1f Mbit/s", kbps / 1000f) else "$kbps kbit/s"
+
+    /** "7,4 s" (eine Nachkommastelle, deutsches Komma). */
+    fun secondsLabel(ms: Long): String =
+        String.format(Locale.GERMANY, "%.1f s", ms.coerceAtLeast(0L) / 1000.0)
 
     /** Datenrate aus übertragenen Bytes und Zeit. */
     fun kbps(bytes: Long, millis: Long): Int? {

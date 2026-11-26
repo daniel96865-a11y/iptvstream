@@ -34,13 +34,28 @@ class PlaybackBufferTest {
 
     @Test
     fun liveStartIsFastOnZapAndSafeAfterStall() {
-        assertEquals(300 to 4_000, PlaybackBuffer.liveStart("small"))
-        assertEquals(500 to 6_000, PlaybackBuffer.liveStart("medium"))
-        assertEquals(800 to 10_000, PlaybackBuffer.liveStart("large"))
+        assertEquals(500 to 2_500, PlaybackBuffer.liveStart("small"))
+        assertEquals(1_000 to 4_000, PlaybackBuffer.liveStart("medium"))
+        assertEquals(1_500 to 6_000, PlaybackBuffer.liveStart("large"))
         for (b in listOf("small", "medium", "large")) {
             val (zap, after) = PlaybackBuffer.liveStart(b)
-            assert(zap < 1_000) { "Senderwechsel muss unter 1 s Vorlauf bleiben" }
-            assert(after > zap)
+            assertTrue("Senderwechsel bleibt bei höchstens 1,5 s Vorlauf", zap <= 1_500)
+            assertTrue(after > zap)
+        }
+    }
+
+    @Test
+    fun liveBufferIsLargeEvenOnSmall() {
+        assertEquals(30_000, PlaybackBuffer.liveMaxMs("small"))
+        assertEquals(45_000, PlaybackBuffer.liveMaxMs("medium"))
+        assertEquals(90_000, PlaybackBuffer.liveMaxMs("large"))
+        for (b in listOf("small", "medium", "large")) {
+            val max = PlaybackBuffer.liveMaxMs(b)
+            val (base, _, cap) = PlaybackBuffer.cushion(b)
+            assertTrue("Ziel-Vorlauf passt in den Puffer", cap < max)
+            assertTrue(base < cap)
+            assertTrue("HLS-Abstand passt in den Puffer", PlaybackBuffer.liveTargetOffsetMs(b) < max)
+            assertTrue("Wachstumsziel liegt über dem Startvorlauf", base > PlaybackBuffer.liveStart(b).second)
         }
     }
 }

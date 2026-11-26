@@ -1,0 +1,16 @@
+Testversion 1.0.79-puffer1 (Vorabversion, nur zum Testen)
+
+Live-TV: Puffer läuft nicht mehr ständig leer
+- Ursache: Ein Live-Sender kommt nur in Echtzeit an. Der Vorlauf, mit dem das Bild startet, wächst danach nicht von selbst – jede Netzschwankung, die länger dauert, leert den Puffer.
+- Neu „Live-Vorlauf aufbauen“ (Einstellungen → Player, Standard an): Nach dem Umschalten spielt der Sender kaum merklich langsamer (96 %, bei sehr wenig Vorlauf 92 %, Tonhöhe bleibt gleich), bis etwa 6 / 10 / 15 Sekunden Vorlauf da sind (Puffergröße klein / mittel / groß). Läuft der Puffer trotzdem leer, wächst das Ziel um 4–5 Sekunden (bis 15 / 25 / 40 s).
+- Umschalten bleibt schnell: Start nach 0,5 / 1 / 1,5 Sekunden Vorlauf.
+- Live-Puffer bis 30 / 45 / 90 Sekunden. Der Player liest durchgehend weiter statt bei vollem Puffer zu pausieren (manche Anbieter trennen sonst die Verbindung).
+- HLS-Sender: 12 / 20 / 30 Sekunden Abstand zur Live-Kante als Polster, nach jedem Hänger 3 s mehr.
+- Neuverbindung erst, wenn 10 Sekunden lang wirklich keine Daten mehr kommen (vorher auch bei langsamem Nachladen – dabei wurde der Puffer weggeworfen).
+- Beendet der Anbieter die Verbindung, läuft der Restpuffer bis ~0,75 s weiter (vorher Neustart schon bei 5 s Rest).
+- HLS/DASH-Segmentenden zählen nicht mehr als Streamende.
+- Stream-Infos (Einstellungen → Player oder Player-Menü) zeigen jetzt Puffer, Ziel, Höchstwert, wie oft der Puffer leer lief, Neuverbindungen und das Tempo.
+
+Außerdem aus der Testversion 1.0.79-zap1: voriger Sender, Einstellungen pro Playlist, Stream-Infos, externer Player (VLC …), TV-Bildwiederholrate, Bild-in-Bild auf dem Handy, Video- und Audioverarbeitung aus 1.0.78-player1.
+
+Basis: 1.0.77.

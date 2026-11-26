@@ -14,6 +14,11 @@ import androidx.media3.exoplayer.upstream.Allocator
  * Wie [delegate], aber bei Live-Sendern: beim Senderwechsel sofort mit kleinem Vorlauf starten,
  * nach einem Hänger erst mit großem Vorlauf weiterspielen ([PlaybackBuffer.liveStart]).
  * [stalled] bleibt für den laufenden Sender gesetzt, auch über eine Neuverbindung hinweg.
+ *
+ * Laden bei Live ohne Pause: [DefaultLoadControl][androidx.media3.exoplayer.DefaultLoadControl] hört
+ * beim Maximum auf und lädt erst unter dem Minimum weiter. Bei einem Live-Strom staut sich dann die
+ * Verbindung für viele Sekunden, und manche Anbieter trennen sie. Hier wird bis [liveMaxMs] (und der
+ * Byte-Grenze [targetBytes]) durchgehend gelesen ([shouldLoadLive]).
  * Filme und Serien bleiben beim Verhalten von [delegate].
  */
 @UnstableApi
@@ -23,6 +28,9 @@ class LiveAwareLoadControl(
     private val liveAfterRebufferMs: Int,
     private val isLive: () -> Boolean,
     private val stalled: () -> Boolean = { false },
+    private val liveMaxMs: Int = Int.MAX_VALUE,
+    private val liveMinMs: Int = 0,
+    private val targetBytes: Int = Int.MAX_VALUE,
 ) : LoadControl {
 
     override fun shouldStartPlayback(parameters: LoadControl.Parameters): Boolean {
@@ -32,8 +40,11 @@ class LiveAwareLoadControl(
         return bufferedUs >= needMs * 1_000L
     }
 
-    override fun shouldContinueLoading(parameters: LoadControl.Parameters): Boolean =
-        delegate.shouldContinueLoading(parameters)
+    override fun shouldContinueLoading(parameters: LoadControl.Parameters): Boolean {
+        if (!isLive()) return delegate.shouldContinueLoading(parameters)
+        val allocated = delegate.getAllocator(parameters.playerId).totalBytesAllocated.toLong()
+        return shouldLoadLive(parameters.bufferedDurationUs, allocated, liveMinMs, liveMaxMs, targetBytes)
+    }
 
     override fun onPrepared(playerId: PlayerId) = delegate.onPrepared(playerId)
 
@@ -60,4 +71,12 @@ class LiveAwareLoadControl(
         mediaPeriodId: MediaSource.MediaPeriodId,
         bufferedDurationUs: Long,
     ): Boolean = delegate.shouldContinuePreloading(playerId, timeline, mediaPeriodId, bufferedDurationUs)
+
+    companion object {
+        /** Unter [minMs] immer laden; darüber bis [maxMs], solange der Speicher unter [targetBytes] bleibt. */
+        fun shouldLoadLive(bufferedUs: Long, allocatedBytes: Long, minMs: Int, maxMs: Int, targetBytes: Int): Boolean {
+            if (bufferedUs < minMs * 1_000L) return true
+            return bufferedUs < maxMs * 1_000L && allocatedBytes < targetBytes
+        }
+    }
 }

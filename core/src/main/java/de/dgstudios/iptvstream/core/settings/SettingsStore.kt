@@ -66,6 +66,8 @@ data class AppSettings(
     val liveFormat: String get() = get("live_format")
     val userAgent: String get() = get("user_agent")
     val seamless: Boolean get() = on("seamless")
+    /** Live: Vorlauf durch kaum merklich langsamere Wiedergabe aufbauen. */
+    val liveSlow: Boolean get() = on("live_slow")
     val castEnabled: Boolean get() = on("cast")
     val startMode: String get() = get("start_mode")
     val showNumbers: Boolean get() = on("show_numbers")

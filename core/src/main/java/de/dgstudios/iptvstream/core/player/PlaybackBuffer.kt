@@ -55,17 +55,47 @@ object PlaybackBuffer {
 
     /**
      * Live: so viel Vorlauf muss da sein, bevor das Bild startet: (Senderwechsel, nach einem Hänger).
-     * Beim Umschalten zählt Tempo: das Bild startet schon nach einem Bruchteil einer Sekunde.
-     * Erst wenn der Sender einmal hängt, verlangt der Player den großen Vorlauf – für den Rest
-     * dieses Senders, auch nach einer Neuverbindung ([LiveAwareLoadControl]).
+     * Beim Umschalten zählt Tempo: Start nach 0,5–1,5 s Vorlauf. Ein Live-TS-Strom kommt aber nur in
+     * Echtzeit an – der Vorlauf wächst danach nicht von selbst. Deshalb baut [LiveCushion] ihn durch
+     * kaum merklich langsamere Wiedergabe auf. Nach einem Hänger startet der Sender erst mit dem
+     * zweiten Wert wieder ([LiveAwareLoadControl]).
      */
     fun liveStart(setting: String): Pair<Int, Int> = when (setting) {
-        "small" -> ZAP_SMALL_MS to 4_000
-        "large" -> ZAP_LARGE_MS to 10_000
-        else -> ZAP_MEDIUM_MS to 6_000
+        "small" -> ZAP_SMALL_MS to 2_500
+        "large" -> ZAP_LARGE_MS to 6_000
+        else -> ZAP_MEDIUM_MS to 4_000
     }
 
-    const val ZAP_SMALL_MS = 300
-    const val ZAP_MEDIUM_MS = 500
-    const val ZAP_LARGE_MS = 800
+    const val ZAP_SMALL_MS = 500
+    const val ZAP_MEDIUM_MS = 1_000
+    const val ZAP_LARGE_MS = 1_500
+
+    /**
+     * Live: so weit darf der Puffer höchstens wachsen. Unabhängig von „Klein“ mindestens 30 s, damit
+     * ein Anbieter, der beim Verbinden einen Schwung Daten schickt, voll aufgenommen wird. Den Speicher
+     * begrenzt weiterhin die Byte-Grenze ([capBytes]).
+     */
+    fun liveMaxMs(setting: String): Int = when (setting) {
+        "small" -> 30_000
+        "large" -> LARGE_MAX_MS
+        else -> 45_000
+    }
+
+    /**
+     * HLS/DASH live: Abstand zur Live-Kante. Der Player kann nur bis zur Kante vorladen, der Abstand ist
+     * also der größtmögliche Puffer. Der Start wird dadurch nicht langsamer (es wird nur ein früheres
+     * Segment geladen), nur das Bild liegt etwas weiter hinter dem Live-Geschehen.
+     */
+    fun liveTargetOffsetMs(setting: String): Int = when (setting) {
+        "small" -> 12_000
+        "large" -> 30_000
+        else -> 20_000
+    }
+
+    /** Ziel-Vorlauf für [LiveCushion]: Grundwert, Zuschlag je Hänger, Obergrenze. */
+    fun cushion(setting: String): Triple<Long, Long, Long> = when (setting) {
+        "small" -> Triple(6_000L, 4_000L, 15_000L)
+        "large" -> Triple(15_000L, 5_000L, 40_000L)
+        else -> Triple(10_000L, 5_000L, 25_000L)
+    }
 }
