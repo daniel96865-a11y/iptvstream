@@ -55,7 +55,7 @@ object PlaybackBuffer {
 
     /**
      * Live: so viel Vorlauf muss da sein, bevor das Bild startet: (Senderwechsel, nach einem Hänger).
-     * Beim Umschalten zählt Tempo: Start nach 0,5–1,5 s Vorlauf. Ein Live-TS-Strom kommt aber nur in
+     * Beim Umschalten zählt Tempo: Start nach 0,3–0,8 s Vorlauf (wie 1.0.79-zap1). Ein Live-TS-Strom kommt aber nur in
      * Echtzeit an – der Vorlauf wächst danach nicht von selbst. Deshalb baut [LiveCushion] ihn durch
      * kaum merklich langsamere Wiedergabe auf. Nach einem Hänger startet der Sender erst mit dem
      * zweiten Wert wieder ([LiveAwareLoadControl]).
@@ -66,9 +66,9 @@ object PlaybackBuffer {
         else -> ZAP_MEDIUM_MS to 4_000
     }
 
-    const val ZAP_SMALL_MS = 500
-    const val ZAP_MEDIUM_MS = 1_000
-    const val ZAP_LARGE_MS = 1_500
+    const val ZAP_SMALL_MS = 300
+    const val ZAP_MEDIUM_MS = 500
+    const val ZAP_LARGE_MS = 800
 
     /**
      * Live: so weit darf der Puffer höchstens wachsen. Unabhängig von „Klein“ mindestens 30 s, damit
@@ -79,17 +79,6 @@ object PlaybackBuffer {
         "small" -> 30_000
         "large" -> LARGE_MAX_MS
         else -> 45_000
-    }
-
-    /**
-     * HLS/DASH live: Abstand zur Live-Kante. Der Player kann nur bis zur Kante vorladen, der Abstand ist
-     * also der größtmögliche Puffer. Der Start wird dadurch nicht langsamer (es wird nur ein früheres
-     * Segment geladen), nur das Bild liegt etwas weiter hinter dem Live-Geschehen.
-     */
-    fun liveTargetOffsetMs(setting: String): Int = when (setting) {
-        "small" -> 12_000
-        "large" -> 30_000
-        else -> 20_000
     }
 
     /** Ziel-Vorlauf für [LiveCushion]: Grundwert, Zuschlag je Hänger, Obergrenze. */

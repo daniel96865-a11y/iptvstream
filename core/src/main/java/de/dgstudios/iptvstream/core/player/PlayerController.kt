@@ -43,7 +43,6 @@ import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
-import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
 import androidx.media3.extractor.ts.TsExtractor
@@ -293,6 +292,9 @@ class PlayerController(
     private var lastPlaybackState = Player.STATE_IDLE
     /** Neuverbindungen auf dem laufenden Sender (Anzeige; der Versuchszähler wird zwischendurch zurückgesetzt). */
     private var reconnectsThisChannel = 0
+    private val connections: StreamConnections
+    /** Zuletzt hat der Anbieter ein Verbindungslimit gemeldet (elapsedRealtime, 0 = nie). */
+    @Volatile private var limitedAt = 0L
 
     private val byteCounter = object : TransferListener {
         override fun onTransferInitializing(source: DataSource, dataSpec: DataSpec, isNetwork: Boolean) {}
@@ -335,13 +337,16 @@ class PlayerController(
             .followRedirects(true)
             .followSslRedirects(true)
             .build()
+        // Alle Stream-Anfragen laufen über [connections]: vor jeder neuen Verbindung werden die alten hart
+        // abgebrochen (Anbieter mit nur einer erlaubten Verbindung lehnen sonst mit HTTP 406 o. Ä. ab).
+        connections = StreamConnections(streamClient)
         val httpFactory = DataSource.Factory {
             val extra = streamReferrer?.let { mapOf("Referer" to it) }.orEmpty()
             DefaultDataSource.Factory(
                 context,
                 // Kürzeres Lese-Zeitlimit für Streams: Hängt die Verbindung, kommt nach 15 s ein Fehler
                 // und die Wiederverbindung greift, statt 45 s lang mit leerem Puffer zu warten.
-                OkHttpDataSource.Factory(streamClient).setUserAgent(streamUserAgent ?: Net.userAgentFor(settings.userAgent))
+                OkHttpDataSource.Factory(connections).setUserAgent(streamUserAgent ?: Net.userAgentFor(settings.userAgent))
                     .setDefaultRequestProperties(extra)
                     .setTransferListener(byteCounter),
             ).createDataSource()
@@ -365,7 +370,12 @@ class PlayerController(
                     DefaultTsPayloadReaderFactory.FLAG_IGNORE_SPLICE_INFO_STREAM,
             )
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSource, extractors)
-            .setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(6))
+            .setLoadErrorHandlingPolicy(
+                StreamErrorPolicy { code ->
+                    limitedAt = SystemClock.elapsedRealtime()
+                    diag.issue("Anbieter: Verbindung belegt (HTTP $code)")
+                },
+            )
 
         // Wie bis 1.0.52: Minimum und Maximum getrennt, Zeit vor Größe. Die Gleichsetzung in 1.0.53 hat
         // das Ruckeln nicht behoben (der Anbieter beendet den Strom unabhängig vom Lesen) und ist zurückgenommen.
@@ -459,7 +469,7 @@ class PlayerController(
         reconnectJob?.cancel()
         // Alten Sender sofort freigeben: Verbindung schließen, bevor die neue aufgeht (viele Anbieter
         // erlauben nur eine Verbindung gleichzeitig).
-        if (current != null) player.stop()
+        if (current != null) stopStream()
         zapStartedAt = SystemClock.elapsedRealtime()
         cushion.reset()
         reconnectsThisChannel = 0
@@ -529,16 +539,15 @@ class PlayerController(
             .apply {
                 if (Urls.isHls(item.url)) setMimeType(MimeTypes.APPLICATION_M3U8)
                 if (live) {
-                    // HLS/DASH: Der Abstand zur Live-Kante ist der größtmögliche Puffer. 12/20/30 s statt der
-                    // Playlist-Vorgabe (oft nur 3 Segmente): mehr Polster, der Start bleibt gleich schnell.
-                    // Nach einem Hänger rückt der Abstand um 3 s nach hinten (setLivePlaybackSpeedControl).
-                    // Media3 kürzt den Abstand selbst auf das Fenster der Playlist.
+                    // HLS/DASH: Start beim Abstand, den die Playlist vorgibt (nah an der Kante, schneller Start).
+                    // Das Polster wächst danach über das langsamere Tempo ([LiveCushion]) bzw. nach Hängern
+                    // (+3 s, setLivePlaybackSpeedControl). Nie schneller als normal: sonst holt Media3 zur
+                    // Kante auf und verbraucht genau das Polster wieder.
                     setLiveConfiguration(
                         MediaItem.LiveConfiguration.Builder()
-                            .setTargetOffsetMs(PlaybackBuffer.liveTargetOffsetMs(settings.buffer).toLong().coerceAtMost(liveBufferMaxMs))
                             .setMaxOffsetMs(liveBufferMaxMs)
                             .setMinPlaybackSpeed(0.97f)
-                            .setMaxPlaybackSpeed(1.03f)
+                            .setMaxPlaybackSpeed(1f)
                             .build(),
                     )
                 }
@@ -563,6 +572,7 @@ class PlayerController(
         reconnectAttempts = 0
         bufferingWatchdog.reset()
         _state.update { it.copy(error = null, loading = true) }
+        connections.closeAll()
         if (liveEdge(current)) player.seekToDefaultPosition()
         player.prepare()
         player.playWhenReady = true
@@ -581,7 +591,7 @@ class PlayerController(
         current?.let { saveProgress(it, force = true) }
         player.pause()
         if (liveEdge(current)) {
-            player.stop()
+            stopStream()
             stoppedForBackground = true
         }
     }
@@ -966,6 +976,7 @@ class PlayerController(
         if (code == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
             behindLiveWindowCount++
             if (behindLiveWindowCount <= MAX_BEHIND_LIVE_WINDOW || !tryReconnect()) {
+                connections.closeAll()
                 player.seekToDefaultPosition()
                 player.prepare()
                 player.playWhenReady = true
@@ -1069,7 +1080,7 @@ class PlayerController(
     private fun restartForDecoder() {
         diag.audioDecoder = null
         if (liveEdge(current)) player.seekToDefaultPosition()
-        player.stop()
+        stopStream()
         player.prepare()
         player.playWhenReady = true
     }
@@ -1108,7 +1119,7 @@ class PlayerController(
             notice("Software-Bilddecoder stockt. Hardware wird versucht …")
             stall.reset()
             frames.reset()
-            player.stop()
+            stopStream()
             player.prepare()
             player.playWhenReady = true
             return
@@ -1133,7 +1144,7 @@ class PlayerController(
         )
         stall.reset()
         frames.reset()
-        player.stop()
+        stopStream()
         player.prepare()
         player.playWhenReady = true
     }
@@ -1231,7 +1242,11 @@ class PlayerController(
         if (liveMode) stalledLive = true
         diag.event("Neuverbindung $reconnectAttempts, Puffer ${player.totalBufferedDuration / 1000} s, ${diag.lastIssue ?: "ohne Fehler"}")
         val live = liveEdge(current)
-        val wait = ReconnectBackoff.waitMs(reconnectAttempts, live)
+        val limited = limitedAt != 0L && SystemClock.elapsedRealtime() - limitedAt < LIMIT_RECENT_MS
+        val wait = ReconnectBackoff.waitMs(reconnectAttempts, live, limited)
+        // Sofort schließen, nicht erst nach der Wartezeit: dann zählt der Anbieter die alte Verbindung
+        // schon nicht mehr, wenn die neue kommt.
+        if (live && player.playbackState == Player.STATE_IDLE) connections.closeAll()
         if (ReconnectBackoff.showNotice(reconnectAttempts, live)) {
             notice(
                 "Verbinde neu … Versuch $reconnectAttempts von $MAX_RECONNECTS\n${diagnosisLine()}",
@@ -1251,8 +1266,10 @@ class PlayerController(
             bufferingWatchdog.reset()
             if (liveEdge(current)) {
                 // Alte Verbindung sicher schließen, damit der Anbieter kein Verbindungslimit meldet.
-                player.stop()
+                stopStream()
                 player.seekToDefaultPosition()
+            } else {
+                connections.closeAll()
             }
             player.prepare()
             player.playWhenReady = true
@@ -1266,10 +1283,20 @@ class PlayerController(
         diag.event("Neustart bei Puffer ${player.totalBufferedDuration / 1000} s (Anbieter hat beendet)")
         reconnectsThisChannel++
         bufferingWatchdog.reset()
-        player.stop()
+        stopStream()
         player.seekToDefaultPosition()
         player.prepare()
         player.playWhenReady = true
+    }
+
+    /**
+     * Player anhalten und die offenen Stream-Verbindungen sofort schließen. Ohne das hält ein hängender
+     * Lesevorgang die alte Verbindung bis zum Zeitlimit offen, und die neue wird vom Anbieter abgelehnt.
+     */
+    private fun stopStream() {
+        player.stop()
+        val closed = connections.closeAll()
+        if (closed > 0) diag.event("Alte Verbindung geschlossen ($closed)")
     }
 
     private fun friendlyError(code: Int): String = when (code) {
@@ -1498,6 +1525,7 @@ class PlayerController(
         const val STREAM_CONNECT_TIMEOUT_S = 15L
         const val STALL_AUDIO_SUSPECT_BUFFER_MS = 2_000L
         const val STUCK_PLAYING_TIMEOUT_MS = 30_000
+        const val LIMIT_RECENT_MS = 20_000L
     }
 }
 

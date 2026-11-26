@@ -1,0 +1,12 @@
+Testversion 1.0.79-puffer2 (Vorabversion, nur zum Testen)
+
+Behebt das lange Laden aus 1.0.79-puffer1:
+- Ursache: Hing ein Sender, blieb die alte Verbindung zum Anbieter bis zu 15 Sekunden offen, während die App schon neu verband. Anbieter mit nur einer erlaubten Verbindung lehnten die neue ab (z. B. HTTP 406), und die App versuchte es sofort immer wieder.
+- Vor jeder neuen Verbindung (Umschalten, Neuverbindung, Wiederholen) wird die alte jetzt sofort geschlossen.
+- Meldet der Anbieter „Verbindung belegt“ (HTTP 403, 406, 429, 509 …), wartet die App 2–4 Sekunden zwischen den Versuchen statt sofort zu wiederholen.
+- Umschalten wieder so schnell wie in zap1: Bild nach 0,3 / 0,5 / 0,8 Sekunden Vorlauf (klein / mittel / groß).
+- HLS startet wieder nah an der Live-Kante; das Polster wächst danach über „Live-Vorlauf aufbauen“.
+
+Weiterhin aus puffer1: Live-Vorlauf wächst durch kaum merklich langsamere Wiedergabe (96 % / 92 %) auf 6 / 10 / 15 s, mehr nach Hängern; Live-Puffer bis 30 / 45 / 90 s; Neuverbindung erst nach 10 s ohne Daten; Stream-Infos mit Puffer, Ziel, Hängern, Neuverbindungen und Tempo.
+
+Basis: 1.0.77.

@@ -158,7 +158,7 @@ object SettingsSchema {
                     "buffer", "Puffergröße",
                     bufferOptions,
                     "medium",
-                    "Beim Umschalten startet das Bild nach 0,5 / 1 / 1,5 Sekunden Vorlauf. Danach wächst der Live-Vorlauf auf etwa 6 / 10 / 15 Sekunden, nach Hängern mehr (bis 15 / 25 / 40 s). Groß: stabiler, Live-HLS liegt etwas weiter hinter dem Live-Geschehen.",
+                    "Beim Umschalten startet das Bild nach 0,3 / 0,5 / 0,8 Sekunden Vorlauf. Danach wächst der Live-Vorlauf auf etwa 6 / 10 / 15 Sekunden, nach Hängern mehr (bis 15 / 25 / 40 s). Groß: stabiler.",
                 ),
                 ChoiceDef(
                     "resize", "Bildmodus",

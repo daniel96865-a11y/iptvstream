@@ -35,9 +35,8 @@ class LiveAwareLoadControl(
 
     override fun shouldStartPlayback(parameters: LoadControl.Parameters): Boolean {
         if (!isLive()) return delegate.shouldStartPlayback(parameters)
-        val needMs = if (parameters.rebuffering || stalled()) liveAfterRebufferMs else liveStartMs
         val bufferedUs = Util.getPlayoutDurationForMediaDuration(parameters.bufferedDurationUs, parameters.playbackSpeed)
-        return bufferedUs >= needMs * 1_000L
+        return liveStartReached(bufferedUs, parameters.rebuffering || stalled(), liveStartMs, liveAfterRebufferMs)
     }
 
     override fun shouldContinueLoading(parameters: LoadControl.Parameters): Boolean {
@@ -73,6 +72,15 @@ class LiveAwareLoadControl(
     ): Boolean = delegate.shouldContinuePreloading(playerId, timeline, mediaPeriodId, bufferedDurationUs)
 
     companion object {
+        /**
+         * Startbedingung Live: beim Umschalten nur [zapMs] Vorlauf (Bild sofort), nach einem Hänger [afterStallMs].
+         * Hängt bewusst nicht an der Speichergrenze: die Grenze darf den Start nie verhindern.
+         */
+        fun liveStartReached(bufferedPlayoutUs: Long, afterStall: Boolean, zapMs: Int, afterStallMs: Int): Boolean {
+            val needMs = if (afterStall) afterStallMs else zapMs
+            return bufferedPlayoutUs >= needMs * 1_000L
+        }
+
         /** Unter [minMs] immer laden; darüber bis [maxMs], solange der Speicher unter [targetBytes] bleibt. */
         fun shouldLoadLive(bufferedUs: Long, allocatedBytes: Long, minMs: Int, maxMs: Int, targetBytes: Int): Boolean {
             if (bufferedUs < minMs * 1_000L) return true
