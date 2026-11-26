@@ -32,4 +32,11 @@ class BufferDiagTest {
             BufferDiag.line("TS", 6_000, null, 1f, null, null, null, null, 0, 0, 0, 900, null),
         )
     }
+
+    @Test fun showsDecoderNote() {
+        assertEquals(
+            "TS · Puffer 6,0 s · Tempo 97 % · Zulauf … · Wiedergabe … · Netz … · leer 0× · neu 1× · zuletzt: Stillstand 3 s → Neustart · Decoder: Bild stand (Daten-Stillstand), Decoder bleibt",
+            BufferDiag.line("TS", 6_000, null, 0.97f, null, null, null, null, 0, 1, 0, 0, "Stillstand 3 s → Neustart", "Bild stand (Daten-Stillstand), Decoder bleibt"),
+        )
+    }
 }

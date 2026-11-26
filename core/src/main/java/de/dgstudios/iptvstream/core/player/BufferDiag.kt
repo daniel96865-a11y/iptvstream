@@ -18,6 +18,7 @@ object BufferDiag {
         seamless: Int = 0,
         stallMs: Long = 0L,
         lastFix: String? = null,
+        decoderNote: String? = null,
     ): String = buildList {
         add(format)
         add("Puffer ${sec(bufferedMs)}" + (targetMs?.let { " / Ziel ${sec(it)}" } ?: ""))
@@ -30,6 +31,7 @@ object BufferDiag {
         if (seamless > 0) add("nahtlos ${seamless}×")
         if (stallMs >= 1_000L) add("Stillstand ${sec(stallMs)}")
         lastFix?.let { add("zuletzt: $it") }
+        decoderNote?.let { add("Decoder: $it") }
     }.joinToString(" · ")
 
     private fun sec(ms: Long) = String.format(Locale.GERMANY, "%.1f s", ms.coerceAtLeast(0L) / 1000.0)

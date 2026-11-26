@@ -224,12 +224,18 @@ class PlayerController(
     private var rateAt = 0L
     private var networkKbps: Int? = null
     private var reconnectsThisChannel = 0
-    /** Live-TS: Verbindung bei Daten-Stillstand im laufenden Player ersetzen (Einstellung). */
+    /** Live-TS: bei Daten-Stillstand sauber neu aufbauen (Einstellung). */
     private val stallReconnectOn = settings.stallReconnect
-    @Volatile private var stallReconnectLive = false
+    private var stallReconnectLive = false
     private val stallGuard = SupplyStallGuard()
-    /** Gesetzt direkt vor dem absichtlichen Abbruch; [ReconnectingDataSource] holt es ab. */
-    private val stallKick = java.util.concurrent.atomic.AtomicBoolean(false)
+    /** Stillstand erkannt; Neuaufbau, sobald der Puffer fast leer ist (oder Daten kommen wieder). */
+    private var stallPending = false
+    private var lastStallRestartAt = 0L
+    /** Bis hierhin (elapsedRealtime) darf der Bild-steht-Wächter nicht den Decoder wechseln. */
+    private var freezeGraceUntil = 0L
+    private var decoderSwitchesThisChannel = 0
+    /** Grund des letzten Decoder-Wechsels (oder warum keiner), für die Puffer-Diagnose. */
+    private var decoderNote: String? = null
     private val seamlessCount = java.util.concurrent.atomic.AtomicInteger()
     /** Grund der letzten Neuverbindung, für die Puffer-Diagnose. */
     @Volatile private var lastFix: String? = null
@@ -308,18 +314,6 @@ class PlayerController(
                     seamlessCount.incrementAndGet()
                     lastFix = "Anbieter-Ende → nahtlos"
                     diag.event("Anbieter beendete nach ${bytes / 1024} KB / ${millis / 1000} s, nahtlos neu verbunden")
-                },
-                stallEnabled = { stallReconnectLive },
-                takeStallKick = { stallKick.getAndSet(false) },
-                onStallReconnect = { attempts, ok ->
-                    if (ok) {
-                        seamlessCount.incrementAndGet()
-                        lastFix = "Stillstand → nahtlos" + if (attempts > 1) " ($attempts Versuche)" else ""
-                        diag.event("Daten-Stillstand: Verbindung nahtlos ersetzt ($attempts Versuch(e))")
-                    } else {
-                        lastFix = "Stillstand → Ersetzen fehlgeschlagen"
-                        diag.issue("Daten-Stillstand: neue Verbindung nach $attempts Versuchen abgelehnt")
-                    }
                 },
             )
         }
@@ -455,7 +449,11 @@ class PlayerController(
         seamlessLive = live && settings.seamless && streamType == C.CONTENT_TYPE_OTHER
         stallReconnectLive = live && stallReconnectOn && streamType == C.CONTENT_TYPE_OTHER
         stallGuard.reset()
-        stallKick.set(false)
+        stallPending = false
+        lastStallRestartAt = 0L
+        freezeGraceUntil = 0L
+        decoderSwitchesThisChannel = 0
+        decoderNote = null
         seamlessCount.set(0)
         lastFix = null
         readyOnce = false
@@ -1035,6 +1033,29 @@ class PlayerController(
      */
     private fun onFrozenPicture() {
         if (released || inBackground) return
+        // Steht das Bild wegen des Stroms (Neuverbindung gerade erst, Daten-Stillstand, Puffer leer),
+        // ist der Decoder unschuldig: nicht wechseln. Der Stillstand-/Puffer-Wächter kümmert sich.
+        val now = SystemClock.elapsedRealtime()
+        val streamCause = when {
+            now < freezeGraceUntil -> "kurz nach Neuverbindung"
+            stallPending || stallGuard.stalledMs(now) >= 1_000L -> "Daten-Stillstand"
+            player.totalBufferedDuration < FREEZE_MIN_BUFFER_MS -> "Puffer fast leer"
+            else -> null
+        }
+        if (streamCause != null) {
+            decoderNote = "Bild stand ($streamCause), Decoder bleibt"
+            diag.event("Bild steht, $streamCause: kein Decoder-Wechsel")
+            return
+        }
+        // Höchstens ein Wechsel je Sender. Steht das Bild danach wieder, sauber neu verbinden statt hin und her.
+        if (decoderSwitchesThisChannel >= 1) {
+            decoderNote = "Bild stand erneut, kein 2. Wechsel → Neustart"
+            diag.issue("Bild steht erneut (kein weiterer Decoder-Wechsel)")
+            freezeGraceUntil = now + FREEZE_GRACE_MS
+            if (tryReconnect()) return
+            stuckError("Das Bild bleibt stehen.")
+            return
+        }
         val mime = player.videoFormat?.sampleMimeType
         val decoder = diag.videoDecoder
         val older = compat
@@ -1042,6 +1063,9 @@ class PlayerController(
         if (older && software && !videoDecoders.restarted(mime)) {
             videoDecoders.fallbackFromSoftware(mime, decoder)
             videoDecoders.markRestarted(mime)
+            decoderSwitchesThisChannel++
+            freezeGraceUntil = now + FREEZE_GRACE_MS
+            decoderNote = "Software stand → Hardware"
             diag.issue("Software-Bilddecoder stockt; Hardware-Fallback")
             notice("Software-Bilddecoder stockt. Hardware wird versucht …")
             stall.reset()
@@ -1064,6 +1088,9 @@ class PlayerController(
             return
         }
         videoDecoders.markRestarted(mime)
+        decoderSwitchesThisChannel++
+        freezeGraceUntil = now + FREEZE_GRACE_MS
+        decoderNote = "gewechselt: ${decoder ?: "?"} stand ${frozenFramesMs / 1000} s bei Puffer ${player.totalBufferedDuration / 1000} s"
         diag.issue(if (older) "Software-Bilddecoder" else "Bilddecoder wird gewechselt")
         notice(
             if (older) "Bilddecoder des Sticks bleibt stehen. Software-Decoder wird geladen …"
@@ -1191,6 +1218,7 @@ class PlayerController(
                 return@launch
             }
             bufferingWatchdog.reset()
+            freezeGraceUntil = SystemClock.elapsedRealtime() + FREEZE_GRACE_MS
             if (liveEdge(current)) {
                 // Alte Verbindung sicher schließen, damit der Anbieter kein Verbindungslimit meldet.
                 stopStream()
@@ -1208,6 +1236,7 @@ class PlayerController(
         diag.event("Neustart bei Puffer ${player.totalBufferedDuration / 1000} s (Anbieter hat beendet)")
         reconnectsThisChannel++
         lastFix = "Anbieter-Ende → Neustart"
+        freezeGraceUntil = SystemClock.elapsedRealtime() + FREEZE_GRACE_MS
         bufferingWatchdog.reset()
         stopStream()
         player.seekToDefaultPosition()
@@ -1253,31 +1282,61 @@ class PlayerController(
             seamless = seamlessCount.get(),
             stallMs = stallGuard.stalledMs(now),
             lastFix = lastFix,
+            decoderNote = decoderNote,
         )
         _state.update { if (it.bufferDiag == line) it else it.copy(bufferDiag = line) }
     }
 
     /**
-     * Live-TS: Der Player will nachladen, aber seit [SupplyStallGuard.THRESHOLD_MS] kommt kein Byte. Dann die
-     * hängende Verbindung abbrechen; [ReconnectingDataSource] öffnet sofort eine neue, ohne Player-Neustart,
-     * der Puffer bleibt. Nicht beim Start (erst nach dem ersten Bild), nicht bei vollem Puffer (lädt dann nicht).
+     * Live-TS: Der Player will nachladen, aber seit [SupplyStallGuard.THRESHOLD_MS] kommt kein Byte (der Anbieter
+     * hält die Verbindung offen, schickt aber nichts). Erst den Puffer abspielen (vielleicht liefert er wieder),
+     * bei höchstens [STALL_RESTART_BUFFER_MS] Puffer sauber neu aufbauen: alte Verbindung hart schließen, neu
+     * vorbereiten an der Live-Kante – wie die Wiederverbindung aus 1.0.77, nur früher als nach 15 s Lese-Zeitlimit.
+     * Kein Anfügen in den laufenden Strom (das hat in puffer5 den Bilddecoder aus dem Tritt gebracht).
+     * Nicht beim Start (erst nach dem ersten Bild), nicht bei vollem Puffer (der Player lädt dann nicht).
      */
     private fun checkSupplyStall() {
         val now = SystemClock.elapsedRealtime()
         val active = stallReconnectLive && readyOnce && !inBackground && player.playWhenReady &&
             player.isLoading && player.playbackState != Player.STATE_IDLE
-        if (stallGuard.observe(now, active, bytesLoaded.get())) {
+        if (stallGuard.observe(now, active, bytesLoaded.get()) && !stallPending) {
+            stallPending = true
             diag.issue("Kein Datenzulauf seit ${stallGuard.stalledMs(now) / 1000} s")
-            stallKick.set(true)
-            val closed = connections.closeAll()
-            if (closed == 0) {
-                stallKick.set(false)
-            } else {
-                diag.event("Daten-Stillstand ${stallGuard.stalledMs(now) / 1000} s bei Puffer ${player.totalBufferedDuration / 1000} s: Verbindung abgebrochen")
-            }
+            diag.event("Daten-Stillstand bei Puffer ${player.totalBufferedDuration / 1000} s: Neuaufbau bei ≤ ${STALL_RESTART_BUFFER_MS / 1000} s")
         }
-        // Daten fließen wieder: eine nicht abgeholte Markierung darf keinen späteren Fehler verdecken.
-        if (stallGuard.kicks == 0) stallKick.set(false)
+        if (!stallPending) return
+        if (stallGuard.kicks == 0) {
+            // Daten kommen wieder: nichts tun.
+            stallPending = false
+            diag.event("Datenzulauf wieder da")
+            return
+        }
+        val low = player.totalBufferedDuration <= STALL_RESTART_BUFFER_MS ||
+            player.playbackState == Player.STATE_BUFFERING
+        if (!low) return
+        stallPending = false
+        val stalledS = stallGuard.stalledMs(now) / 1000
+        // Schnell hintereinander: über die normale Wiederverbindung (Versuchszähler, Pausen) statt sofort.
+        if (lastStallRestartAt != 0L && now - lastStallRestartAt < STALL_RESTART_SPACING_MS) {
+            lastFix = "Stillstand ${stalledS} s → Wiederverbindung"
+            stallGuard.reset()
+            readyOnce = false
+            if (!tryReconnect()) stuckError("Der Sender liefert keine Daten mehr.")
+            return
+        }
+        lastStallRestartAt = now
+        reconnectsThisChannel++
+        lastFix = "Stillstand ${stalledS} s → Neustart"
+        diag.event("Neustart nach Daten-Stillstand ${stalledS} s, Puffer ${player.totalBufferedDuration / 1000} s")
+        stallGuard.reset()
+        readyOnce = false
+        freezeGraceUntil = now + FREEZE_GRACE_MS
+        bufferingWatchdog.reset()
+        connections.closeAll()
+        stopStream()
+        player.seekToDefaultPosition()
+        player.prepare()
+        player.playWhenReady = true
     }
 
     /** Player anhalten und offene Stream-Verbindungen sofort schließen (nicht erst nach dem Lese-Zeitlimit). */
@@ -1435,6 +1494,12 @@ class PlayerController(
         const val MAX_RECONNECTS = 8
         const val MAX_BEHIND_LIVE_WINDOW = 3
         const val FROZEN_FRAMES_MS = 8_000L
+        /** Nach einer Neuverbindung oder einem Decoder-Wechsel so lange keinen Decoder-Wechsel. */
+        const val FREEZE_GRACE_MS = 8_000L
+        /** Darunter steht das Bild wegen des Stroms, nicht wegen des Decoders. */
+        const val FREEZE_MIN_BUFFER_MS = 1_000L
+        const val STALL_RESTART_BUFFER_MS = 2_000L
+        const val STALL_RESTART_SPACING_MS = 20_000L
         const val EOF_RECONNECT_BUFFER_MS = 750L
         const val STREAM_READ_TIMEOUT_S = 15L
         const val STALL_AUDIO_SUSPECT_BUFFER_MS = 2_000L

@@ -154,11 +154,11 @@ object SettingsSchema {
                 ),
                 ChoiceDef(
                     "buffer_diag", "Puffer-Diagnose einblenden", onOff, "off",
-                    "Zeigt oben im Bild: Puffer und Ziel, Tempo, Zulauf und Wiedergabe (1,00× = Echtzeit), Datenrate, wie oft der Puffer leer lief und neu verbunden wurde, Daten-Stillstand und Grund der letzten Neuverbindung. Gilt ab dem nächsten Öffnen des Players.",
+                    "Zeigt oben im Bild: Puffer und Ziel, Tempo, Zulauf und Wiedergabe (1,00× = Echtzeit), Datenrate, wie oft der Puffer leer lief und neu verbunden wurde, Daten-Stillstand, Grund der letzten Neuverbindung und eines Decoder-Wechsels. Gilt ab dem nächsten Öffnen des Players.",
                 ),
                 ChoiceDef(
                     "stall_reconnect", "Bei Datenstillstand neu verbinden", onOff, "on",
-                    "Live-TS: Kommen etwa 3 s lang gar keine Daten mehr, obwohl der Player nachladen will, wird die Verbindung im laufenden Player ersetzt (alte zuerst geschlossen). Der Puffer bleibt, das Bild springt höchstens um die fehlenden Sekunden. Der Start bleibt unverändert.",
+                    "Live-TS: Kommen etwa 3 s lang gar keine Daten mehr, obwohl der Player nachladen will, läuft erst der Puffer weiter; bei unter 2 s wird sauber neu verbunden (alte Verbindung zuerst geschlossen) statt bis zum Zeitlimit von 15 s zu warten. Der Start bleibt unverändert.",
                 ),
                 ChoiceDef(
                     "seamless", "Nahtlose Neuverbindung (Test)", onOff, "off",

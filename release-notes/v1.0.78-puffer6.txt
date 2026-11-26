@@ -1,0 +1,9 @@
+Testversion 1.0.78-puffer6 (Vorabversion, nur zum Testen)
+
+Basis 1.0.77, Start unverändert. Gegenüber puffer5:
+- Zurückgenommen: das nahtlose Anhängen einer neuen Verbindung in den laufenden TS-Strom bei Daten-Stillstand. Das hat einen Sprung im Strom erzeugt, das Bild blieb stehen und der Bilddecoder wurde gewechselt.
+- Stattdessen bei Daten-Stillstand (etwa 3 s keine Daten, erst nach dem ersten Bild): Der Puffer läuft erst weiter (vielleicht liefert der Anbieter wieder). Bei unter 2 s Puffer wird sauber neu aufgebaut: alte Verbindung hart schließen, neu an der Live-Kante starten, wie die Wiederverbindung aus 1.0.77 – nur nach Sekunden statt nach 15 s Zeitlimit. Bei „belegt“ (HTTP 406 …) bleiben die Pausen. Mehrere Stillstände kurz hintereinander laufen über die normale Wiederverbindung mit Versuchszähler (keine Endlosschleife).
+- Bilddecoder-Wechsel nur noch, wenn wirklich der Decoder schuld ist: nicht in den ersten 8 s nach einer Neuverbindung, nicht bei Daten-Stillstand, nicht bei fast leerem Puffer. Höchstens ein Wechsel pro Sender; steht das Bild danach wieder, wird sauber neu verbunden statt erneut zu wechseln.
+- Puffer-Diagnose zeigt zusätzlich „Decoder: …“ (warum gewechselt bzw. warum nicht).
+
+versionCode 97.
