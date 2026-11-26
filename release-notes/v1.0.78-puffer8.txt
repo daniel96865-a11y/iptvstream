@@ -1,0 +1,10 @@
+Testversion 1.0.78-puffer8 (Vorabversion, nur zum Testen)
+
+Basis 1.0.77, Start unverändert. Gegenüber puffer7 (Handy-Verhalten bleibt):
+- Fernseher bekam nach einem Verbindungsende „HTTP 406“ in Schleife (kein Bild): Die neue Verbindung wurde sofort nach dem Ende der alten geöffnet. Manche Anbieter geben die alte Sitzung erst nach einem Moment frei und lehnen bis dahin ab; jede sofortige Wiederholung verlängert die Sperre.
+- Jetzt: Nach dem Ende einer Verbindung 2,5 s warten (früher, wenn der Puffer unter 6 s fällt), alte Verbindung vorher sicher geschlossen, nie zwei gleichzeitig.
+- Lehnt der Anbieter eine angeschlossene Verbindung trotzdem ab (406, 429 …), wird das Anschließen für diesen Sender abgeschaltet und wie in 1.0.77 neu verbunden (erst bei fast leerem Puffer, mit Pausen). Hat der Anbieter kurz vorher „belegt“ gemeldet, wird gar nicht erst angeschlossen.
+- Senderwechsel und Schließen des Players schließen die alte Verbindung sofort (vorher konnte eine hängende Verbindung bis zu 15 s offen bleiben und beim Anbieter mitzählen).
+- Abschaltbar: Einstellungen → Player → „Bei Abbruch oder Datenstillstand neu verbinden“ (aus = Verhalten 1.0.77).
+
+versionCode 99.

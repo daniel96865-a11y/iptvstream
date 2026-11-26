@@ -235,6 +235,9 @@ class PlayerController(
     /** Live-TS: dasselbe MediaItem, das bei einem Ende als nächstes Stück angeschlossen wird. */
     private var liveMediaItem: MediaItem? = null
     private var chainCount = 0
+    private var chainJob: Job? = null
+    /** Der Anbieter hat eine angeschlossene Verbindung abgelehnt (406 …): für diesen Sender wie in 1.0.77 weiter. */
+    @Volatile private var chainBlocked = false
     private var emptyChains = 0
     private var lastByteCount = -1L
     private var lastByteAt = 0L
@@ -339,6 +342,22 @@ class PlayerController(
                 // Wie DefaultLoadErrorHandlingPolicy(6); nur bei „Verbindung belegt“ (406, 429 …) mit Pause.
                 StreamErrorPolicy { code ->
                     limitedAt = android.os.SystemClock.elapsedRealtime()
+                    // Lehnt der Anbieter eine angeschlossene Verbindung ab, ist die alte Sitzung bei ihm noch
+                    // nicht frei. Dann für diesen Sender nicht mehr anschließen (zurück zum Verhalten aus 1.0.77).
+                    if (chainCount > 0 && !chainBlocked) {
+                        chainBlocked = true
+                        diag.issue("Anschließen abgeschaltet: Anbieter meldet HTTP $code")
+                        scope.launch {
+                            // Abgelehntes angeschlossenes Stück entfernen; der Rest des Puffers läuft, danach
+                            // verbindet der Weg aus 1.0.77 neu (bei fast leerem Puffer, mit Pause).
+                            val n = player.mediaItemCount
+                            val i = player.currentMediaItemIndex
+                            if (!released && n > i + 1) {
+                                player.removeMediaItems(i + 1, n)
+                                eofPending = true
+                            }
+                        }
+                    }
                     diag.issue("Anbieter: Verbindung belegt (HTTP $code)")
                 },
             )
@@ -465,6 +484,8 @@ class PlayerController(
         liveMediaItem = null
         chainCount = 0
         emptyChains = 0
+        chainJob?.cancel()
+        chainBlocked = false
         lastByteCount = -1L
         freezeGraceUntil = 0L
         decoderSwitchesThisChannel = 0
@@ -521,6 +542,9 @@ class PlayerController(
             )
         }
         liveMediaItem = if (stallReconnectLive) mediaItem else null
+        // Senderwechsel: die alte Verbindung sofort schließen (nicht erst nach dem Lese-Zeitlimit), sonst zählt der
+        // Anbieter sie noch mit und lehnt die neue mit 406 ab. Der Start selbst bleibt wie in 1.0.77.
+        connections.closeAll()
         player.setMediaItem(mediaItem, if (startMs > 0) startMs else C.TIME_UNSET)
         player.prepare()
         player.playWhenReady = true
@@ -639,7 +663,10 @@ class PlayerController(
         gain.release()
         player.removeListener(listener)
         player.removeAnalyticsListener(analytics)
+        chainJob?.cancel()
         player.release()
+        // Hängende Verbindung nicht bis zum Lese-Zeitlimit offen lassen (zählt beim Anbieter mit).
+        connections.closeAll()
     }
 
     // ------------------------------------------------------------------ Audio
@@ -1363,15 +1390,35 @@ class PlayerController(
         if (released || inBackground || !settings.reconnect) return false
         // Nur das letzte Stück der Liste bekommt einen Nachfolger.
         if (windowIndex != player.mediaItemCount - 1) return true
+        if (chainBlocked) return false
+        val now = SystemClock.elapsedRealtime()
+        if (limitedAt != 0L && now - limitedAt < LIMIT_RECENT_MS) {
+            diag.event("Kein Anschluss: Anbieter meldete eben „belegt“")
+            return false
+        }
         emptyChains = if (bytes < CHAIN_MIN_BYTES) emptyChains + 1 else 0
         if (emptyChains > MAX_EMPTY_CHAINS) {
             diag.issue("Anbieter liefert nach Neuverbindung nichts")
             return false
         }
-        chainCount++
-        lastFix = if (kicked) "Stillstand → angeschlossen" else "Anbieter-Ende → angeschlossen"
-        diag.event("Neue Verbindung angeschlossen ($chainCount.), Puffer ${player.totalBufferedDuration / 1000} s")
-        player.addMediaItem(next)
+        val item = current
+        chainJob?.cancel()
+        chainJob = scope.launch {
+            // Nie zwei Verbindungen gleichzeitig: die alte ist zu Ende; dem Anbieter etwas Zeit geben, die Sitzung
+            // freizugeben (sofort neu → 406 auf manchen Anschlüssen). Früher, wenn der Puffer knapp wird.
+            val until = SystemClock.elapsedRealtime() + CHAIN_DELAY_MS
+            while (SystemClock.elapsedRealtime() < until && player.totalBufferedDuration > CHAIN_EARLY_BUFFER_MS) delay(100)
+            val state = player.playbackState
+            if (released || inBackground || chainBlocked || current !== item ||
+                state == Player.STATE_IDLE || state == Player.STATE_ENDED ||
+                windowIndex != player.mediaItemCount - 1
+            ) return@launch
+            connections.closeAll()
+            chainCount++
+            lastFix = if (kicked) "Stillstand → angeschlossen" else "Anbieter-Ende → angeschlossen"
+            diag.event("Neue Verbindung angeschlossen ($chainCount.), Puffer ${player.totalBufferedDuration / 1000} s")
+            player.addMediaItem(next)
+        }
         return true
     }
 
@@ -1386,6 +1433,7 @@ class PlayerController(
 
     /** Player anhalten und offene Stream-Verbindungen sofort schließen (nicht erst nach dem Lese-Zeitlimit). */
     private fun stopStream() {
+        chainJob?.cancel()
         player.stop()
         trimToCurrent()
         val closed = connections.closeAll()
@@ -1547,6 +1595,10 @@ class PlayerController(
         /** Weniger als das in einer Verbindung zählt als „nichts geliefert“. */
         const val CHAIN_MIN_BYTES = 64L * 1024
         const val MAX_EMPTY_CHAINS = 2
+        /** Pause zwischen dem Ende einer Verbindung und der angeschlossenen neuen. */
+        const val CHAIN_DELAY_MS = 2_500L
+        /** Wird der Puffer knapper, sofort anschließen. */
+        const val CHAIN_EARLY_BUFFER_MS = 6_000L
         const val EOF_RECONNECT_BUFFER_MS = 750L
         const val STREAM_READ_TIMEOUT_S = 15L
         const val STALL_AUDIO_SUSPECT_BUFFER_MS = 2_000L
