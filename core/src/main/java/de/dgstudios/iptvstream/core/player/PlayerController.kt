@@ -88,6 +88,8 @@ data class PlayerState(
     val signalAudio: String? = null,
     val resize: String = "fit",
     val ended: Boolean = false,
+    /** Puffer-Diagnose (Einstellung), eine Zeile; null wenn aus. */
+    val bufferDiag: String? = null,
 )
 
 /**
@@ -214,6 +216,22 @@ class PlayerController(
     private val cushionOn = settings.liveSlow
     private var appliedSpeed = 1f
     private var lastPlaybackState = Player.STATE_IDLE
+    /** Puffer-Diagnose einblenden (Einstellung). */
+    private val bufferDiagOn = settings.bufferDiag
+    private val flow = FlowMeter()
+    private val bytesLoaded = java.util.concurrent.atomic.AtomicLong()
+    private var rateBytes = 0L
+    private var rateAt = 0L
+    private var networkKbps: Int? = null
+    private var reconnectsThisChannel = 0
+    private val byteCounter = object : androidx.media3.datasource.TransferListener {
+        override fun onTransferInitializing(source: DataSource, dataSpec: androidx.media3.datasource.DataSpec, isNetwork: Boolean) {}
+        override fun onTransferStart(source: DataSource, dataSpec: androidx.media3.datasource.DataSpec, isNetwork: Boolean) {}
+        override fun onBytesTransferred(source: DataSource, dataSpec: androidx.media3.datasource.DataSpec, isNetwork: Boolean, bytesTransferred: Int) {
+            if (isNetwork) bytesLoaded.addAndGet(bytesTransferred.toLong())
+        }
+        override fun onTransferEnd(source: DataSource, dataSpec: androidx.media3.datasource.DataSpec, isNetwork: Boolean) {}
+    }
     private var reconnectAttempts = 0
     /** Wie oft der Player hinter das Live-Fenster gefallen ist, seit er zuletzt stabil lief. */
     private var behindLiveWindowCount = 0
@@ -267,7 +285,8 @@ class PlayerController(
                 // Kürzeres Lese-Zeitlimit für Streams: Hängt die Verbindung, kommt nach 15 s ein Fehler
                 // und die Wiederverbindung greift, statt 45 s lang mit leerem Puffer zu warten.
                 OkHttpDataSource.Factory(connections).setUserAgent(streamUserAgent ?: Net.userAgentFor(settings.userAgent))
-                    .setDefaultRequestProperties(extra),
+                    .setDefaultRequestProperties(extra)
+                    .setTransferListener(byteCounter),
             ).createDataSource()
         }
         // Live-TS: Beendet der Anbieter die Verbindung, wird sofort neu geöffnet, ohne den Player anzufassen.
@@ -411,6 +430,10 @@ class PlayerController(
         val streamType = streamType(item.url)
         seamlessLive = live && settings.seamless && streamType == C.CONTENT_TYPE_OTHER
         cushion.reset()
+        flow.reset()
+        reconnectsThisChannel = 0
+        networkKbps = null
+        rateAt = 0L
         lastPlaybackState = Player.STATE_IDLE
         if (appliedSpeed != 1f) {
             appliedSpeed = 1f
@@ -437,7 +460,9 @@ class PlayerController(
                             .setTargetOffsetMs(liveBufferMaxMs)
                             .setMaxOffsetMs(liveBufferMaxMs)
                             .setMinPlaybackSpeed(0.98f)
-                            .setMaxPlaybackSpeed(1.02f)
+                            // Nie schneller als Echtzeit: Mit 1,02 holt Media3 (HLS mit Zeitstempeln) zum
+                            // Zielabstand auf und spielt dabei den Puffer stetig leer.
+                            .setMaxPlaybackSpeed(1f)
                             .build(),
                     )
                 }
@@ -1112,6 +1137,7 @@ class PlayerController(
         reconnectAttempts++
         diag.event("Neuverbindung $reconnectAttempts, Puffer ${player.totalBufferedDuration / 1000} s, ${diag.lastIssue ?: "ohne Fehler"}")
         val live = liveEdge(current)
+        reconnectsThisChannel++
         val limited = limitedAt != 0L && android.os.SystemClock.elapsedRealtime() - limitedAt < LIMIT_RECENT_MS
         val wait = ReconnectBackoff.waitMs(reconnectAttempts, live, limited)
         // Nach einem Fehler ist der Player schon gestoppt: hängende alte Verbindung sofort schließen,
@@ -1156,6 +1182,45 @@ class PlayerController(
         player.playWhenReady = true
     }
 
+    /**
+     * Eine Zeile für die Puffer-Diagnose: Puffer/Ziel, Tempo, Zulauf und Wiedergabe als Vielfaches der
+     * Echtzeit, Datenrate, wie oft der Puffer leer lief und neu verbunden wurde.
+     */
+    private fun refreshBufferDiag(item: PlayItem) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        flow.add(now, player.bufferedPosition, player.currentPosition)
+        val bytes = bytesLoaded.get()
+        if (rateAt == 0L) {
+            rateAt = now
+            rateBytes = bytes
+        } else if (now - rateAt >= 5_000L) {
+            networkKbps = ((bytes - rateBytes) * 8 / (now - rateAt)).toInt()
+            rateAt = now
+            rateBytes = bytes
+        }
+        val live = liveEdge(item)
+        val fmt = when (streamType(item.url)) {
+            C.CONTENT_TYPE_HLS -> "HLS"
+            C.CONTENT_TYPE_DASH -> "DASH"
+            C.CONTENT_TYPE_OTHER -> "TS"
+            else -> "?"
+        }
+        val videoKbps = player.videoFormat?.let { f -> (f.averageBitrate.takeIf { it > 0 } ?: f.bitrate.takeIf { it > 0 })?.div(1000) }
+        val line = BufferDiag.line(
+            format = fmt,
+            bufferedMs = player.totalBufferedDuration,
+            targetMs = if (live && cushionOn) cushion.targetMs else null,
+            speed = player.playbackParameters.speed,
+            supply = flow.supplyRate(),
+            play = flow.playRate(),
+            networkKbps = networkKbps,
+            videoKbps = videoKbps,
+            rebuffers = cushion.rebuffers,
+            reconnects = reconnectsThisChannel,
+        )
+        _state.update { if (it.bufferDiag == line) it else it.copy(bufferDiag = line) }
+    }
+
     /** Player anhalten und offene Stream-Verbindungen sofort schließen (nicht erst nach dem Lese-Zeitlimit). */
     private fun stopStream() {
         player.stop()
@@ -1164,13 +1229,14 @@ class PlayerController(
     }
 
     /**
-     * Live-TS: Tempo nach dem Vorlauf ([LiveCushion]), nur bei laufender Wiedergabe. HLS/DASH, Filme,
-     * Serien und Archiv bleiben immer bei normalem Tempo. Media3 hält die Tonhöhe gleich.
+     * Live: Tempo nach dem Vorlauf ([LiveCushion]), nur bei laufender Wiedergabe. Filme, Serien und
+     * Archiv bleiben immer bei normalem Tempo. Media3 hält die Tonhöhe gleich.
      */
     private fun adjustLiveSpeed(item: PlayItem) {
-        val ts = liveEdge(item) && streamType(item.url) == C.CONTENT_TYPE_OTHER
+        // Alle Live-Sender (TS, HLS, DASH). Bei HLS/DASH schaltet ein Tempo unter 1 Media3s eigene
+        // Live-Tempo-Steuerung so lange ab; die darf ohnehin nie schneller als 1 spielen.
         val wanted = when {
-            !ts || !cushionOn || inBackground -> 1f
+            !liveEdge(item) || !cushionOn || inBackground -> 1f
             player.playbackState != Player.STATE_READY || !player.playWhenReady -> appliedSpeed
             else -> cushion.speedFor(player.totalBufferedDuration.coerceAtLeast(0L), appliedSpeed)
         }
@@ -1236,6 +1302,7 @@ class PlayerController(
                 }
                 refreshSignal()
                 adjustLiveSpeed(item)
+                if (bufferDiagOn) refreshBufferDiag(item)
                 val now = System.currentTimeMillis()
                 val running = player.isPlaying && !inBackground
                 if (stall.observe(now, running, player.currentPosition)) {

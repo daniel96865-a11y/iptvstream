@@ -305,6 +305,20 @@ private fun TvPlayerContent(vm: PlayerViewModel, ctrl: PlayerController, ui: Pla
             CircularProgressIndicator(Modifier.align(Alignment.Center), color = Color.White, strokeWidth = 4.dp)
         }
 
+        // Puffer-Diagnose (Einstellungen → Player): für ein Foto bei Pufferproblemen.
+        st.bufferDiag?.let { line ->
+            Text(
+                line,
+                color = Color.White,
+                fontSize = 15.sp,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(start = tvSafe.horizontal, end = tvSafe.horizontal, top = tvSafe.vertical)
+                    .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+            )
+        }
+
         val notice = st.notice ?: ui.toast
         if (notice != null) {
             Text(

@@ -326,6 +326,21 @@ private fun PlayerContent(
             CircularProgressIndicator(Modifier.align(Alignment.Center), color = Color.White, strokeWidth = 3.dp)
         }
 
+        // Puffer-Diagnose (Einstellungen → Player): für ein Bildschirmfoto bei Pufferproblemen.
+        st.bufferDiag?.let { line ->
+            Text(
+                line,
+                color = Color.White,
+                fontSize = 11.sp,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .padding(start = 12.dp, end = 12.dp, top = 60.dp)
+                    .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+            )
+        }
+
         // Hinweise (Audiowechsel, Wiederverbindung …)
         val notice = st.notice ?: ui.toast
         if (notice != null) {

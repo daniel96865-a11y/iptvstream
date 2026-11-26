@@ -150,7 +150,11 @@ object SettingsSchema {
                 ),
                 ChoiceDef(
                     "live_slow", "Live-Vorlauf aufbauen", onOff, "on",
-                    "Live-Sender (MPEG-TS) laufen nach dem Start kaum merklich langsamer (97 %, bei unter 2 s Vorlauf 95 %), bis genug Vorlauf da ist (etwa 6 / 10 / 15 s je nach Puffergröße, nach Hängern mehr). Der Start selbst bleibt unverändert. Ohne Wirkung bei Ton-Durchleitung an den AV-Receiver.",
+                    "Live-Sender laufen nach dem Start kaum merklich langsamer (97 %, bei unter 3 s Vorlauf 93 %, nie schneller als normal), bis genug Vorlauf da ist (etwa 6 / 10 / 15 s je nach Puffergröße, nach Hängern mehr). Der Start selbst bleibt unverändert. Ohne Wirkung bei Ton-Durchleitung an den AV-Receiver.",
+                ),
+                ChoiceDef(
+                    "buffer_diag", "Puffer-Diagnose einblenden", onOff, "off",
+                    "Zeigt oben im Bild: Puffer und Ziel, Tempo, Zulauf und Wiedergabe (1,00× = Echtzeit), Datenrate, wie oft der Puffer leer lief und neu verbunden wurde. Gilt ab dem nächsten Öffnen des Players.",
                 ),
                 ChoiceDef(
                     "seamless", "Nahtlose Neuverbindung (Test)", onOff, "off",

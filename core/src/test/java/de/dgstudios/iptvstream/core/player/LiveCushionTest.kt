@@ -25,8 +25,8 @@ class LiveCushionTest {
         assertEquals(NORMAL, c.speedFor(8_100, NORMAL))
         assertEquals(GENTLE, c.speedFor(7_900, NORMAL))
         // Aus der Gefahrenzone erst mit etwas Abstand zurück auf sanft.
-        assertEquals(STRONG, c.speedFor(2_500, STRONG))
-        assertEquals(GENTLE, c.speedFor(3_100, STRONG))
+        assertEquals(STRONG, c.speedFor(3_500, STRONG))
+        assertEquals(GENTLE, c.speedFor(4_100, STRONG))
     }
 
     @Test fun lowBufferAlwaysSlowsDownStrongly() {

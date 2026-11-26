@@ -42,6 +42,8 @@ data class AppSettings(val raw: Map<String, String> = emptyMap()) {
     val seamless: Boolean get() = on("seamless")
     /** Live-TS: Vorlauf nach dem Start durch kaum merklich langsamere Wiedergabe aufbauen. */
     val liveSlow: Boolean get() = on("live_slow")
+    /** Eine Zeile mit Puffer, Tempo, Zulauf und Datenrate im Player einblenden. */
+    val bufferDiag: Boolean get() = on("buffer_diag")
     val castEnabled: Boolean get() = on("cast")
     val startMode: String get() = get("start_mode")
     val showNumbers: Boolean get() = on("show_numbers")

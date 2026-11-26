@@ -1,0 +1,10 @@
+Testversion 1.0.78-puffer4 (Vorabversion, nur zum Testen)
+
+Basis 1.0.77, Start unverändert. Gegenüber puffer3:
+- Live-Vorlauf aufbauen gilt jetzt für alle Live-Sender (auch HLS/DASH, vorher nur MPEG-TS). Je leerer der Puffer, desto stärker wird gebremst: unter 3 s Vorlauf 93 %, sonst 97 %, bis das Ziel erreicht ist. Nie schneller als normal.
+- HLS-Live spielt nicht mehr schneller als Echtzeit (vorher bis 102 %, um zum Zielabstand aufzuholen – das hat den Puffer stetig geleert).
+- Neu: „Puffer-Diagnose einblenden“ (Einstellungen → Player). Eine Zeile oben im Bild: Format, Puffer / Ziel, Tempo, Zulauf und Wiedergabe (1,00× = Echtzeit), Datenrate, wie oft der Puffer leer lief und neu verbunden wurde. Bitte bei Pufferproblemen ein Bildschirmfoto davon schicken.
+
+Lesehilfe: Liegt „Zulauf“ dauerhaft unter „Wiedergabe“, liefert der Anbieter bzw. das Netz langsamer, als der Sender abgespielt wird – dann sinkt der Puffer zwangsläufig.
+
+versionCode 95.

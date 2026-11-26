@@ -5,7 +5,8 @@ package de.dgstudios.iptvstream.core.player
  *
  * Ein Live-Strom kommt nur in Echtzeit an. Startet das Bild nach 1 s Vorlauf, bleiben es 1 s –
  * jede Netzschwankung, die länger dauert, leert den Puffer. Spielt der Player etwas langsamer als
- * Echtzeit, wächst der Vorlauf stetig: bei 95 % um 3 s pro Minute, bei 97 % um knapp 2 s.
+ * Echtzeit, wächst der Vorlauf stetig: bei 93 % um gut 4 s pro Minute, bei 97 % um knapp 2 s.
+ * Je leerer der Puffer, desto stärker wird gebremst (unter 3 s: 93 %). Nie schneller als normal.
  * Ist das Ziel erreicht, läuft alles wieder mit normalem Tempo. Die Tonhöhe bleibt dabei gleich.
  *
  * Nach jedem Hänger wächst das Ziel ([stepMs]) bis [capMs]: Ein wackliger Sender bekommt mehr Polster.
@@ -54,8 +55,8 @@ class LiveCushion(
         /** Kaum hörbar, für den normalen Aufbau. */
         const val GENTLE = 0.97f
         /** Unter [LOW_MS] Vorlauf: schneller aus der Gefahrenzone. */
-        const val STRONG = 0.95f
-        const val LOW_MS = 2_000L
+        const val STRONG = 0.93f
+        const val LOW_MS = 3_000L
         private const val LOW_BAND_MS = 1_000L
         private const val MAX_BAND_MS = 2_000L
     }
