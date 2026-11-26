@@ -1,7 +1,7 @@
 {
-  "versionCode": 76,
-  "versionName": "1.0.74",
-  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.74/iptvstream-mobile.apk",
-  "sha256": "1c5e871cb0f4f97424b0c05d36e7a4596e62adda4441de93905bc2df5dffabe0",
-  "changelog": "• IPTVstream 1.0.74\n• TV-Browser: Der Mauszeiger lässt sich wieder mit den Pfeiltasten bewegen – mit der Stick-Fernbedienung, der normalen TV-Fernbedienung (HDMI-CEC) und Handy-Fernbedienungs-Apps. Schnelles Drücken beschleunigt, am Rand wird gescrollt, OK klickt.\n• TV-Browser: OK auf der Adressleiste oder in einem Eingabefeld einer Webseite öffnet die Bildschirmtastatur. Geht keine auf, erscheint ein Eingabefenster. Im Menü gibt es zusätzlich „Adresse eingeben“."
+  "versionCode": 89,
+  "versionName": "1.0.77",
+  "apkUrl": "https://github.com/daniel96865-a11y/iptvstream/releases/download/v1.0.77/iptvstream-mobile.apk",
+  "sha256": "f7868606d98ccddd27608c218f2d126942da62f49610ac63281fcb34b6672409",
+  "changelog": "• IPTVstream 1.0.77\n• Neu: Freie Sender – frei empfangbare Sender ohne Anbieter und ohne Zugangsdaten, mit Suche, Favoriten und Programmführer. Sprachen wählst du unter Einstellungen → Freie Sender. Am Handy lassen sich die Sender per langem Druck und Ziehen sortieren.\n• Am Fernseher erreichst du „Freie Sender“ mit der Fernbedienung: von den Tabs nach unten auf „Meine Sender“/„Freie Sender“, mit Links/Rechts wechseln.\n• Behoben: Absturz beim schnellen Wechsel zwischen „Meine Sender“ und „Freie Sender“.\n• Neu im Browser: „Sicheres DNS“ (DNS über HTTPS). Im Browser-Menü kannst du Aus, Cloudflare, Quad9, Google oder einen eigenen Anbieter wählen. Namensauflösungen laufen dann verschlüsselt – dadurch gehen Seiten, die sonst durch eine DNS-Sperre blockiert waren. Adressen im Heimnetz nutzen weiter das normale DNS.\n• Fernseher: Es wird nichts mehr am Rand abgeschnitten. Unter Einstellungen → Design gibt es „Bildschirmrand (nur TV)“ mit Klein, Normal, Größer und Maximal. Die Tab-Leiste (auch Einstellungen und Browser) passt vollständig auf den Bildschirm.\n• Technik-Update: vorbereitet auf Android 16, aktuelle Bibliotheken."
 }
