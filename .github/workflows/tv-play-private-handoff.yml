@@ -1,0 +1,80 @@
+name: Build private IPTVstream TV handoff
+on:
+  push:
+    branches: ['play/tv-unsigned-handoff']
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Android SDK
+        run: |
+          set -euo pipefail
+          sdk="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          cmdline="$(find "$sdk/cmdline-tools" -type f -name sdkmanager | head -n1)"
+          test -n "$cmdline"
+          echo "ANDROID_HOME=$sdk" >> "$GITHUB_ENV"
+          yes | "$cmdline" --sdk_root="$sdk" --licenses >/dev/null || true
+          "$cmdline" --sdk_root="$sdk" --install "platforms;android-35" "platforms;android-36" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build unsigned Google Play TV bundle
+        run: |
+          set -euo pipefail
+          python3 - <<'PYBUILD'
+          from pathlib import Path
+          p = Path("tv/build.gradle.kts")
+          s = p.read_text()
+          old = 'signingConfigs.getByName("debug")'
+          assert s.count(old) == 1
+          p.write_text(s.replace(old, 'null'))
+          PYBUILD
+          ./gradlew --no-daemon -Pdistribution=play :tv:bundleRelease
+          test -s tv/build/outputs/bundle/release/tv-release.aab
+          if unzip -Z1 tv/build/outputs/bundle/release/tv-release.aab | grep -Ei '^META-INF/.*\.(RSA|SF|DSA|EC)$'; then
+            echo "Bundle unexpectedly signed"
+            exit 1
+          fi
+      - name: Encrypt bundle for private handoff
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/recipient.pem" <<'CERT'
+          -----BEGIN CERTIFICATE-----
+          MIIEQTCCAqmgAwIBAgIUTQ3S0wDiE/974NuJ2tjhYU8obIowDQYJKoZIhvcNAQEL
+          BQAwMDEuMCwGA1UEAwwlSVBUVnN0cmVhbSB1bnNpZ25lZCBUViBidW5kbGUgaGFu
+          ZG9mZjAeFw0yNjExMjYxNzI1MjlaFw0yNjExMjgxNzI1MjlaMDAxLjAsBgNVBAMM
+          JUlQVFZzdHJlYW0gdW5zaWduZWQgVFYgYnVuZGxlIGhhbmRvZmYwggGiMA0GCSqG
+          SIb3DQEBAQUAA4IBjwAwggGKAoIBgQCpgEIByV0PiDxdsfynxeoYpJehJoZVAKvZ
+          uF1l6QyfGy2dsPIygS7Wl93o1QYBeeXqRjaIQezeQqZCtC8aSJrjWDyx9ISroWtZ
+          R8XvlSAr2L81esAkgZ+cmtJJm1orhFDYlPkXdHZ6l1Ow0mpmSx/zWtTKlm2cnWA7
+          626pVzThmgtrIbmZLsY0uXX6oiqov2yVhIPdMVs99YeQNMyhL5dfnYIpgPLIDmBr
+          c4dcS27BV0vKDjovBkByTL2K7CmmOYvz52gKfNJXEqeScpcYgMwOkju4WRjGnwtv
+          aiOHb79o4oQ6FkLrhfDXjIiAMMAEfMj6ll38z4RS4QXHDk1DbphRz9zDiHXW0pDc
+          z0ahaGCZhVOAfi/pmtJWNi8ch5CCB+3HG7a8aW8vOruSeCCfa9zL4IeSJH+QM0RB
+          rN79453cQM7OgQOsP0kbAFm/8I+r0L8SJw9+HhuFyVFyWFpXdNj+/50JaXhmL5GS
+          LSJ+eTFCSrlpRAzI9eQlSRPEDOJj0tkCAwEAAaNTMFEwHQYDVR0OBBYEFCCn6P2M
+          RDGwNxF28eRNNIyWhJZkMB8GA1UdIwQYMBaAFCCn6P2MRDGwNxF28eRNNIyWhJZk
+          MA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggGBAAVfevsYqpRtYFGA
+          8QgaBYgy6l4owCXyuvSflTXp/gPg4qR+/crBRtHw2cxaCp8nQUVo7T4S7D5SfXj7
+          Ezm8IJTCVB67EOFpV4+1Q1qohI6ZMIeySsI4b64WQSJOh3SRr+/o9wWSAbrXPyPm
+          /J7mGXhNQ8AfFBrwaVznkYnvNO0Yb7f/Gm7ESdwZJrThznjdCySA74hA0Bk3GZJU
+          a36HVVDIe+eb1q7JFbPYpDfpMzfotD0wB3cl7ufv5TXnFj7oN9jQfPDID7eJAuN2
+          8dj7AbKOlaUZAmCPmDfgv6vz7HHyao4KPSV1YwRZLZvitvwpPCwcykVEdeW3cB49
+          8eAIKtwsfG3WO32Itb0h5aVwhHh7htVEY2oWR6T34YvRXXB6jXRlsQQvRAmAP2jU
+          Q1V9fay+IydBKodLUt86npkG8R2cPl7Qg2prz9/ct1Q2q7YE1G4gLYGNQXf4l5V0
+          iSdGsMdNPcS37QTCqVmhVuvajbjIffUMIZXj2fp2C/Mdapdv2g==
+          -----END CERTIFICATE-----
+          CERT
+          openssl cms -encrypt -binary -aes-256-gcm -in tv/build/outputs/bundle/release/tv-release.aab -out tv-unsigned.aab.cms -outform DER "$RUNNER_TEMP/recipient.pem"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: encrypted-tv-bundle-handoff
+          path: tv-unsigned.aab.cms
+          if-no-files-found: error
+          retention-days: 1
