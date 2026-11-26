@@ -34,7 +34,7 @@ jobs:
         test -n "$CMDLINE"
         echo "$(dirname "$CMDLINE"):$SDK/platform-tools" >> "$GITHUB_PATH"
         yes | "$CMDLINE" --sdk_root="$SDK" --licenses >/dev/null || true
-        "$CMDLINE" --sdk_root="$SDK" --install "platforms;android-35" "build-tools;35.0.0"
+        "$CMDLINE" --sdk_root="$SDK" --install "platforms;android-35" "platforms;android-36" "build-tools;35.0.0"
 
     - uses: gradle/actions/setup-gradle@v4
 
@@ -67,7 +67,7 @@ jobs:
         test -n "$CMDLINE"
         echo "$(dirname "$CMDLINE"):$SDK/platform-tools" >> "$GITHUB_PATH"
         yes | "$CMDLINE" --sdk_root="$SDK" --licenses >/dev/null || true
-        "$CMDLINE" --sdk_root="$SDK" --install "platforms;android-35" "build-tools;35.0.0"
+        "$CMDLINE" --sdk_root="$SDK" --install "platforms;android-35" "platforms;android-36" "build-tools;35.0.0"
 
     - uses: gradle/actions/setup-gradle@v4
 
@@ -114,7 +114,7 @@ jobs:
         test -n "$CMDLINE"
         echo "$(dirname "$CMDLINE"):$SDK/platform-tools" >> "$GITHUB_PATH"
         yes | "$CMDLINE" --sdk_root="$SDK" --licenses >/dev/null || true
-        "$CMDLINE" --sdk_root="$SDK" --install "platforms;android-35" "build-tools;35.0.0"
+        "$CMDLINE" --sdk_root="$SDK" --install "platforms;android-35" "platforms;android-36" "build-tools;35.0.0"
 
     - uses: gradle/actions/setup-gradle@v4
 
