@@ -224,6 +224,16 @@ class PlayerController(
     private var rateAt = 0L
     private var networkKbps: Int? = null
     private var reconnectsThisChannel = 0
+    /** Live-TS: Verbindung bei Daten-Stillstand im laufenden Player ersetzen (Einstellung). */
+    private val stallReconnectOn = settings.stallReconnect
+    @Volatile private var stallReconnectLive = false
+    private val stallGuard = SupplyStallGuard()
+    /** Gesetzt direkt vor dem absichtlichen Abbruch; [ReconnectingDataSource] holt es ab. */
+    private val stallKick = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val seamlessCount = java.util.concurrent.atomic.AtomicInteger()
+    /** Grund der letzten Neuverbindung, für die Puffer-Diagnose. */
+    @Volatile private var lastFix: String? = null
+    private var readyOnce = false
     private val byteCounter = object : androidx.media3.datasource.TransferListener {
         override fun onTransferInitializing(source: DataSource, dataSpec: androidx.media3.datasource.DataSpec, isNetwork: Boolean) {}
         override fun onTransferStart(source: DataSource, dataSpec: androidx.media3.datasource.DataSpec, isNetwork: Boolean) {}
@@ -295,7 +305,21 @@ class PlayerController(
                 httpFactory,
                 enabled = { seamlessLive },
                 onReconnect = { bytes, millis ->
+                    seamlessCount.incrementAndGet()
+                    lastFix = "Anbieter-Ende → nahtlos"
                     diag.event("Anbieter beendete nach ${bytes / 1024} KB / ${millis / 1000} s, nahtlos neu verbunden")
+                },
+                stallEnabled = { stallReconnectLive },
+                takeStallKick = { stallKick.getAndSet(false) },
+                onStallReconnect = { attempts, ok ->
+                    if (ok) {
+                        seamlessCount.incrementAndGet()
+                        lastFix = "Stillstand → nahtlos" + if (attempts > 1) " ($attempts Versuche)" else ""
+                        diag.event("Daten-Stillstand: Verbindung nahtlos ersetzt ($attempts Versuch(e))")
+                    } else {
+                        lastFix = "Stillstand → Ersetzen fehlgeschlagen"
+                        diag.issue("Daten-Stillstand: neue Verbindung nach $attempts Versuchen abgelehnt")
+                    }
                 },
             )
         }
@@ -429,6 +453,12 @@ class PlayerController(
         eofPending = false
         val streamType = streamType(item.url)
         seamlessLive = live && settings.seamless && streamType == C.CONTENT_TYPE_OTHER
+        stallReconnectLive = live && stallReconnectOn && streamType == C.CONTENT_TYPE_OTHER
+        stallGuard.reset()
+        stallKick.set(false)
+        seamlessCount.set(0)
+        lastFix = null
+        readyOnce = false
         cushion.reset()
         flow.reset()
         reconnectsThisChannel = 0
@@ -1138,6 +1168,7 @@ class PlayerController(
         diag.event("Neuverbindung $reconnectAttempts, Puffer ${player.totalBufferedDuration / 1000} s, ${diag.lastIssue ?: "ohne Fehler"}")
         val live = liveEdge(current)
         reconnectsThisChannel++
+        lastFix = (diag.lastIssue ?: "Fehler") + " → Neustart"
         val limited = limitedAt != 0L && android.os.SystemClock.elapsedRealtime() - limitedAt < LIMIT_RECENT_MS
         val wait = ReconnectBackoff.waitMs(reconnectAttempts, live, limited)
         // Nach einem Fehler ist der Player schon gestoppt: hängende alte Verbindung sofort schließen,
@@ -1175,6 +1206,8 @@ class PlayerController(
     private fun reconnectNow() {
         if (released || inBackground || !settings.reconnect) return
         diag.event("Neustart bei Puffer ${player.totalBufferedDuration / 1000} s (Anbieter hat beendet)")
+        reconnectsThisChannel++
+        lastFix = "Anbieter-Ende → Neustart"
         bufferingWatchdog.reset()
         stopStream()
         player.seekToDefaultPosition()
@@ -1217,8 +1250,34 @@ class PlayerController(
             videoKbps = videoKbps,
             rebuffers = cushion.rebuffers,
             reconnects = reconnectsThisChannel,
+            seamless = seamlessCount.get(),
+            stallMs = stallGuard.stalledMs(now),
+            lastFix = lastFix,
         )
         _state.update { if (it.bufferDiag == line) it else it.copy(bufferDiag = line) }
+    }
+
+    /**
+     * Live-TS: Der Player will nachladen, aber seit [SupplyStallGuard.THRESHOLD_MS] kommt kein Byte. Dann die
+     * hängende Verbindung abbrechen; [ReconnectingDataSource] öffnet sofort eine neue, ohne Player-Neustart,
+     * der Puffer bleibt. Nicht beim Start (erst nach dem ersten Bild), nicht bei vollem Puffer (lädt dann nicht).
+     */
+    private fun checkSupplyStall() {
+        val now = SystemClock.elapsedRealtime()
+        val active = stallReconnectLive && readyOnce && !inBackground && player.playWhenReady &&
+            player.isLoading && player.playbackState != Player.STATE_IDLE
+        if (stallGuard.observe(now, active, bytesLoaded.get())) {
+            diag.issue("Kein Datenzulauf seit ${stallGuard.stalledMs(now) / 1000} s")
+            stallKick.set(true)
+            val closed = connections.closeAll()
+            if (closed == 0) {
+                stallKick.set(false)
+            } else {
+                diag.event("Daten-Stillstand ${stallGuard.stalledMs(now) / 1000} s bei Puffer ${player.totalBufferedDuration / 1000} s: Verbindung abgebrochen")
+            }
+        }
+        // Daten fließen wieder: eine nicht abgeholte Markierung darf keinen späteren Fehler verdecken.
+        if (stallGuard.kicks == 0) stallKick.set(false)
     }
 
     /** Player anhalten und offene Stream-Verbindungen sofort schließen (nicht erst nach dem Lese-Zeitlimit). */
@@ -1302,6 +1361,8 @@ class PlayerController(
                 }
                 refreshSignal()
                 adjustLiveSpeed(item)
+                if (player.playbackState == Player.STATE_READY) readyOnce = true
+                checkSupplyStall()
                 if (bufferDiagOn) refreshBufferDiag(item)
                 val now = System.currentTimeMillis()
                 val running = player.isPlaying && !inBackground

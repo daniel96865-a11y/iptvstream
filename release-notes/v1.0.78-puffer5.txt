@@ -1,0 +1,10 @@
+Testversion 1.0.78-puffer5 (Vorabversion, nur zum Testen)
+
+Basis 1.0.77, Start unverändert. Gegenüber puffer4:
+- Daten-Stillstand bei Live-TS: Hält der Anbieter die Verbindung offen, schickt aber nichts mehr, wurde bisher erst nach 15 s (Lese-Zeitlimit) bzw. 10 s Puffern neu verbunden – bis dahin lief der Puffer leer. Jetzt: Kommen etwa 3 s lang keine Daten, obwohl der Player nachladen will, wird die hängende Verbindung abgebrochen und sofort im laufenden Player durch eine neue ersetzt. Kein Player-Neustart, der Puffer bleibt erhalten; das Bild springt höchstens um die Sekunden, die der Anbieter nicht geliefert hat.
+- Die alte Verbindung wird vorher hart geschlossen (wegen HTTP 406). Meldet der Anbieter trotzdem „belegt“, wird 2 bzw. 3 s gewartet, höchstens 3 Versuche. Bleibt auch die neue Verbindung stumm, kommt der nächste Eingriff erst nach 6 bzw. 9 s, höchstens 3-mal ohne Daten dazwischen – danach greift die normale Wiederverbindung (keine Endlosschleife).
+- Bei vollem Puffer (Player lädt bewusst nicht) zählt Stille nicht als Stillstand. Nicht während des Starts (erst nach dem ersten Bild).
+- Abschaltbar: Einstellungen → Player → „Bei Datenstillstand neu verbinden“ (Standard an).
+- Puffer-Diagnose zusätzlich: „Stillstand x s“ (seit wann keine Daten), „nahtlos n×“ (Verbindung ohne Neustart ersetzt) und „zuletzt: …“ (Grund der letzten Neuverbindung). „neu“ zählt jetzt auch Neustarts nach Anbieter-Ende.
+
+versionCode 96.

@@ -18,4 +18,18 @@ class BufferDiagTest {
             BufferDiag.line("HLS", 0, null, 1f, null, null, null, null, 0, 0),
         )
     }
+
+    @Test fun showsStallAndReason() {
+        assertEquals(
+            "TS · Puffer 6,0 s · Tempo 97 % · Zulauf 0,00× · Wiedergabe 0,98× · Netz 0 kbit/s · leer 2× · neu 0× · nahtlos 1× · Stillstand 3,5 s · zuletzt: Stillstand → nahtlos",
+            BufferDiag.line("TS", 6_000, null, 0.97f, 0f, 0.98f, 0, null, 2, 0, 1, 3_500, "Stillstand → nahtlos"),
+        )
+    }
+
+    @Test fun shortSilenceIsHidden() {
+        assertEquals(
+            "TS · Puffer 6,0 s · Tempo 100 % · Zulauf … · Wiedergabe … · Netz … · leer 0× · neu 0×",
+            BufferDiag.line("TS", 6_000, null, 1f, null, null, null, null, 0, 0, 0, 900, null),
+        )
+    }
 }
