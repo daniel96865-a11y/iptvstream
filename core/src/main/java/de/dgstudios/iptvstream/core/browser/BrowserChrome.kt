@@ -40,6 +40,10 @@ class BrowserChrome(private val ctx: Context, val tv: Boolean) {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         setBackgroundColor(BAR)
+        // Schwarz-Weiß: auch Symbole/Emoji der Leiste grau (die Webseite darunter bleibt unverändert).
+        if (mono) setLayerType(android.view.View.LAYER_TYPE_HARDWARE, android.graphics.Paint().apply {
+            colorFilter = android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix().apply { setSaturation(0f) })
+        })
         // Handy: kompakt wie Chrome, eine Zeile ~52 dp (40-dp-Knöpfe + 6 dp oben/unten).
         if (tv) setPadding(dp(8), dp(6), dp(8), dp(6)) else setPadding(dp(4), dp(6), dp(4), dp(6))
     }
@@ -257,11 +261,13 @@ class BrowserChrome(private val ctx: Context, val tv: Boolean) {
     }
 
     companion object {
-        const val BG = 0xFF0B1020.toInt()
-        const val BAR = 0xFF111827.toInt()
-        const val FIELD = 0xFF1F2937.toInt()
-        const val FIELD_FOCUS = 0xFF334155.toInt()
-        const val ACCENT = 0xFF14B8A6.toInt()
+        /** Schwarz-Weiß-Oberfläche (Einstellung „Schwarz-Weiß“); die Webseite selbst bleibt unverändert. */
+        @Volatile var mono = false
+        val BG get() = if (mono) 0xFF000000.toInt() else 0xFF0B1020.toInt()
+        val BAR get() = if (mono) 0xFF141414.toInt() else 0xFF111827.toInt()
+        val FIELD get() = if (mono) 0xFF262626.toInt() else 0xFF1F2937.toInt()
+        val FIELD_FOCUS get() = if (mono) 0xFF3D3D3D.toInt() else 0xFF334155.toInt()
+        val ACCENT get() = if (mono) 0xFF7A7A7A.toInt() else 0xFF14B8A6.toInt()
     }
 }
 
@@ -272,7 +278,7 @@ class CursorView(ctx: Context) : View(ctx) {
     private val d = resources.displayMetrics.density
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; style = Paint.Style.FILL }
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; style = Paint.Style.STROKE; strokeWidth = 2f * d }
-    private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x8814B8A6.toInt(); style = Paint.Style.FILL }
+    private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = (BrowserChrome.ACCENT and 0x00FFFFFF) or 0x88000000.toInt(); style = Paint.Style.FILL }
     private var pressed = false
 
     init {

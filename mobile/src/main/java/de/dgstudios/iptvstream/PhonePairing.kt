@@ -1,5 +1,6 @@
 package de.dgstudios.iptvstream
 
+import de.dgstudios.iptvstream.core.ui.MonoWindow
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
@@ -110,7 +111,7 @@ fun SendToTvDialog(profile: ProfileEntity, onDismiss: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
-        title = { Text(if (done) "Gesendet" else "An TV senden") },
+        title = { MonoWindow(); Text(if (done) "Gesendet" else "An TV senden") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (done) {

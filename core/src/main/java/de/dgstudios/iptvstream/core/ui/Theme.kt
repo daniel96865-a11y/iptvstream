@@ -69,6 +69,8 @@ data class AppStyle(
     val accentEnd: Color = accent,
     /** Zweiter Farbfleck im Hintergrund. */
     val glow2: Color = accent,
+    /** Schwarz-Weiß: nur Schwarz, Weiß und Grau; reiner schwarzer Hintergrund ohne Farbflecken. */
+    val mono: Boolean = false,
 ) {
     val gradient: Boolean get() = accentEnd != accent
     /** Verlauf für Flächen mit weißer Schrift (Chips, Leisten-Kapsel): dunkleres Cyan für Kontrast. */
@@ -97,6 +99,11 @@ fun AppTheme(settings: AppSettings, isTv: Boolean, content: @Composable () -> Un
         "system" -> isSystemInDarkTheme()
         else -> true
     }
+    val (style, scheme) = if (settings.mono) monoTheme(isTv, settings) else colorTheme(settings, isTv, dark)
+    ThemeContent(style, scheme, content)
+}
+
+private fun colorTheme(settings: AppSettings, isTv: Boolean, dark: Boolean): Pair<AppStyle, androidx.compose.material3.ColorScheme> {
     val preset = Palette.colorThemes[settings.colorTheme]
     val accentIndex = preset?.accent ?: settings.accent.coerceIn(0, Palette.accents.lastIndex)
     val bgIndex = preset?.background ?: settings.background.coerceIn(0, Palette.darkBackgrounds.lastIndex)
@@ -124,10 +131,142 @@ fun AppTheme(settings: AppSettings, isTv: Boolean, content: @Composable () -> Un
             surfaceVariant = bg[2], onSurfaceVariant = Color(0xB30D1220),
         )
     }
+    return style to scheme
+}
+
+/**
+ * Gemeinsamer Rahmen für normal und Schwarz-Weiß: gleicher Aufbau, damit beim Umschalten der Inhalt
+ * (Navigation, Listenposition) erhalten bleibt und nur die Farben wechseln.
+ */
+@Composable
+private fun ThemeContent(style: AppStyle, scheme: androidx.compose.material3.ColorScheme, content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalAppStyle provides style) {
-        MaterialTheme(colorScheme = scheme, content = content)
+        MaterialTheme(colorScheme = scheme) {
+            if (style.mono) {
+                MonoWindow()
+                MonoSystemBars()
+            }
+            content()
+        }
     }
 }
+
+/** Schwarz-Weiß: Akzent ist ein mittleres Grau (weiße Schrift darauf und Grau auf Schwarz bleiben lesbar). */
+object Mono {
+    val accent = Color(0xFF7A7A7A)
+    val light = Color(0xFFD6D6D6)
+    val mid = Color(0xFF9E9E9E)
+    val dark = Color(0xFF2A2A2A)
+    val darker = Color(0xFF141414)
+
+    /** Sättigung 0, Helligkeit bleibt. */
+    val greyFilter: android.graphics.ColorMatrixColorFilter
+        get() = android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix().apply { setSaturation(0f) })
+}
+
+private fun monoTheme(isTv: Boolean, settings: AppSettings): Pair<AppStyle, androidx.compose.material3.ColorScheme> {
+    val black = Color.Black
+    val style = AppStyle(
+        Mono.accent, listOf(black, black, black), settings.glass.coerceIn(1, 3), settings.animations,
+        dark = true, isTv = isTv, mono = true,
+    )
+    // Alle Rollen ausdrücklich grau: Material3 setzt sonst für nicht genannte Rollen lila/rosa Standardtöne
+    // (Schalter, Chips, Dialoge, Fehler).
+    val scheme = darkColorScheme(
+        primary = Mono.accent, onPrimary = Color.White,
+        primaryContainer = Mono.dark, onPrimaryContainer = Color.White,
+        inversePrimary = Mono.dark,
+        secondary = Mono.mid, onSecondary = black,
+        secondaryContainer = Mono.dark, onSecondaryContainer = Color.White,
+        tertiary = Mono.mid, onTertiary = black,
+        tertiaryContainer = Mono.dark, onTertiaryContainer = Color.White,
+        background = black, onBackground = Color.White,
+        surface = black, onSurface = Color.White,
+        surfaceVariant = Mono.dark, onSurfaceVariant = Color(0xB3FFFFFF),
+        surfaceTint = Color.White,
+        inverseSurface = Mono.light, inverseOnSurface = black,
+        error = Mono.light, onError = black,
+        errorContainer = Mono.dark, onErrorContainer = Color.White,
+        outline = Mono.mid, outlineVariant = Mono.dark,
+        scrim = black,
+        surfaceBright = Mono.dark, surfaceDim = black,
+        surfaceContainer = Mono.darker, surfaceContainerHigh = Color(0xFF1E1E1E),
+        surfaceContainerHighest = Mono.dark, surfaceContainerLow = Color(0xFF0E0E0E),
+        surfaceContainerLowest = black,
+    )
+    return style to scheme
+}
+
+/**
+ * Schwarz-Weiß: Status- und Navigationsleiste schwarz mit hellen Symbolen, ohne helle System-Abdunklung
+ * (enableEdgeToEdge folgt sonst dem hellen Systemmodus). Beim Abschalten wieder wie vorher.
+ */
+@Composable
+private fun MonoSystemBars() {
+    val view = androidx.compose.ui.platform.LocalView.current
+    androidx.compose.runtime.DisposableEffect(view) {
+        var ctx = view.context
+        while (ctx is android.content.ContextWrapper && ctx !is android.app.Activity) ctx = ctx.baseContext
+        val window = (ctx as? android.app.Activity)?.window
+        if (window == null || view.isInEditMode) return@DisposableEffect onDispose {}
+        val ctl = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+        val lightStatus = ctl.isAppearanceLightStatusBars
+        val lightNav = ctl.isAppearanceLightNavigationBars
+        @Suppress("DEPRECATION") val navColor = window.navigationBarColor
+        @Suppress("DEPRECATION") val statusColor = window.statusBarColor
+        val contrast = if (android.os.Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced else false
+        ctl.isAppearanceLightStatusBars = false
+        ctl.isAppearanceLightNavigationBars = false
+        @Suppress("DEPRECATION") run {
+            window.statusBarColor = android.graphics.Color.TRANSPARENT
+            window.navigationBarColor = android.graphics.Color.BLACK
+        }
+        if (android.os.Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced = false
+        onDispose {
+            ctl.isAppearanceLightStatusBars = lightStatus
+            ctl.isAppearanceLightNavigationBars = lightNav
+            @Suppress("DEPRECATION") run {
+                window.statusBarColor = statusColor
+                window.navigationBarColor = navColor
+            }
+            if (android.os.Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced = contrast
+        }
+    }
+}
+
+/**
+ * Schwarz-Weiß: das ganze Fenster, in dem diese Stelle gezeichnet wird, über eine Ebene mit Sättigung 0
+ * zusammensetzen. Erfasst auch Senderlogos, Poster und fest eingebaute Farben. Das Videobild (SurfaceView)
+ * hat eine eigene Fläche und bleibt farbig. Dialoge und Menüs sind eigene Fenster: dort ebenfalls aufrufen.
+ */
+@Composable
+fun MonoWindow() {
+    val mono = LocalAppStyle.current.mono
+    val view = androidx.compose.ui.platform.LocalView.current
+    androidx.compose.runtime.DisposableEffect(view, mono) {
+        if (mono) {
+            val n = (monoUsers[view] ?: 0) + 1
+            monoUsers[view] = n
+            if (n == 1) {
+                view.setLayerType(android.view.View.LAYER_TYPE_HARDWARE, android.graphics.Paint().apply { colorFilter = Mono.greyFilter })
+            }
+        }
+        onDispose {
+            if (mono) {
+                // Gezählt: Liegt die Stelle doch im selben Fenster wie eine andere, bleibt der Filter.
+                val n = (monoUsers[view] ?: 1) - 1
+                if (n <= 0) {
+                    monoUsers.remove(view)
+                    view.setLayerType(android.view.View.LAYER_TYPE_NONE, null)
+                } else {
+                    monoUsers[view] = n
+                }
+            }
+        }
+    }
+}
+
+private val monoUsers = java.util.WeakHashMap<android.view.View, Int>()
 
 /** Vollflächiger Hintergrund mit Verlauf und weichen Farbflecken. */
 @Composable
@@ -138,6 +277,7 @@ fun AppBackground(modifier: Modifier = Modifier, content: @Composable () -> Unit
             .fillMaxSize()
             .background(Brush.verticalGradient(style.backgroundColors))
             .drawBehind {
+                if (style.mono) return@drawBehind
                 val a = if (style.dark) 0.22f else 0.16f
                 drawCircle(
                     brush = Brush.radialGradient(

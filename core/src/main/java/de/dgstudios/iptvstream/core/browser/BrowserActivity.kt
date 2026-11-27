@@ -1,5 +1,6 @@
 package de.dgstudios.iptvstream.core.browser
 
+import de.dgstudios.iptvstream.core.container
 import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.content.Context
@@ -70,6 +71,9 @@ class BrowserActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         tv = intent.getBooleanExtra(EXTRA_TV, false)
         prefs = BrowserPrefs(this)
+        BrowserChrome.mono = runCatching {
+            kotlinx.coroutines.runBlocking { applicationContext.container.settings.current().mono }
+        }.getOrDefault(true)
         ui = BrowserChrome(this, tv)
         // Randlos (Android 15 erzwingt das ohnehin); die Leisten-Abstände setzt BrowserChrome.applyInsets.
         WindowCompat.setDecorFitsSystemWindows(window, false)

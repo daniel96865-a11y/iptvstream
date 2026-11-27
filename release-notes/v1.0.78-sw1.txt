@@ -1,0 +1,10 @@
+Testversion 1.0.78-sw1 (Vorabversion, nur zum Testen): Schwarz-Weiß
+
+Basis 1.0.78-puffer8 (Puffer-Verbesserungen bleiben enthalten).
+- Neu: Einstellungen → Design → „Schwarz-Weiß“ (Standard: an). Die ganze Oberfläche nur in Schwarz, Weiß und Grau: echter schwarzer Hintergrund, weiße Schrift, graue Akzente, Fokusrahmen am Fernseher, Schalter, Regler, Fortschrittsbalken, Markierungen, Dialoge und Menüs.
+- Senderlogos, Poster und Bilder werden grau dargestellt. Das Videobild bleibt farbig.
+- Auch die Leisten des eingebauten Browsers sind grau; die Webseiten selbst bleiben unverändert.
+- „Schwarz-Weiß“ aus = bisheriges Design; Farbthema, Akzentfarbe und Hintergrund gelten dann wieder.
+- App-Symbol, Fernseher-Banner und Widget-Hintergrund sind fest schwarz-weiß (folgen dem Schalter nicht).
+
+versionCode 100.

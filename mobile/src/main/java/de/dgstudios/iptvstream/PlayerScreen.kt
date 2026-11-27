@@ -1,5 +1,6 @@
 package de.dgstudios.iptvstream
 
+import de.dgstudios.iptvstream.core.ui.MonoWindow
 import de.dgstudios.iptvstream.core.ui.AccentBar
 import android.app.Activity
 import android.content.Context
@@ -665,6 +666,7 @@ private fun PlayerContent(
             sheetState = sheetState,
             containerColor = s.backgroundColors[1],
         ) {
+            MonoWindow()
             Column(
                 Modifier
                     .fillMaxWidth()
@@ -771,6 +773,7 @@ private fun CastPickerDialog(
 ) {
     val s = LocalAppStyle.current
     Dialog(onDismissRequest = onDismiss) {
+        MonoWindow()
         Column(
             Modifier
                 .fillMaxWidth()
@@ -881,6 +884,7 @@ private fun ArchiveDialog(vm: PlayerViewModel, channel: String, onDismiss: () ->
     }
     val now = System.currentTimeMillis()
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        MonoWindow()
         Box(Modifier.fillMaxSize()) {
             Box(
                 Modifier

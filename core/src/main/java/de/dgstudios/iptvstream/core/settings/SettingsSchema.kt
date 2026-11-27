@@ -48,6 +48,10 @@ object SettingsSchema {
             "design", "Design",
             listOf(
                 ChoiceDef(
+                    "mono", "Schwarz-Weiß", onOff, "on",
+                    "Die ganze Oberfläche nur in Schwarz, Weiß und Grau (auch Senderlogos und Bilder). Das Videobild bleibt farbig. Aus = Farbthema, Akzentfarbe und Hintergrund unten gelten wieder.",
+                ),
+                ChoiceDef(
                     "color_theme", "Farbthema",
                     listOf(
                         Option("glas", "Glas & Verlauf"),

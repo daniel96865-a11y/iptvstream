@@ -1,5 +1,6 @@
 package de.dgstudios.iptvstream.tv
 
+import de.dgstudios.iptvstream.core.ui.MonoWindow
 import de.dgstudios.iptvstream.core.ui.scrollToItemSafe
 
 import de.dgstudios.iptvstream.core.ui.AccentBar
@@ -421,6 +422,7 @@ fun TvActionDialog(title: String, actions: List<TvAction>, onDismiss: () -> Unit
     val s = LocalAppStyle.current
     val first = remember { FocusRequester() }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        MonoWindow()
         Column(
             Modifier
                 .width(520.dp)
@@ -478,6 +480,7 @@ fun TvTextInputDialog(
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val shape = RoundedCornerShape(14.dp)
     Dialog(onDismissRequest = onCancel, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        MonoWindow()
         Column(
             Modifier
                 .width(640.dp)

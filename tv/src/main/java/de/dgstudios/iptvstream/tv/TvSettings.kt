@@ -1,5 +1,6 @@
 package de.dgstudios.iptvstream.tv
 
+import de.dgstudios.iptvstream.core.ui.MonoWindow
 import de.dgstudios.iptvstream.core.ui.AccentBar
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -453,6 +454,7 @@ private fun TvFreeLanguagesDialog(form: ProfileFormState, onClose: () -> Unit) {
         onDismissRequest = onClose,
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
     ) {
+        MonoWindow()
         Column(
             Modifier
                 .width(620.dp)

@@ -1,5 +1,6 @@
 package de.dgstudios.iptvstream.core.update
 
+import de.dgstudios.iptvstream.core.ui.MonoWindow
 import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
@@ -107,6 +108,7 @@ fun WhatsNewHost(show: Boolean, television: Boolean) {
         onDismissRequest = { close() },
         properties = DialogProperties(dismissOnClickOutside = false, usePlatformDefaultWidth = false),
     ) {
+        MonoWindow()
         Column(
             Modifier
                 .widthIn(max = if (television) 640.dp else 440.dp)

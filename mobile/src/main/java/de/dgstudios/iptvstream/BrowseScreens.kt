@@ -1,5 +1,6 @@
 package de.dgstudios.iptvstream
 
+import de.dgstudios.iptvstream.core.ui.MonoWindow
 import de.dgstudios.iptvstream.core.ui.scrollToItemSafe
 import de.dgstudios.iptvstream.core.ui.clampIndex
 
@@ -335,6 +336,7 @@ private fun CategoryDrawer(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = true),
     ) {
+        MonoWindow()
         Box(Modifier.fillMaxSize()) {
             Box(
                 Modifier
@@ -805,7 +807,7 @@ fun LiveScreen(
     if (showSortHelp) {
         AlertDialog(
             onDismissRequest = { showSortHelp = false },
-            title = { Text("Sortieren") },
+            title = { MonoWindow(); Text("Sortieren") },
             text = { Text("Halte einen Sender oder eine Kategorie gedrückt und schiebe ihn an den neuen Platz. Loslassen speichert sofort. Wenn du ohne Schieben loslässt, erscheint ein kleines Menü.") },
             confirmButton = { TextButton(onClick = { showSortHelp = false }) { Text("OK") } },
         )
@@ -813,7 +815,7 @@ fun LiveScreen(
     if (showHiddenChannels) {
         AlertDialog(
             onDismissRequest = { showHiddenChannels = false },
-            title = { Text("Ausgeblendete Sender") },
+            title = { MonoWindow(); Text("Ausgeblendete Sender") },
             text = {
                 Column {
                     hiddenChannels.forEach { ch ->

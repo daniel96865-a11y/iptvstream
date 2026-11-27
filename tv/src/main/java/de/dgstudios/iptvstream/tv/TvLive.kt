@@ -2,6 +2,7 @@
 
 package de.dgstudios.iptvstream.tv
 
+import de.dgstudios.iptvstream.core.ui.MonoWindow
 import de.dgstudios.iptvstream.core.ui.scrollToItemSafe
 
 
@@ -230,6 +231,7 @@ fun TvCategoryDrawer(
     val listBottom = maxOf(drawerSystemBottom(), outerBottom) + 48.dp
     val safe = tvSafe
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        MonoWindow()
         Row(Modifier.fillMaxSize()) {
             Column(
                 Modifier

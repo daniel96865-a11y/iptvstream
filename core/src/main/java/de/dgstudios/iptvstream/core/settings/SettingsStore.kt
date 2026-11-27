@@ -26,6 +26,8 @@ data class AppSettings(val raw: Map<String, String> = emptyMap()) {
     val glass: Int get() = int("glass", 2)
     val animations: Boolean get() = on("animations")
     val theme: String get() = get("theme")
+    /** Schwarz-Weiß-Oberfläche (Test). */
+    val mono: Boolean get() = on("mono")
     val clockOn: Boolean get() = on("clock")
     val clockPos: String get() = get("clock_pos")
     val clockAlpha: Float get() = int("clock_alpha", 70) / 100f

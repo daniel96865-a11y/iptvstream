@@ -1,5 +1,6 @@
 package de.dgstudios.iptvstream
 
+import de.dgstudios.iptvstream.core.ui.MonoWindow
 import de.dgstudios.iptvstream.core.ui.AccentBar
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
@@ -274,6 +275,7 @@ internal fun SettingRow(
                         Text(def.labelOf(value), color = s.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     }
                     DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                        MonoWindow()
                         for (o in def.options) {
                             DropdownMenuItem(
                                 text = { Text(o.label) },
@@ -426,7 +428,7 @@ fun ProfilesScreen(mainVm: MainViewModel, onBack: () -> Unit, onEdit: (Long) -> 
     if (del != null) {
         AlertDialog(
             onDismissRequest = { toDelete = null },
-            title = { Text("Profil löschen?") },
+            title = { MonoWindow(); Text("Profil löschen?") },
             text = { Text("„${del.name}“ und alle zwischengespeicherten Daten, Favoriten und Fortschritte dieses Profils werden entfernt.") },
             confirmButton = {
                 TextButton(onClick = {
@@ -598,7 +600,7 @@ private fun FreeLanguagesDialog(form: ProfileFormState, onClose: () -> Unit) {
     val selected = form.freeLanguages
     AlertDialog(
         onDismissRequest = onClose,
-        title = { Text("Sprachen (${selected.size} gewählt)") },
+        title = { MonoWindow(); Text("Sprachen (${selected.size} gewählt)") },
         text = {
             Column {
                 GlassTextField(query, { query = it }, "Suchen")
