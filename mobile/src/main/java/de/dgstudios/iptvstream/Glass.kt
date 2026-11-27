@@ -1,5 +1,6 @@
 package de.dgstudios.iptvstream
 
+import de.dgstudios.iptvstream.core.ui.ui
 import de.dgstudios.iptvstream.core.ui.AccentBar
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -53,7 +54,11 @@ val GlassLavender = Color(0xFFDCD6FF)
 
 /** Glasfarbe passend zum Thema. */
 val glassTint: Color
-    @Composable get() = if (LocalAppStyle.current.gradient) GlassLavender else GlassBlue
+    @Composable get() = when {
+        LocalAppStyle.current.mono -> Color(0xFFD0D0D0)
+        LocalAppStyle.current.gradient -> GlassLavender
+        else -> GlassBlue
+    }
 
 /** Glas-Optik: halbtransparente Fläche mit hellem Rand und Verlauf. */
 @Composable
@@ -197,7 +202,7 @@ fun SyncBanner(sync: SyncState, epg: EpgState, onRetry: () -> Unit) {
             )
         } else if (sync.error != null) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(sync.error!!, color = Color(0xFFFF8A8A), fontSize = 13.sp, modifier = Modifier.weight(1f))
+                Text(sync.error!!, color = Color(0xFFFF8A8A).ui, fontSize = 13.sp, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(8.dp))
                 Text(
                     "Erneut",
@@ -227,7 +232,7 @@ fun SyncBanner(sync: SyncState, epg: EpgState, onRetry: () -> Unit) {
             }
         } else if (epg.error != null) {
             if (showSync) Spacer(Modifier.height(6.dp))
-            Text(epg.error!!, color = Color(0xFFFFB27A), fontSize = 12.sp)
+            Text(epg.error!!, color = Color(0xFFFFB27A).ui, fontSize = 12.sp)
         }
     }
 }
@@ -243,7 +248,7 @@ fun StarBadge(modifier: Modifier = Modifier) {
         Icon(
             Icons.Rounded.Star,
             contentDescription = "Favorit",
-            tint = Color(0xFFFFC857),
+            tint = Color(0xFFFFC857).ui,
             modifier = Modifier.width(14.dp).height(14.dp).popIn(),
         )
     }

@@ -1,6 +1,6 @@
 package de.dgstudios.iptvstream.tv
 
-import de.dgstudios.iptvstream.core.ui.MonoWindow
+import de.dgstudios.iptvstream.core.ui.ui
 import de.dgstudios.iptvstream.core.ui.AccentBar
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -382,7 +382,7 @@ fun TvProfileForm(mainVm: MainViewModel, profileId: Long, first: Boolean, onDone
             TvField("EPG-URL (XMLTV, optional)", form.epgUrl, { form.epgUrl = it })
         }
         val err = form.error
-        if (err != null) Text(err, color = Color(0xFFFF8A8A), fontSize = 17.sp)
+        if (err != null) Text(err, color = Color(0xFFFF8A8A).ui, fontSize = 17.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             TvButton(
                 text = when {
@@ -439,7 +439,7 @@ internal fun TvFreeSenders(form: ProfileFormState) {
         )
     }
     if (selected.isEmpty()) {
-        Text("Bitte mindestens eine Sprache wählen.", color = Color(0xFFFF8A8A), fontSize = 16.sp)
+        Text("Bitte mindestens eine Sprache wählen.", color = Color(0xFFFF8A8A).ui, fontSize = 16.sp)
     }
     if (showAll) TvFreeLanguagesDialog(form, onClose = { showAll = false })
 }
@@ -454,7 +454,6 @@ private fun TvFreeLanguagesDialog(form: ProfileFormState, onClose: () -> Unit) {
         onDismissRequest = onClose,
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        MonoWindow()
         Column(
             Modifier
                 .width(620.dp)

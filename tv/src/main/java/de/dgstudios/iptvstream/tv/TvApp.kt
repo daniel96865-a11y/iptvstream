@@ -1,5 +1,6 @@
 package de.dgstudios.iptvstream.tv
 
+import de.dgstudios.iptvstream.core.ui.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -101,7 +102,7 @@ fun TvApp(mainVm: MainViewModel = viewModel()) {
     val active by mainVm.active.collectAsStateWithLifecycle()
     val s = settings
     if (s == null || !active.loaded) {
-        Box(Modifier.fillMaxSize().background(Color(0xFF05070F)))
+        Box(Modifier.fillMaxSize().background(Color(0xFF05070F).ui))
         return
     }
 
@@ -386,7 +387,7 @@ internal fun BrowserButton(compact: Boolean = false, onClick: () -> Unit) {
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier
-                .background(Color(0xFF14B8A6), RoundedCornerShape(8.dp))
+                .background(Color(0xFF14B8A6).ui, RoundedCornerShape(8.dp))
                 .padding(horizontal = 5.dp, vertical = 1.dp),
         )
     }

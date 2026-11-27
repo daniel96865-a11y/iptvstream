@@ -1,5 +1,6 @@
 package de.dgstudios.iptvstream.tv
 
+import de.dgstudios.iptvstream.core.ui.ui
 import androidx.compose.foundation.border
 import de.dgstudios.iptvstream.core.ui.AccentBar
 import android.view.KeyEvent as AKey
@@ -384,7 +385,7 @@ private fun TvPlayerContent(vm: PlayerViewModel, ctrl: PlayerController, ui: Pla
                 Modifier
                     .align(Alignment.Center)
                     .width(620.dp)
-                    .background(Color(0xE6101420), RoundedCornerShape(22.dp))
+                    .background(Color(0xE6101420).ui, RoundedCornerShape(22.dp))
                     .padding(28.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
@@ -404,7 +405,7 @@ private fun TvPlayerContent(vm: PlayerViewModel, ctrl: PlayerController, ui: Pla
                 Modifier
                     .align(Alignment.BottomEnd)
                     .padding(end = tvSafe.horizontal, bottom = maxOf(tvSafe.vertical, 40.dp))
-                    .background(Color(0xE6101420), RoundedCornerShape(20.dp))
+                    .background(Color(0xE6101420).ui, RoundedCornerShape(20.dp))
                     .padding(20.dp),
             ) {
                 Text("Nächste Episode in ${ui.nextOfferSeconds} s", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
@@ -449,8 +450,8 @@ private fun ControlsBar(
         Column(
             Modifier
                 .fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(Color(0xD91A1733), Color(0xE60E1424))), panel)
-                .border(1.dp, Brush.linearGradient(listOf(Color(0x66DCD6FF), Color(0x14DCD6FF))), panel)
+                .background(Brush.verticalGradient(listOf(Color(0xD91A1733).ui, Color(0xE60E1424).ui)), panel)
+                .border(1.dp, Brush.linearGradient(listOf(Color(0x66DCD6FF).ui, Color(0x14DCD6FF).ui)), panel)
                 .padding(horizontal = 32.dp, vertical = 24.dp),
         ) {
             if (isLive && !ui.catchingUp) {
@@ -672,7 +673,7 @@ private fun SettingsPanel(
             .padding(end = tvSafe.horizontal, top = tvSafe.vertical, bottom = tvSafe.vertical)
             .width(460.dp)
             .fillMaxHeight()
-            .background(Color(0xEE0E1322), RoundedCornerShape(22.dp))
+            .background(Color(0xEE0E1322).ui, RoundedCornerShape(22.dp))
             .padding(18.dp),
     ) {
         Text("Einstellungen", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)

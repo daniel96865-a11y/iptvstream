@@ -1,6 +1,6 @@
 package de.dgstudios.iptvstream.tv
 
-import de.dgstudios.iptvstream.core.ui.MonoWindow
+import de.dgstudios.iptvstream.core.ui.ui
 import de.dgstudios.iptvstream.core.ui.scrollToItemSafe
 
 import de.dgstudios.iptvstream.core.ui.AccentBar
@@ -288,7 +288,7 @@ fun TvStatusLine(sync: SyncState, epg: EpgState) {
         }
         sync.error != null -> {
             text = sync.error!!
-            color = Color(0xFFFF8A8A)
+            color = Color(0xFFFF8A8A).ui
         }
         epg.running -> {
             text = epg.message
@@ -297,7 +297,7 @@ fun TvStatusLine(sync: SyncState, epg: EpgState) {
         }
         epg.error != null -> {
             text = epg.error!!
-            color = Color(0xFFFFB27A)
+            color = Color(0xFFFFB27A).ui
         }
         else -> return
     }
@@ -422,7 +422,6 @@ fun TvActionDialog(title: String, actions: List<TvAction>, onDismiss: () -> Unit
     val s = LocalAppStyle.current
     val first = remember { FocusRequester() }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        MonoWindow()
         Column(
             Modifier
                 .width(520.dp)
@@ -480,7 +479,6 @@ fun TvTextInputDialog(
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val shape = RoundedCornerShape(14.dp)
     Dialog(onDismissRequest = onCancel, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        MonoWindow()
         Column(
             Modifier
                 .width(640.dp)

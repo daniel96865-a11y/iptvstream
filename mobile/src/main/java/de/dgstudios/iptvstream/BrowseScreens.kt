@@ -1,6 +1,6 @@
 package de.dgstudios.iptvstream
 
-import de.dgstudios.iptvstream.core.ui.MonoWindow
+import de.dgstudios.iptvstream.core.ui.ui
 import de.dgstudios.iptvstream.core.ui.scrollToItemSafe
 import de.dgstudios.iptvstream.core.ui.clampIndex
 
@@ -336,7 +336,6 @@ private fun CategoryDrawer(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = true),
     ) {
-        MonoWindow()
         Box(Modifier.fillMaxSize()) {
             Box(
                 Modifier
@@ -807,7 +806,7 @@ fun LiveScreen(
     if (showSortHelp) {
         AlertDialog(
             onDismissRequest = { showSortHelp = false },
-            title = { MonoWindow(); Text("Sortieren") },
+            title = { Text("Sortieren") },
             text = { Text("Halte einen Sender oder eine Kategorie gedrückt und schiebe ihn an den neuen Platz. Loslassen speichert sofort. Wenn du ohne Schieben loslässt, erscheint ein kleines Menü.") },
             confirmButton = { TextButton(onClick = { showSortHelp = false }) { Text("OK") } },
         )
@@ -815,7 +814,7 @@ fun LiveScreen(
     if (showHiddenChannels) {
         AlertDialog(
             onDismissRequest = { showHiddenChannels = false },
-            title = { MonoWindow(); Text("Ausgeblendete Sender") },
+            title = { Text("Ausgeblendete Sender") },
             text = {
                 Column {
                     hiddenChannels.forEach { ch ->
@@ -918,7 +917,7 @@ internal fun ChannelRow(
                 Icon(
                     if (fav) Icons.Rounded.Star else Icons.Rounded.StarBorder,
                     contentDescription = "Favorit",
-                    tint = if (fav) Color(0xFFFFC857) else s.onSurfaceDim,
+                    tint = if (fav) Color(0xFFFFC857).ui else s.onSurfaceDim,
                     modifier = if (fav) Modifier.popIn() else Modifier,
                 )
             }

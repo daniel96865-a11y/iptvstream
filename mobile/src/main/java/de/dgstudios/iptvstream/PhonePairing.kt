@@ -1,6 +1,6 @@
 package de.dgstudios.iptvstream
 
-import de.dgstudios.iptvstream.core.ui.MonoWindow
+import de.dgstudios.iptvstream.core.ui.ui
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
@@ -111,7 +111,7 @@ fun SendToTvDialog(profile: ProfileEntity, onDismiss: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
-        title = { MonoWindow(); Text(if (done) "Gesendet" else "An TV senden") },
+        title = { Text(if (done) "Gesendet" else "An TV senden") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (done) {
@@ -129,7 +129,7 @@ fun SendToTvDialog(profile: ProfileEntity, onDismiss: () -> Unit) {
                         if (edit.focus != index) jump = FieldJump(edit.focus, jump.seq + 1)
                     }
                     val err = error
-                    if (err != null) Text(err, color = Color(0xFFFF6B6B))
+                    if (err != null) Text(err, color = Color(0xFFFF6B6B).ui)
                     if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 }
             }
@@ -278,7 +278,7 @@ fun SendToTvScreen(mainVm: MainViewModel, onDone: () -> Unit) {
             GlassTextField(form.epgUrl, { form.epgUrl = it }, "EPG-URL (optional)", imeAction = ImeAction.Done)
         }
         val err = error
-        if (err != null) Text(err, color = Color(0xFFFF8A8A), fontSize = 14.sp)
+        if (err != null) Text(err, color = Color(0xFFFF8A8A).ui, fontSize = 14.sp)
         PrimaryButton(
             text = if (busy) "Sende …" else "An den Fernseher senden",
             onClick = { if (!busy && form.valid) send(form.toEntity()) },

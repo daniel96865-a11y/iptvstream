@@ -1,6 +1,6 @@
 package de.dgstudios.iptvstream
 
-import de.dgstudios.iptvstream.core.ui.MonoWindow
+import de.dgstudios.iptvstream.core.ui.ui
 import de.dgstudios.iptvstream.core.ui.AccentBar
 import android.app.Activity
 import android.content.Context
@@ -449,7 +449,7 @@ private fun PlayerContent(
                                         if (ui.isFavorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
                                         "Favorit",
                                         { vm.toggleFavorite() },
-                                        tint = if (ui.isFavorite) Color(0xFFFFC857) else null,
+                                        tint = if (ui.isFavorite) Color(0xFFFFC857).ui else null,
                                     )
                                     Spacer(Modifier.width(8.dp))
                                 }
@@ -466,7 +466,7 @@ private fun PlayerContent(
                                         if (castUi.casting) Icons.Rounded.CastConnected else Icons.Rounded.Cast,
                                         if (castUi.casting) "Übertragung beenden" else "Auf Fernseher übertragen",
                                         { castPicker = true },
-                                        tint = if (castUi.casting) Color(0xFFFFC857) else null,
+                                        tint = if (castUi.casting) Color(0xFFFFC857).ui else null,
                                     )
                                     Spacer(Modifier.width(8.dp))
                                 }
@@ -490,7 +490,7 @@ private fun PlayerContent(
                                 Spacer(Modifier.height(8.dp))
                                 Text(
                                     castError,
-                                    color = Color(0xFFFFC857),
+                                    color = Color(0xFFFFC857).ui,
                                     fontSize = 12.sp,
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis,
@@ -666,7 +666,6 @@ private fun PlayerContent(
             sheetState = sheetState,
             containerColor = s.backgroundColors[1],
         ) {
-            MonoWindow()
             Column(
                 Modifier
                     .fillMaxWidth()
@@ -743,7 +742,7 @@ private fun CastBanner(deviceName: String?, connecting: Boolean, onOpen: () -> U
         if (connecting) {
             CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
         } else {
-            Icon(Icons.Rounded.CastConnected, null, tint = Color(0xFFFFC857), modifier = Modifier.size(20.dp))
+            Icon(Icons.Rounded.CastConnected, null, tint = Color(0xFFFFC857).ui, modifier = Modifier.size(20.dp))
         }
         Spacer(Modifier.width(10.dp))
         Text(
@@ -754,7 +753,7 @@ private fun CastBanner(deviceName: String?, connecting: Boolean, onOpen: () -> U
         )
         Text(
             "Stoppen",
-            color = Color(0xFFFF8A8A), fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+            color = Color(0xFFFF8A8A).ui, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
             modifier = Modifier.pressable(onStop).padding(4.dp),
         )
     }
@@ -773,7 +772,6 @@ private fun CastPickerDialog(
 ) {
     val s = LocalAppStyle.current
     Dialog(onDismissRequest = onDismiss) {
-        MonoWindow()
         Column(
             Modifier
                 .fillMaxWidth()
@@ -884,7 +882,6 @@ private fun ArchiveDialog(vm: PlayerViewModel, channel: String, onDismiss: () ->
     }
     val now = System.currentTimeMillis()
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        MonoWindow()
         Box(Modifier.fillMaxSize()) {
             Box(
                 Modifier

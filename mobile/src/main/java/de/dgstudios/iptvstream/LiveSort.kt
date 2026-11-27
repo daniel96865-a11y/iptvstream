@@ -1,6 +1,5 @@
 package de.dgstudios.iptvstream
 
-import de.dgstudios.iptvstream.core.ui.MonoWindow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.Alignment
@@ -38,7 +37,7 @@ internal fun SortActionMenu(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { MonoWindow(); Text(title) },
+        title = { Text(title) },
         text = null,
         confirmButton = {},
         dismissButton = {

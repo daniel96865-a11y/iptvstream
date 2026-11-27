@@ -140,12 +140,9 @@ private fun colorTheme(settings: AppSettings, isTv: Boolean, dark: Boolean): Pai
  */
 @Composable
 private fun ThemeContent(style: AppStyle, scheme: androidx.compose.material3.ColorScheme, content: @Composable () -> Unit) {
-    CompositionLocalProvider(LocalAppStyle provides style) {
+    CompositionLocalProvider(LocalAppStyle provides style, LocalMono provides style.mono) {
         MaterialTheme(colorScheme = scheme) {
-            if (style.mono) {
-                MonoWindow()
-                MonoSystemBars()
-            }
+            if (style.mono) MonoSystemBars()
             content()
         }
     }
@@ -158,10 +155,6 @@ object Mono {
     val mid = Color(0xFF9E9E9E)
     val dark = Color(0xFF2A2A2A)
     val darker = Color(0xFF141414)
-
-    /** Sättigung 0, Helligkeit bleibt. */
-    val greyFilter: android.graphics.ColorMatrixColorFilter
-        get() = android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix().apply { setSaturation(0f) })
 }
 
 private fun monoTheme(isTv: Boolean, settings: AppSettings): Pair<AppStyle, androidx.compose.material3.ColorScheme> {
@@ -234,39 +227,21 @@ private fun MonoSystemBars() {
     }
 }
 
-/**
- * Schwarz-Weiß: das ganze Fenster, in dem diese Stelle gezeichnet wird, über eine Ebene mit Sättigung 0
- * zusammensetzen. Erfasst auch Senderlogos, Poster und fest eingebaute Farben. Das Videobild (SurfaceView)
- * hat eine eigene Fläche und bleibt farbig. Dialoge und Menüs sind eigene Fenster: dort ebenfalls aufrufen.
- */
-@Composable
-fun MonoWindow() {
-    val mono = LocalAppStyle.current.mono
-    val view = androidx.compose.ui.platform.LocalView.current
-    androidx.compose.runtime.DisposableEffect(view, mono) {
-        if (mono) {
-            val n = (monoUsers[view] ?: 0) + 1
-            monoUsers[view] = n
-            if (n == 1) {
-                view.setLayerType(android.view.View.LAYER_TYPE_HARDWARE, android.graphics.Paint().apply { colorFilter = Mono.greyFilter })
-            }
-        }
-        onDispose {
-            if (mono) {
-                // Gezählt: Liegt die Stelle doch im selben Fenster wie eine andere, bleibt der Filter.
-                val n = (monoUsers[view] ?: 1) - 1
-                if (n <= 0) {
-                    monoUsers.remove(view)
-                    view.setLayerType(android.view.View.LAYER_TYPE_NONE, null)
-                } else {
-                    monoUsers[view] = n
-                }
-            }
-        }
-    }
+/** Schwarz-Weiß aktiv? Auch außerhalb von [AppTheme] lesbar (dann false). */
+val LocalMono = staticCompositionLocalOf { false }
+
+/** Grauton gleicher Helligkeit (Rec. 601), Deckkraft bleibt. */
+fun Color.toGrey(): Color {
+    val l = (0.299f * red + 0.587f * green + 0.114f * blue).coerceIn(0f, 1f)
+    return Color(l, l, l, alpha)
 }
 
-private val monoUsers = java.util.WeakHashMap<android.view.View, Int>()
+/**
+ * Feste UI-Farbe (Fehlerrot, Favoriten-Gelb, Paneele …): bei Schwarz-Weiß als Grauton, sonst unverändert.
+ * Nur für Oberflächenfarben; Bilder (Senderlogos, Poster) werden nie umgefärbt.
+ */
+val Color.ui: Color
+    @Composable @androidx.compose.runtime.ReadOnlyComposable get() = if (LocalMono.current) toGrey() else this
 
 /** Vollflächiger Hintergrund mit Verlauf und weichen Farbflecken. */
 @Composable

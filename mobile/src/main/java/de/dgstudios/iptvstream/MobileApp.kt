@@ -2,6 +2,7 @@
 
 package de.dgstudios.iptvstream
 
+import de.dgstudios.iptvstream.core.ui.ui
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -119,7 +120,7 @@ fun MobileApp(mainVm: MainViewModel = viewModel()) {
     val active by mainVm.active.collectAsStateWithLifecycle()
     val s = settings
     if (s == null || !active.loaded) {
-        Box(Modifier.fillMaxSize().background(Color(0xFF05070F)))
+        Box(Modifier.fillMaxSize().background(Color(0xFF05070F).ui))
         return
     }
 

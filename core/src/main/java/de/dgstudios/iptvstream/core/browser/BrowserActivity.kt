@@ -73,7 +73,7 @@ class BrowserActivity : ComponentActivity() {
         prefs = BrowserPrefs(this)
         BrowserChrome.mono = runCatching {
             kotlinx.coroutines.runBlocking { applicationContext.container.settings.current().mono }
-        }.getOrDefault(true)
+        }.getOrDefault(false)
         ui = BrowserChrome(this, tv)
         // Randlos (Android 15 erzwingt das ohnehin); die Leisten-Abstände setzt BrowserChrome.applyInsets.
         WindowCompat.setDecorFitsSystemWindows(window, false)

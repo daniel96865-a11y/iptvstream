@@ -1,6 +1,6 @@
 package de.dgstudios.iptvstream
 
-import de.dgstudios.iptvstream.core.ui.MonoWindow
+import de.dgstudios.iptvstream.core.ui.ui
 import de.dgstudios.iptvstream.core.ui.AccentBar
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
@@ -275,7 +275,6 @@ internal fun SettingRow(
                         Text(def.labelOf(value), color = s.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     }
                     DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                        MonoWindow()
                         for (o in def.options) {
                             DropdownMenuItem(
                                 text = { Text(o.label) },
@@ -396,7 +395,7 @@ fun ProfilesScreen(mainVm: MainViewModel, onBack: () -> Unit, onEdit: (Long) -> 
                     }
                     GlassIconButton(Icons.Rounded.Edit, "Bearbeiten", { onEdit(p.id) })
                     Spacer(Modifier.width(6.dp))
-                    GlassIconButton(Icons.Rounded.Delete, "Löschen", { toDelete = p }, tint = Color(0xFFFF8A8A))
+                    GlassIconButton(Icons.Rounded.Delete, "Löschen", { toDelete = p }, tint = Color(0xFFFF8A8A).ui)
                 }
             }
             if (profiles.none { it.type == ProfileType.FREE }) {
@@ -428,13 +427,13 @@ fun ProfilesScreen(mainVm: MainViewModel, onBack: () -> Unit, onEdit: (Long) -> 
     if (del != null) {
         AlertDialog(
             onDismissRequest = { toDelete = null },
-            title = { MonoWindow(); Text("Profil löschen?") },
+            title = { Text("Profil löschen?") },
             text = { Text("„${del.name}“ und alle zwischengespeicherten Daten, Favoriten und Fortschritte dieses Profils werden entfernt.") },
             confirmButton = {
                 TextButton(onClick = {
                     mainVm.deleteProfile(del.id)
                     toDelete = null
-                }) { Text("Löschen", color = Color(0xFFFF6B6B)) }
+                }) { Text("Löschen", color = Color(0xFFFF6B6B).ui) }
             },
             dismissButton = { TextButton(onClick = { toDelete = null }) { Text("Abbrechen") } },
         )
@@ -516,7 +515,7 @@ fun ProfileFormScreen(mainVm: MainViewModel, profileId: Long, first: Boolean, on
 
         val err = form.error
         if (err != null) {
-            Text(err, color = Color(0xFFFF8A8A), fontSize = 14.sp)
+            Text(err, color = Color(0xFFFF8A8A).ui, fontSize = 14.sp)
         }
         PrimaryButton(
             text = when {
@@ -574,7 +573,7 @@ internal fun FreeSendersSection(form: ProfileFormState) {
         )
     }
     if (selected.isEmpty()) {
-        Text("Bitte mindestens eine Sprache wählen.", color = Color(0xFFFF8A8A), fontSize = 13.sp)
+        Text("Bitte mindestens eine Sprache wählen.", color = Color(0xFFFF8A8A).ui, fontSize = 13.sp)
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text("Geo-gesperrte Sender ausblenden", color = s.onSurface, fontSize = 15.sp, modifier = Modifier.weight(1f))
@@ -600,7 +599,7 @@ private fun FreeLanguagesDialog(form: ProfileFormState, onClose: () -> Unit) {
     val selected = form.freeLanguages
     AlertDialog(
         onDismissRequest = onClose,
-        title = { MonoWindow(); Text("Sprachen (${selected.size} gewählt)") },
+        title = { Text("Sprachen (${selected.size} gewählt)") },
         text = {
             Column {
                 GlassTextField(query, { query = it }, "Suchen")

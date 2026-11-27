@@ -1,6 +1,6 @@
 package de.dgstudios.iptvstream.core.update
 
-import de.dgstudios.iptvstream.core.ui.MonoWindow
+import de.dgstudios.iptvstream.core.ui.ui
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
@@ -41,9 +41,9 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
-private val Card = Color(0xFF121A24)
-private val Accent = Color(0xFF3D7EFF)
-private val Muted = Color(0xFFB7C0CC)
+private val Card: Color @Composable get() = Color(0xFF121A24).ui
+private val Accent: Color @Composable get() = Color(0xFF3D7EFF).ui
+private val Muted: Color @Composable get() = Color(0xFFB7C0CC).ui
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -85,7 +85,6 @@ fun UpdateHost(checker: UpdateChecker, television: Boolean = false) {
         onDismissRequest = { if (current !is UpdatePrompt.Offer || !current.downloading) checker.later() },
         properties = DialogProperties(dismissOnClickOutside = false, usePlatformDefaultWidth = false),
     ) {
-        MonoWindow()
         Column(
             Modifier
                 .widthIn(max = if (television) 640.dp else 440.dp)

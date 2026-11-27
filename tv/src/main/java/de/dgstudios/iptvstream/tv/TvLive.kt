@@ -2,7 +2,7 @@
 
 package de.dgstudios.iptvstream.tv
 
-import de.dgstudios.iptvstream.core.ui.MonoWindow
+import de.dgstudios.iptvstream.core.ui.ui
 import de.dgstudios.iptvstream.core.ui.scrollToItemSafe
 
 
@@ -231,7 +231,6 @@ fun TvCategoryDrawer(
     val listBottom = maxOf(drawerSystemBottom(), outerBottom) + 48.dp
     val safe = tvSafe
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        MonoWindow()
         Row(Modifier.fillMaxSize()) {
             Column(
                 Modifier
@@ -1012,7 +1011,7 @@ private fun ChannelRow(
         }
         if (isFav) {
             Spacer(Modifier.width(10.dp))
-            Text("★", color = Color(0xFFFFC857), fontSize = 22.sp, modifier = Modifier.popIn())
+            Text("★", color = Color(0xFFFFC857).ui, fontSize = 22.sp, modifier = Modifier.popIn())
         }
     }
 }

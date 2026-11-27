@@ -1,5 +1,6 @@
 package de.dgstudios.iptvstream.tv
 
+import de.dgstudios.iptvstream.core.ui.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -149,7 +150,7 @@ fun TvLanTransfer(mainVm: MainViewModel, onCancel: () -> Unit, onDone: () -> Uni
                 Text("Prüfe Zugangsdaten …", color = s.accent, fontSize = 18.sp)
                 LinearProgressIndicator(Modifier.fillMaxWidth().height(4.dp), color = s.accent, trackColor = Color.White.copy(alpha = 0.15f))
             } else if (problem != null) {
-                Text(problem, color = Color(0xFFFF8A8A), fontSize = 18.sp)
+                Text(problem, color = Color(0xFFFF8A8A).ui, fontSize = 18.sp)
             } else if (offer != null) {
                 Text("Warte auf das Handy …", color = s.onSurfaceDim, fontSize = 18.sp)
             }

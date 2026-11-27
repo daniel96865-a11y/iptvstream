@@ -1,0 +1,8 @@
+Testversion 1.0.78-sw2 (Vorabversion, nur zum Testen): Schwarz-Weiß zum Einschalten
+
+Basis 1.0.78-sw1 / puffer8 (Puffer-Verbesserungen bleiben enthalten). Gegenüber sw1:
+- Die App startet wieder im gewohnten farbigen Design. Schwarz-Weiß ist ein Schalter zum Einschalten: Einstellungen → Design → „Schwarz-Weiß“ (Standard: aus).
+- Eingeschaltet: Oberfläche nur in Schwarz, Weiß und Grau (Hintergrund, Schrift, Akzente, Fokusrahmen, Schalter, Balken, Dialoge, Hinweise). Senderlogos, Poster/Cover und das Videobild bleiben farbig.
+- App-Symbol, Fernseher-Banner und Widget wieder farbig wie in 1.0.77.
+
+versionCode 101.

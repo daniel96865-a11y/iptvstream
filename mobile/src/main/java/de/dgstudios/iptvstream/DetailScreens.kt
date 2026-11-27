@@ -1,5 +1,6 @@
 package de.dgstudios.iptvstream
 
+import de.dgstudios.iptvstream.core.ui.ui
 import de.dgstudios.iptvstream.core.ui.AccentBar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -167,7 +168,7 @@ fun MovieDetailScreen(onBack: () -> Unit, onPlay: () -> Unit) {
                         if (fav) Icons.Rounded.Star else Icons.Rounded.StarBorder,
                         "Favorit",
                         { vm.toggleFavorite() },
-                        tint = if (fav) Color(0xFFFFC857) else null,
+                        tint = if (fav) Color(0xFFFFC857).ui else null,
                     )
                 }
                 Spacer(Modifier.height(16.dp))
@@ -273,7 +274,7 @@ fun SeriesDetailScreen(onBack: () -> Unit, onPlay: () -> Unit) {
                         if (fav) Icons.Rounded.Star else Icons.Rounded.StarBorder,
                         "Favorit",
                         { vm.toggleFavorite() },
-                        tint = if (fav) Color(0xFFFFC857) else null,
+                        tint = if (fav) Color(0xFFFFC857).ui else null,
                     )
                 }
             }

@@ -1,5 +1,9 @@
 package de.dgstudios.iptvstream.tv
 
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import de.dgstudios.iptvstream.core.container
+import kotlinx.coroutines.flow.map
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -23,10 +27,14 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContent {
+            // Rand hinter den Systemleisten: bei Schwarz-Weiß reines Schwarz statt Fast-Schwarz-Blau.
+            val mono by androidx.compose.runtime.remember {
+                applicationContext.container.settings.flow.map { it.mono }
+            }.collectAsState(initial = false)
             Box(
                 Modifier
                     .fillMaxSize()
-                    .background(Color(0xFF05070F))
+                    .background(if (mono) Color.Black else Color(0xFF05070F))
                     .windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout)),
             ) {
                 TvApp()

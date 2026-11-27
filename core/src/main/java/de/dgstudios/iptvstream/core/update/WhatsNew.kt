@@ -1,6 +1,6 @@
 package de.dgstudios.iptvstream.core.update
 
-import de.dgstudios.iptvstream.core.ui.MonoWindow
+import de.dgstudios.iptvstream.core.ui.ui
 import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
@@ -108,11 +108,10 @@ fun WhatsNewHost(show: Boolean, television: Boolean) {
         onDismissRequest = { close() },
         properties = DialogProperties(dismissOnClickOutside = false, usePlatformDefaultWidth = false),
     ) {
-        MonoWindow()
         Column(
             Modifier
                 .widthIn(max = if (television) 640.dp else 440.dp)
-                .background(Color(0xFF121A24), RoundedCornerShape(20.dp))
+                .background(Color(0xFF121A24).ui, RoundedCornerShape(20.dp))
                 .padding(if (television) 28.dp else 22.dp)
                 .focusGroup(),
         ) {
@@ -124,7 +123,7 @@ fun WhatsNewHost(show: Boolean, television: Boolean) {
             )
             Text(
                 "Version ${current.first}",
-                color = Color(0xFFB7C0CC),
+                color = Color(0xFFB7C0CC).ui,
                 fontSize = if (television) 16.sp else 13.sp,
                 modifier = Modifier.padding(top = 4.dp),
             )
@@ -147,7 +146,7 @@ fun WhatsNewHost(show: Boolean, television: Boolean) {
                 Button(
                     onClick = { close() },
                     modifier = Modifier.focusRequester(primary),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3D7EFF), contentColor = Color.White),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3D7EFF).ui, contentColor = Color.White),
                 ) { Text("OK", fontSize = if (television) 18.sp else 15.sp) }
             }
         }
