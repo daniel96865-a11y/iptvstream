@@ -234,6 +234,8 @@ class PlayerController(
     @Volatile private var lastEndWasKick = false
     /** Live-TS: dasselbe MediaItem, das bei einem Ende als nächstes Stück angeschlossen wird. */
     private var liveMediaItem: MediaItem? = null
+    /** Letzte PTS der alten Verbindung, damit die neue den Vorlauf überspringt. */
+    private val liveJoin = LiveTsJoin()
     private var chainCount = 0
     private var chainJob: Job? = null
     /** Der Anbieter hat eine angeschlossene Verbindung abgelehnt (406 …): für diesen Sender wie in 1.0.77 weiter. */
@@ -306,14 +308,17 @@ class PlayerController(
         )
         val httpFactory = DataSource.Factory {
             val extra = streamReferrer?.let { mapOf("Referer" to it) }.orEmpty()
-            DefaultDataSource.Factory(
-                context,
-                // Kürzeres Lese-Zeitlimit für Streams: Hängt die Verbindung, kommt nach 15 s ein Fehler
-                // und die Wiederverbindung greift, statt 45 s lang mit leerem Puffer zu warten.
-                OkHttpDataSource.Factory(connections).setUserAgent(streamUserAgent ?: Net.userAgentFor(settings.userAgent))
-                    .setDefaultRequestProperties(extra)
-                    .setTransferListener(byteCounter),
-            ).createDataSource()
+            TsOverlapSkipDataSource(
+                DefaultDataSource.Factory(
+                    context,
+                    // Kürzeres Lese-Zeitlimit für Streams: Hängt die Verbindung, kommt nach 15 s ein Fehler
+                    // und die Wiederverbindung greift, statt 45 s lang mit leerem Puffer zu warten.
+                    OkHttpDataSource.Factory(connections).setUserAgent(streamUserAgent ?: Net.userAgentFor(settings.userAgent))
+                        .setDefaultRequestProperties(extra)
+                        .setTransferListener(byteCounter),
+                ).createDataSource(),
+                liveJoin,
+            )
         }
         // Live-TS: Beendet der Anbieter die Verbindung, wird sofort neu geöffnet, ohne den Player anzufassen.
         val dataSource = DataSource.Factory {
@@ -322,6 +327,7 @@ class PlayerController(
                 enabled = { seamlessLive },
                 stallEnabled = { stallReconnectLive },
                 takeStallKick = { stallKick.getAndSet(false).also { if (it) lastEndWasKick = true } },
+                onReopen = { liveJoin.arm() },
                 onReconnect = { bytes, millis ->
                     seamlessCount.incrementAndGet()
                     lastFix = "Anbieter-Ende → nahtlos"
@@ -482,6 +488,7 @@ class PlayerController(
         stallKick.set(false)
         lastEndWasKick = false
         liveMediaItem = null
+        liveJoin.reset()
         chainCount = 0
         emptyChains = 0
         chainJob?.cancel()
@@ -757,7 +764,20 @@ class PlayerController(
             if (index <= 0) return
             freezeGraceUntil = SystemClock.elapsedRealtime() + FREEZE_GRACE_MS
             stallGuard.reset()
-            diag.event("Angeschlossene Verbindung läuft (Puffer ${player.totalBufferedDuration / 1000} s)")
+            // Nie zurück: Wenn der Vorlauf nicht per PTS verworfen werden konnte, an die Live-Kante
+            // der neuen Verbindung (lieber ein kurzer Sprung nach vorn als schon Gesehenes).
+            if (liveJoin.shouldSeekToLiveEdge()) {
+                val edge = (player.totalBufferedDuration - 1_000L).coerceAtLeast(0L)
+                if (edge > 500L && player.currentPosition < edge) {
+                    player.seekTo(index, edge)
+                    lastFix = "Anschluss an Live-Kante"
+                    diag.event("Neue Verbindung nicht genau anschließbar, ${edge / 1000} s nach vorn (kein Rücksprung)")
+                }
+            } else if (liveJoin.joined()) {
+                diag.event("Angeschlossene Verbindung ohne Rücksprung (Puffer ${player.totalBufferedDuration / 1000} s)")
+            } else {
+                diag.event("Angeschlossene Verbindung läuft (Puffer ${player.totalBufferedDuration / 1000} s)")
+            }
             scope.launch { if (!released && player.currentMediaItemIndex > 0) player.removeMediaItems(0, player.currentMediaItemIndex) }
         }
 
@@ -1415,6 +1435,7 @@ class PlayerController(
             ) return@launch
             connections.closeAll()
             chainCount++
+            liveJoin.arm()
             lastFix = if (kicked) "Stillstand → angeschlossen" else "Anbieter-Ende → angeschlossen"
             diag.event("Neue Verbindung angeschlossen ($chainCount.), Puffer ${player.totalBufferedDuration / 1000} s")
             player.addMediaItem(next)

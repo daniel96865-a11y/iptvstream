@@ -1,0 +1,8 @@
+Testversion 1.0.78-sw3 (Vorabversion, nur zum Testen): kein Rücksprung beim Anschluss
+
+Basis 1.0.78-sw2 (Schwarz-Weiß-Schalter und Puffer-Verbesserungen von puffer8 bleiben enthalten).
+- Beim Anschließen einer neuen Live-Verbindung haben manche Anbieter ein paar Sekunden Vorlauf geschickt, der zeitlich vor dem Ende der alten Verbindung lag. Der Player sprang dann zurück und zeigte schon Gesehenes noch einmal.
+- Jetzt: Die letzte Bildzeit (PTS) der alten Verbindung wird gemerkt. In der neuen Verbindung wird überlappender Inhalt bis zu diesem Zeitpunkt verworfen, der Anschluss beginnt am nächsten Schlüsselbild danach. Das Videobild läuft vorwärts weiter, ohne die Szene zu wiederholen.
+- Passen die Zeitstempel nicht zusammen, wird statt des Vorlaufs an der Live-Kante der neuen Verbindung weitergespielt (lieber ein kurzer Sprung nach vorn als eine Wiederholung). Zurück springt der Player dabei nicht.
+
+versionCode 102.

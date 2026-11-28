@@ -33,16 +33,27 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
 /**
- * Echter Media3-Player (Fake-Renderer) gegen einen lokalen TS-Server: Eine endende bzw. hängende Live-Verbindung
- * wird als nächstes Stück angeschlossen, und der Player spielt ohne Fehler weiter.
+ * Echter Media3-Player (Fake-Renderer) gegen einen lokalen TS-Server: Eine endende bzw. hängende
+ * Live-Verbindung wird als nächstes Stück angeschlossen. Liefert die neue Verbindung bewusst
+ * schon gesehenen Vorlauf, wird der übersprungen – der Player springt nicht zurück.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class LiveChainPlaybackTest {
     private val ts = javaClass.getResource("/live10s.ts")!!.readBytes()
+    private val packet = 188
+    private val half = ts.size / 2 / packet * packet
 
-    /** Verbindung 1: halbe Datei, dann [hang] (offen, nichts mehr) bzw. schließen. Danach: ganze Datei. */
-    private inner class Server(val hang: Boolean) : AutoCloseable {
+    /**
+     * @param firstEnd wie viele Bytes die erste Verbindung sendet
+     * @param secondStart wo die zweite Verbindung im selben File beginnt (kleiner als firstEnd = Überlappung)
+     * @param hang erste Verbindung nach [firstEnd] offen lassen (Stillstand) statt schließen
+     */
+    private inner class Server(
+        val firstEnd: Int,
+        val secondStart: Int,
+        val hang: Boolean,
+    ) : AutoCloseable {
         val socket = ServerSocket(0)
         val firstSent = CountDownLatch(1)
         val connections = AtomicInteger()
@@ -60,13 +71,12 @@ class LiveChainPlaybackTest {
                             val out = c.getOutputStream()
                             out.write("HTTP/1.1 200 OK\r\nContent-Type: video/mp2t\r\nConnection: close\r\n\r\n".toByteArray())
                             if (n == 1) {
-                                val half = ts.size / 2 / 188 * 188
-                                out.write(ts, 0, half)
+                                out.write(ts, 0, firstEnd)
                                 out.flush()
                                 firstSent.countDown()
                                 if (hang) Thread.sleep(60_000)
                             } else {
-                                out.write(ts)
+                                out.write(ts, secondStart, ts.size - secondStart)
                                 out.flush()
                             }
                             c.close()
@@ -84,15 +94,22 @@ class LiveChainPlaybackTest {
         }
     }
 
-    private fun play(hang: Boolean) {
-        Server(hang).use { server ->
+    private fun play(firstEnd: Int = half, secondStart: Int = 0, hang: Boolean = false) {
+        val join = LiveTsJoin()
+        Server(firstEnd, secondStart, hang).use { server ->
             val connections = StreamConnections(OkHttpClient())
             val kick = AtomicBoolean(false)
             val dataSource = DataSource.Factory {
                 ReconnectingDataSource(
-                    OkHttpDataSource.Factory(connections),
+                    {
+                        TsOverlapSkipDataSource(
+                            OkHttpDataSource.Factory(connections).createDataSource(),
+                            join,
+                        )
+                    },
                     enabled = { false },
                     onReconnect = { _, _ -> },
+                    onReopen = { join.arm() },
                     stallEnabled = { true },
                     takeStallKick = { kick.getAndSet(false) },
                 )
@@ -109,11 +126,12 @@ class LiveChainPlaybackTest {
                 .build()
             val item = MediaItem.fromUri(server.url)
             val transitions = AtomicInteger()
-            var rebuffers = 0
             player.addListener(object : Player.Listener {
                 override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                     if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
                         transitions.incrementAndGet()
+                        // Wie in der App: nach dem Wechsel das alte Stück entfernen.
+                        // Der Anschluss hat den Vorlauf bereits verworfen.
                         player.removeMediaItems(0, player.currentMediaItemIndex)
                     }
                 }
@@ -124,6 +142,7 @@ class LiveChainPlaybackTest {
                     if (mediaLoadData.dataType == C.DATA_TYPE_MEDIA && eventTime.windowIndex == player.mediaItemCount - 1 &&
                         server.connections.get() < 2
                     ) {
+                        join.arm()
                         player.addMediaItem(item)
                     }
                 }
@@ -143,7 +162,18 @@ class LiveChainPlaybackTest {
             assertNull(player.playerError)
             assertEquals(1, transitions.get())
             assertEquals(2, server.connections.get())
-            assertTrue(player.currentPosition > 8_000)
+            // Zweites Stück: nur der noch nicht gesehene Rest (neue Verbindung beginnt früher).
+            // Ohne Überspringen wäre currentPosition ~10 s (ganze Datei noch einmal).
+            assertTrue(
+                "zweites Stück soll nur den neuen Teil haben, nicht die ganze Datei nochmal " +
+                    "(Position ${player.currentPosition} ms, Dauer ${player.duration} ms)",
+                player.currentPosition in 2_000..8_000,
+            )
+            val dur = player.duration
+            if (dur != C.TIME_UNSET) {
+                assertTrue("Dauer des zweiten Stücks ${dur} ms", dur in 2_000..8_000)
+            }
+            assertTrue(join.joined())
             player.release()
         }
     }
@@ -151,4 +181,11 @@ class LiveChainPlaybackTest {
     @Test fun providerEndIsChainedWithoutError() = play(hang = false)
 
     @Test fun stalledConnectionIsCutAndChainedWithoutError() = play(hang = true)
+
+    @Test fun newConnectionStartingEarlierDoesNotReplaySeenContent() {
+        // Erste Verbindung: etwa 7 s, zweite beginnt 3 s früher (typischer Anbieter-Vorlauf).
+        val firstEnd = (ts.size * 7 / 10) / packet * packet
+        val secondStart = (ts.size * 4 / 10) / packet * packet
+        play(firstEnd = firstEnd, secondStart = secondStart, hang = false)
+    }
 }

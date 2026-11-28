@@ -26,6 +26,8 @@ class ReconnectingDataSource(
     private val stallEnabled: () -> Boolean = { false },
     /** Wurde die laufende Verbindung wegen Daten-Stillstand abgebrochen? True genau einmal pro Abbruch. */
     private val takeStallKick: () -> Boolean = { false },
+    /** Vor einer neuen Verbindung im selben Strom (nahtlose Neuöffnung). */
+    private val onReopen: () -> Unit = {},
     private val clock: () -> Long = System::currentTimeMillis,
     private val sleep: (Long) -> Unit = {
         try {
@@ -107,6 +109,7 @@ class ReconnectingDataSource(
             if (Thread.currentThread().isInterrupted) return C.RESULT_END_OF_INPUT
             if (bytes == 0L) sleep(RETRY_DELAY_MS)
             onReconnect(bytes, millis)
+            onReopen()
             openUpstream(spec ?: return C.RESULT_END_OF_INPUT)
         }
     }
