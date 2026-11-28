@@ -15,11 +15,12 @@ import de.dgstudios.iptvstream.core.player.LiveTsJoin.Companion.ptsAhead
  * Liest einen MPEG-TS-Strom und verwirft am Anfang einer neuen Verbindung schon gesehenen Vorlauf:
  * Je Spur (PID) werden PES-Pakete mit PTS ≤ der letzten schon geladenen PTS dieser Spur nicht
  * an den Player weitergegeben. PAT und PMT bleiben immer erhalten. Bilder und Ton der neuen
- * Verbindung beginnen erst ab dem Anschluss (Video: am nächsten Schlüsselbild knapp danach).
+ * Verbindung beginnen erst ab dem Anschluss. Im selben Strom (nahtlose Neuöffnung) geht es sofort nach der letzten PTS weiter; ein neuer Decoder beginnt am nächsten Schlüsselbild.
  * So zählt der Puffer nur neues Material, und schon Gesehenes wird nicht noch einmal gespielt.
  *
- * Passen die Zeitstempel nicht zur alten Verbindung, wird nichts verworfen; der Player soll dann
- * an die Live-Kante springen statt den Vorlauf noch einmal zu zeigen.
+ * Passen die Zeitstempel nicht zur alten Verbindung, wird nichts verworfen. Ein neuer
+ * MediaItem spielt die neue Zeitachse einfach ab (kein Seek auf Live-TS). Im selben Extraktor
+ * darf die fremde Zeitachse nicht landen: dann endet der Strom, der Player hängt ein neues Stück an.
  */
 @UnstableApi
 class TsOverlapSkipDataSource(
@@ -27,6 +28,7 @@ class TsOverlapSkipDataSource(
     private val join: LiveTsJoin,
 ) : DataSource {
     private val packet = ByteArray(TS_PACKET)
+    private val syncScratch = ByteArray(TS_PACKET)
     private var packetFill = 0
     private var unsynced = true
     private val out = ByteArray(TS_PACKET * 64)
@@ -105,15 +107,18 @@ class TsOverlapSkipDataSource(
 
     private fun fillPacket(): Int {
         // Nach einem Sync-Verlust Bytes verwerfen, bis 0x47 an einer Paketgrenze sitzt.
+        // In Blöcken lesen, kein neues Byte-Array pro Byte.
         if (unsynced && packetFill == 0) {
             while (true) {
-                val one = ByteArray(1)
-                val r = upstream.read(one, 0, 1)
+                val r = upstream.read(syncScratch, 0, syncScratch.size)
                 if (r == C.RESULT_END_OF_INPUT) return C.RESULT_END_OF_INPUT
                 if (r == 0) return 0
-                if (one[0] == TS_SYNC) {
-                    packet[0] = TS_SYNC
-                    packetFill = 1
+                var i = 0
+                while (i < r && syncScratch[i] != TS_SYNC) i++
+                if (i < r) {
+                    val keep = r - i
+                    System.arraycopy(syncScratch, i, packet, 0, keep)
+                    packetFill = keep
                     unsynced = false
                     break
                 }
@@ -145,7 +150,6 @@ class TsOverlapSkipDataSource(
         val streamId = readStreamId(packet)
         if (streamId in 0xE0..0xEF) videoPids.add(((packet[1].toInt() and 0x1F) shl 8) or (packet[2].toInt() and 0xFF))
         val rai = hasRai(packet)
-        if (pts != UNSET) join.onPts(pid, pts)
 
         when (skipMode) {
             SkipMode.PASS -> deliver(packet, pts)
@@ -170,9 +174,7 @@ class TsOverlapSkipDataSource(
         when {
             ahead > 0 -> {
                 // Diese Spur beginnt hinter dem alten Ende.
-                skipMode = SkipMode.KEYFRAME
-                heldFromPts = pts
-                dropOrHold(pid, pts, hasRai(packet), readStreamId(packet))
+                startAfterJoin(pid, pts, hasRai(packet), readStreamId(packet))
             }
             ahead == 0L || -ahead <= MAX_OVERLAP_PTS -> {
                 skipMode = SkipMode.DROP
@@ -180,8 +182,13 @@ class TsOverlapSkipDataSource(
             }
             else -> {
                 // Sehr großer Rücksprung (Neustart / andere Zeitachse, nicht der 33-Bit-Umschlag): nichts verwerfen.
-                skipMode = SkipMode.PASS
                 join.markMismatch()
+                if (join.sameStream()) {
+                    // Fremde PTS dürfen nicht in denselben Extraktor. Der Aufrufer (nahtlose
+                    // Neuöffnung) beendet den Strom und hängt ein neues Stück an.
+                    throw TsJoinMismatchException()
+                }
+                skipMode = SkipMode.PASS
                 deliver(packet, pts)
             }
         }
@@ -207,8 +214,8 @@ class TsOverlapSkipDataSource(
             return
         }
         if (pts != UNSET && skipMode == SkipMode.DROP && (target == null || ptsAhead(pts, target) > 0)) {
-            skipMode = SkipMode.KEYFRAME
-            if (heldFromPts == UNSET) heldFromPts = pts
+            startAfterJoin(pid, pts, rai, streamId)
+            return
         }
         if (skipMode == SkipMode.KEYFRAME) {
             val videoTarget = videoPids.firstOrNull()?.let { skipUntil[it] } ?: target
@@ -218,7 +225,8 @@ class TsOverlapSkipDataSource(
                 held.clear()
                 skipMode = SkipMode.PASS
                 droppingPid.clear()
-                join.markJoined()
+                val gap = if (pts != UNSET && videoTarget != null) ptsAhead(pts, videoTarget).coerceAtLeast(0L) else 0L
+                join.markJoined(gap)
                 deliver(packet, pts)
                 return
             }
@@ -227,11 +235,29 @@ class TsOverlapSkipDataSource(
                 flushHeld(keepFromKeyframe = false)
                 skipMode = SkipMode.PASS
                 droppingPid.clear()
-                join.markJoined()
+                join.markJoined(KEYFRAME_WAIT_PTS)
             }
             return
         }
         skippedPackets++
+    }
+
+    /**
+     * Ziel erreicht: Im selben Strom sofort durchlassen (Decoder ist schon warm).
+     * Neuer Decoder: bis zum nächsten Videoschlüsselbild halten, sonst fehlt die Referenz.
+     */
+    private fun startAfterJoin(pid: Int, pts: Long, rai: Boolean, streamId: Int) {
+        if (join.sameStream()) {
+            skipMode = SkipMode.PASS
+            droppingPid.clear()
+            held.clear()
+            join.markJoined(0)
+            deliver(packet, pts)
+            return
+        }
+        skipMode = SkipMode.KEYFRAME
+        if (heldFromPts == UNSET) heldFromPts = pts
+        dropOrHold(pid, pts, rai, streamId)
     }
 
     private fun flushHeld(keepFromKeyframe: Boolean) {
@@ -290,6 +316,13 @@ class TsOverlapSkipDataSource(
         const val TS_SYNC: Byte = 0x47
         private val ALWAYS_PSI = setOf(0, 1, 0x11)
 
+        /**
+         * Der PTS-Filter zerlegt den Strom in 188-Byte-TS-Pakete. Deshalb nur für Live-TS
+         * einschalten – HLS-Playlists, MP4, MKV und andere Formate müssen unverändert durch.
+         */
+        fun wrap(upstream: DataSource, join: LiveTsJoin, liveTs: Boolean): DataSource =
+            if (liveTs) TsOverlapSkipDataSource(upstream, join) else upstream
+
         private enum class SkipMode { PASS, DECIDE, DROP, KEYFRAME }
 
         private fun hasPusi(pkt: ByteArray): Boolean = (pkt[1].toInt() and 0x40) != 0
@@ -332,7 +365,8 @@ class TsOverlapSkipDataSource(
             if (off + 14 > TS_PACKET) return UNSET
             if (pkt[off] != 0.toByte() || pkt[off + 1] != 0.toByte() || pkt[off + 2] != 1.toByte()) return UNSET
             val streamId = pkt[off + 3].toInt() and 0xFF
-            if (streamId < 0xC0) return UNSET
+            // Video 0xE0–0xEF, MPEG-Audio 0xC0–0xDF, AC-3/E-AC-3 oft als private_stream_1 (0xBD).
+            if (streamId != 0xBD && streamId !in 0xC0..0xEF) return UNSET
             val flags = pkt[off + 7].toInt() and 0xFF
             if (flags and 0x80 == 0) return UNSET
             val p = off + 9
@@ -345,3 +379,6 @@ class TsOverlapSkipDataSource(
         }
     }
 }
+
+/** Die neue Live-TS-Verbindung hat eine andere Zeitachse; sie darf nicht in denselben Extraktor. */
+class TsJoinMismatchException : java.io.IOException("Live-TS: Zeitachse passt nicht zum laufenden Extraktor")

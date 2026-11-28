@@ -3,6 +3,7 @@ package de.dgstudios.iptvstream.core.player
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Gemeinsamer Stand für Live-TS-Anschlüsse: merkt je Spur (PID) die letzte PTS der laufenden
@@ -17,14 +18,22 @@ class LiveTsJoin {
     private val skipUntilByPid = ConcurrentHashMap<Int, Long>()
     private val outcome = AtomicInteger(NONE)
     private val deliveredPts = CopyOnWriteArrayList<Pair<Int, Long>>()
+    @Volatile private var sameStream = false
+    private val gapPts = AtomicLong(0)
 
     /** Höchste letzte PTS über alle Spuren, oder [UNSET]. */
     fun lastPts(): Long = lastPtsByPid.values.maxOrNull() ?: UNSET
 
     fun lastPts(pid: Int): Long = lastPtsByPid[pid] ?: UNSET
 
-    /** Neue Verbindung: je Spur bis zur letzten PTS der alten überspringen, falls eine bekannt ist. */
-    fun arm() {
+    /**
+     * Neue Verbindung: je Spur bis zur letzten PTS der alten überspringen, falls eine bekannt ist.
+     * [sameStream] = derselbe Extraktor und Decoder bleiben (nahtlose Neuöffnung): dann nicht bis
+     * zum nächsten Schlüsselbild warten, sonst entsteht eine Lücke von bis zu einer GOP-Länge.
+     */
+    fun arm(sameStream: Boolean = false) {
+        this.sameStream = sameStream
+        gapPts.set(0)
         skipUntilByPid.clear()
         if (lastPtsByPid.isEmpty()) {
             outcome.set(NONE)
@@ -34,6 +43,9 @@ class LiveTsJoin {
         }
     }
 
+    /** Anschluss im laufenden Strom (kein neuer Decoder). */
+    fun sameStream(): Boolean = sameStream
+
     /** Ziel-PTS je Spur für diese Öffnung (einmalig). Leer, wenn nichts übersprungen werden soll. */
     fun takeSkipUntil(): Map<Int, Long> {
         val snap = HashMap(skipUntilByPid)
@@ -41,18 +53,27 @@ class LiveTsJoin {
         return snap
     }
 
-    fun onPts(pid: Int, pts: Long) {
-        lastPtsByPid[pid] = pts
-    }
-
+    /**
+     * Nur tatsächlich an den Player abgegebene PTS merken – verworfener Vorlauf oder
+     * zurückgehaltene Pakete bis zum Schlüsselbild dürfen das nächste Ziel nicht nach vorn schieben.
+     */
     fun onDelivered(pid: Int, pts: Long) {
+        val prev = lastPtsByPid[pid]
+        if (prev == null || ptsAhead(pts, prev) >= 0) lastPtsByPid[pid] = pts
         deliveredPts.add(pid to pts)
     }
 
     /** An den Player abgegebene Medien-PTS in Lesereihenfolge (für Tests: kein Rücksprung). */
     fun delivered(): List<Pair<Int, Long>> = deliveredPts
 
-    fun markJoined() { outcome.set(JOINED) }
+    fun markJoined(gapPts: Long = 0L) {
+        this.gapPts.set(gapPts.coerceAtLeast(0L))
+        outcome.set(JOINED)
+    }
+
+    /** Wie weit der Anschluss hinter dem Ziel liegt (Warten aufs Schlüsselbild), in Millisekunden. */
+    fun keyframeGapMs(): Long = ptsMs(gapPts.get())
+
 
     fun markMismatch() { outcome.set(MISMATCH) }
 
@@ -62,7 +83,12 @@ class LiveTsJoin {
     /** Zeitstempel passen nicht zusammen: an der Live-Kante weiterspielen, nicht am Anfang der neuen Verbindung. */
     fun mismatch(): Boolean = outcome.get() == MISMATCH
 
-    /** Es sollte übersprungen werden, ist aber nicht gelungen. */
+    /**
+     * Es sollte übersprungen werden, ist aber nicht gelungen (MISMATCH oder noch ARMED).
+     * Auf Live-TS darf der Player deshalb nicht seeken: Media3 behandelt das oft als Sprung auf 0
+     * und verwirft den Puffer. Stattdessen das neue Stück einfach abspielen (eigene Zeitachse)
+     * bzw. bei nahtlosem Anschluss im selben Extraktor den Strom beenden und ein neues Stück anhängen.
+     */
     fun shouldSeekToLiveEdge(): Boolean {
         val o = outcome.get()
         return o == MISMATCH || o == ARMED
@@ -81,6 +107,8 @@ class LiveTsJoin {
         skipUntilByPid.clear()
         deliveredPts.clear()
         outcome.set(NONE)
+        sameStream = false
+        gapPts.set(0)
     }
 
     companion object {

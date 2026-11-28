@@ -8,9 +8,11 @@ import de.dgstudios.iptvstream.core.player.LiveTsJoin.Companion.UNSET
 import de.dgstudios.iptvstream.core.player.LiveTsJoin.Companion.ptsAhead
 import de.dgstudios.iptvstream.core.player.LiveTsJoin.Companion.ptsMs
 import de.dgstudios.iptvstream.core.player.TsOverlapSkipDataSource.Companion.TS_PACKET
+import de.dgstudios.iptvstream.core.player.TsOverlapSkipDataSource.Companion.TS_SYNC
 import de.dgstudios.iptvstream.core.player.TsOverlapSkipDataSource.Companion.readPesPts
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -88,6 +90,113 @@ class TsOverlapSkipDataSourceTest {
         assertTrue("ohne Überspringen muss ein PTS-Rücksprung erkennbar sein", hasPtsRewind(join))
     }
 
+    @Test fun newDecoderWaitsForKeyframeAndReportsGap() {
+        val half = ts.size / 2 / TS_PACKET * TS_PACKET
+        val join = LiveTsJoin()
+        readAll(ts.copyOf(half), join)
+        val last = join.lastPts()
+        join.arm(sameStream = false)
+        val src = TsOverlapSkipDataSource(ByteArrayDataSource(ts), join)
+        src.open(DataSpec(Uri.EMPTY))
+        drain(src)
+        src.close()
+        assertTrue(join.joined())
+        val gap = join.keyframeGapMs()
+        assertTrue(
+            "neuer Decoder wartet aufs Schlüsselbild (Lücke $gap ms, typisch 0,2–1 s bei 1-s-GOP)",
+            gap in 200L..1_100L,
+        )
+        assertTrue(src.firstDeliveredPts != UNSET && ptsAhead(src.firstDeliveredPts, last) >= 0)
+        assertNoPtsRewind(join)
+    }
+
+    @Test fun sameStreamDoesNotWaitForNextKeyframe() {
+        val half = ts.size / 2 / TS_PACKET * TS_PACKET
+        val join = LiveTsJoin()
+        readAll(ts.copyOf(half), join)
+        val last = join.lastPts()
+        join.arm(sameStream = true)
+        val src = TsOverlapSkipDataSource(ByteArrayDataSource(ts), join)
+        src.open(DataSpec(Uri.EMPTY))
+        drain(src)
+        src.close()
+        assertTrue(join.joined())
+        assertEquals(0L, join.keyframeGapMs())
+        val gap = ptsMs(ptsAhead(src.firstDeliveredPts, last))
+        assertTrue(
+            "im selben Strom sofort nach der letzten PTS weiter (Lücke $gap ms, nicht bis zum nächsten Schlüsselbild)",
+            src.firstDeliveredPts != UNSET && gap in 0L..200L,
+        )
+        assertNoPtsRewind(join)
+    }
+
+
+    @Test fun droppedOverlapDoesNotMoveLastPts() {
+        val half = ts.size / 2 / TS_PACKET * TS_PACKET
+        val join = LiveTsJoin()
+        readAll(ts.copyOf(half), join)
+        val last = join.lastPts()
+        // Nur der frühe Vorlauf (deutlich vor dem alten Ende): darf lastPts nicht zurücksetzen.
+        val head = ts.copyOf((ts.size / 10) / TS_PACKET * TS_PACKET)
+        join.arm(sameStream = true)
+        val src = TsOverlapSkipDataSource(ByteArrayDataSource(head), join)
+        src.open(DataSpec(Uri.EMPTY))
+        drain(src)
+        src.close()
+        assertEquals("verworfener Vorlauf darf die gemerkte PTS nicht verschieben", last, join.lastPts())
+        assertEquals(UNSET, src.firstDeliveredPts)
+    }
+
+    @Test fun sameStreamMismatchAbortsWithoutDelivering() {
+        val join = LiveTsJoin()
+        readAll(ts, join)
+        join.shiftLastPts(3L * 3600 * 90_000)
+        val shifted = join.lastPts()
+        join.arm(sameStream = true)
+        val src = TsOverlapSkipDataSource(ByteArrayDataSource(ts), join)
+        src.open(DataSpec(Uri.EMPTY))
+        try {
+            drain(src)
+            fail("bei anderer Zeitachse im selben Extraktor muss TsJoinMismatchException fliegen")
+        } catch (_: TsJoinMismatchException) {
+            assertTrue(join.mismatch())
+            assertEquals(UNSET, src.firstDeliveredPts)
+            assertEquals("fremde PTS dürfen lastPts nicht überschreiben", shifted, join.lastPts())
+        } finally {
+            src.close()
+        }
+    }
+
+    @Test fun ac3PrivateStreamPtsIsRead() {
+        val pts = 90_000L * 12 + 1234
+        val pkt = pesPacket(streamId = 0xBD, pts = pts)
+        assertEquals(pts, readPesPts(pkt))
+    }
+
+    @Test fun wrapPassesNonTsThroughUnchanged() {
+        val mp4 = javaClass.getResource("/clip2s.mp4")!!.readBytes()
+        val playlist = javaClass.getResource("/hls/index.m3u8")!!.readBytes()
+        val mkv = javaClass.getResource("/clip2s.mkv")!!.readBytes()
+        val join = LiveTsJoin()
+        for ((name, bytes) in listOf("mp4" to mp4, "mkv" to mkv, "hls" to playlist)) {
+            val pass = TsOverlapSkipDataSource.wrap(ByteArrayDataSource(bytes), join, liveTs = false)
+            pass.open(DataSpec(Uri.EMPTY))
+            val out = drainAny(pass)
+            pass.close()
+            assertEquals("$name muss unverändert durch den Filter-Schalter", bytes.toList(), out.toList())
+        }
+    }
+
+    @Test fun skipperWouldDestroyNonTs() {
+        val playlist = "#EXTM3U\n#EXT-X-TARGETDURATION:4\n".toByteArray()
+        val join = LiveTsJoin()
+        val src = TsOverlapSkipDataSource(ByteArrayDataSource(playlist), join)
+        src.open(DataSpec(Uri.EMPTY))
+        val out = drain(src)
+        src.close()
+        assertTrue("ohne Schalter würde der Filter die Playlist zerlegen", out.isEmpty() || !out.contentEquals(playlist))
+    }
+
     @Test fun unrelatedPtsAreNotSkipped() {
         val join = LiveTsJoin()
         readAll(ts, join)
@@ -112,7 +221,9 @@ class TsOverlapSkipDataSourceTest {
         return out
     }
 
-    private fun drain(src: TsOverlapSkipDataSource): ByteArray {
+    private fun drain(src: TsOverlapSkipDataSource): ByteArray = drainAny(src)
+
+    private fun drainAny(src: androidx.media3.datasource.DataSource): ByteArray {
         val buf = ByteArray(16 * 1024)
         val out = java.io.ByteArrayOutputStream()
         while (true) {
@@ -121,6 +232,27 @@ class TsOverlapSkipDataSourceTest {
             if (n > 0) out.write(buf, 0, n)
         }
         return out.toByteArray()
+    }
+
+    private fun pesPacket(streamId: Int, pts: Long, pid: Int = 0x110): ByteArray {
+        val pkt = ByteArray(TS_PACKET) { 0xFF.toByte() }
+        pkt[0] = TS_SYNC
+        pkt[1] = (0x40 or ((pid shr 8) and 0x1F)).toByte()
+        pkt[2] = (pid and 0xFF).toByte()
+        pkt[3] = 0x10
+        pkt[4] = 0; pkt[5] = 0; pkt[6] = 1
+        pkt[7] = streamId.toByte()
+        pkt[8] = 0; pkt[9] = 8
+        pkt[10] = 0x80.toByte()
+        pkt[11] = 0x80.toByte()
+        pkt[12] = 5
+        fun u(v: Long) = (v and 0xFF).toByte()
+        pkt[13] = u(((pts shr 30) and 0x07L) shl 1 or 1)
+        pkt[14] = u(pts shr 22)
+        pkt[15] = u(((pts shr 15) and 0x7FL) shl 1 or 1)
+        pkt[16] = u(pts shr 7)
+        pkt[17] = u((pts and 0x7FL) shl 1 or 1)
+        return pkt
     }
 
     private fun pid(data: ByteArray, i: Int): Int =

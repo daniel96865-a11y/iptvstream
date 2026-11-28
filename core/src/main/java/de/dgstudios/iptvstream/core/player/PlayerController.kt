@@ -236,6 +236,8 @@ class PlayerController(
     private var liveMediaItem: MediaItem? = null
     /** Letzte PTS der alten Verbindung, damit die neue den Vorlauf überspringt. */
     private val liveJoin = LiveTsJoin()
+    /** PTS-Filter nur bei Live-TS; sonst würde er HLS/MP4/MKV als 188-Byte-Pakete zerlegen. */
+    @Volatile private var liveTsFilter = false
     private var chainCount = 0
     private var chainJob: Job? = null
     /** Der Anbieter hat eine angeschlossene Verbindung abgelehnt (406 …): für diesen Sender wie in 1.0.77 weiter. */
@@ -251,6 +253,10 @@ class PlayerController(
     private val seamlessCount = java.util.concurrent.atomic.AtomicInteger()
     /** Grund der letzten Neuverbindung, für die Puffer-Diagnose. */
     @Volatile private var lastFix: String? = null
+    /** Letzter erkannter Ruckler-Grund, für die Puffer-Diagnose („Ruckler: …“). */
+    @Volatile private var hitchReason: String? = null
+    private var hitchUntil = 0L
+    private var videoDecoderInits = 0
     private var readyOnce = false
     private val byteCounter = object : androidx.media3.datasource.TransferListener {
         override fun onTransferInitializing(source: DataSource, dataSpec: androidx.media3.datasource.DataSpec, isNetwork: Boolean) {}
@@ -308,7 +314,7 @@ class PlayerController(
         )
         val httpFactory = DataSource.Factory {
             val extra = streamReferrer?.let { mapOf("Referer" to it) }.orEmpty()
-            TsOverlapSkipDataSource(
+            TsOverlapSkipDataSource.wrap(
                 DefaultDataSource.Factory(
                     context,
                     // Kürzeres Lese-Zeitlimit für Streams: Hängt die Verbindung, kommt nach 15 s ein Fehler
@@ -318,20 +324,30 @@ class PlayerController(
                         .setTransferListener(byteCounter),
                 ).createDataSource(),
                 liveJoin,
+                liveTsFilter,
             )
         }
         // Live-TS: Beendet der Anbieter die Verbindung, wird sofort neu geöffnet, ohne den Player anzufassen.
         val dataSource = DataSource.Factory {
             ReconnectingDataSource(
                 httpFactory,
-                enabled = { seamlessLive },
+                enabled = { seamlessLive && !chainBlocked },
                 stallEnabled = { stallReconnectLive },
                 takeStallKick = { stallKick.getAndSet(false).also { if (it) lastEndWasKick = true } },
-                onReopen = { liveJoin.arm() },
-                onReconnect = { bytes, millis ->
+                onReopen = { liveJoin.arm(sameStream = true) },
+                reopenMaxDelayMs = { CHAIN_DELAY_MS },
+                shouldWaitBeforeReopen = {
+                    try {
+                        player.totalBufferedDuration > CHAIN_EARLY_BUFFER_MS
+                    } catch (_: Exception) {
+                        true
+                    }
+                },
+                onReconnect = { bytes, millis, kicked ->
                     seamlessCount.incrementAndGet()
-                    lastFix = "Anbieter-Ende → nahtlos"
-                    diag.event("Anbieter beendete nach ${bytes / 1024} KB / ${millis / 1000} s, nahtlos neu verbunden")
+                    lastFix = if (kicked) "Stillstand → nahtlos" else "Anbieter-Ende → nahtlos"
+                    val why = if (kicked) "Daten-Stillstand" else "Anbieter beendete"
+                    diag.event("$why nach ${bytes / 1024} KB / ${millis / 1000} s, nahtlos im selben Strom (Decoder bleibt)")
                 },
             )
         }
@@ -350,8 +366,9 @@ class PlayerController(
                     limitedAt = android.os.SystemClock.elapsedRealtime()
                     // Lehnt der Anbieter eine angeschlossene Verbindung ab, ist die alte Sitzung bei ihm noch
                     // nicht frei. Dann für diesen Sender nicht mehr anschließen (zurück zum Verhalten aus 1.0.77).
-                    if (chainCount > 0 && !chainBlocked) {
+                    if ((chainCount > 0 || seamlessCount.get() > 0) && !chainBlocked) {
                         chainBlocked = true
+                        seamlessLive = false
                         diag.issue("Anschließen abgeschaltet: Anbieter meldet HTTP $code")
                         scope.launch {
                             // Abgelehntes angeschlossenes Stück entfernen; der Rest des Puffers läuft, danach
@@ -482,8 +499,13 @@ class PlayerController(
         liveMode = live
         eofPending = false
         val streamType = streamType(item.url)
-        seamlessLive = live && settings.seamless && streamType == C.CONTENT_TYPE_OTHER
+        // Nahtlos im selben Extraktor (kein Renderer-Reset beim Anschluss): wenn „Bei Abbruch
+        // oder Datenstillstand neu verbinden“ an ist (Standard) oder die Test-Einstellung
+        // „Nahtlose Neuverbindung“. Der PTS-Filter verwirft Anbieter-Vorlauf, ohne auf das
+        // nächste Schlüsselbild zu warten (sonst eine Lücke von bis zu einer GOP, oft ~1 s).
         stallReconnectLive = live && stallReconnectOn && streamType == C.CONTENT_TYPE_OTHER
+        seamlessLive = live && streamType == C.CONTENT_TYPE_OTHER && (stallReconnectLive || settings.seamless)
+        liveTsFilter = live && streamType == C.CONTENT_TYPE_OTHER
         stallGuard.reset()
         stallKick.set(false)
         lastEndWasKick = false
@@ -499,6 +521,9 @@ class PlayerController(
         decoderNote = null
         seamlessCount.set(0)
         lastFix = null
+        hitchReason = null
+        hitchUntil = 0L
+        videoDecoderInits = 0
         readyOnce = false
         cushion.reset()
         flow.reset()
@@ -764,18 +789,23 @@ class PlayerController(
             if (index <= 0) return
             freezeGraceUntil = SystemClock.elapsedRealtime() + FREEZE_GRACE_MS
             stallGuard.reset()
-            // Nie zurück: Wenn der Vorlauf nicht per PTS verworfen werden konnte, an die Live-Kante
-            // der neuen Verbindung (lieber ein kurzer Sprung nach vorn als schon Gesehenes).
-            if (liveJoin.shouldSeekToLiveEdge()) {
-                val edge = (player.totalBufferedDuration - 1_000L).coerceAtLeast(0L)
-                if (edge > 500L && player.currentPosition < edge) {
-                    player.seekTo(index, edge)
-                    lastFix = "Anschluss an Live-Kante"
-                    diag.event("Neue Verbindung nicht genau anschließbar, ${edge / 1000} s nach vorn (kein Rücksprung)")
-                }
+            // Kein Seek: Live-TS ist nicht seekbar, Media3 würde das als Sprung auf 0 werten
+            // und den ganzen Puffer verwerfen. Bei anderer Zeitachse (MISMATCH) einfach
+            // weiterlaufen – das neue Stück hat eine eigene Zeitachse.
+            if (liveJoin.mismatch()) {
+                lastFix = "Anschluss (neue Zeitachse)"
+                diag.event("Zeitstempel passen nicht, neue Verbindung läuft ohne Sprung (Puffer ${player.totalBufferedDuration / 1000} s)")
             } else if (liveJoin.joined()) {
-                diag.event("Angeschlossene Verbindung ohne Rücksprung (Puffer ${player.totalBufferedDuration / 1000} s)")
+                val gap = liveJoin.keyframeGapMs()
+                if (gap >= 200L) {
+                    noteHitch("Lücke bis Schlüsselbild (${gap} ms)")
+                    diag.event("Angeschlossene Verbindung ohne Rücksprung, ${gap} ms bis zum Schlüsselbild (Puffer ${player.totalBufferedDuration / 1000} s)")
+                } else {
+                    noteHitch("Anschluss (Decoder neu)")
+                    diag.event("Angeschlossene Verbindung ohne Rücksprung (Puffer ${player.totalBufferedDuration / 1000} s)")
+                }
             } else {
+                noteHitch("Anschluss (Decoder neu)")
                 diag.event("Angeschlossene Verbindung läuft (Puffer ${player.totalBufferedDuration / 1000} s)")
             }
             scope.launch { if (!released && player.currentMediaItemIndex > 0) player.removeMediaItems(0, player.currentMediaItemIndex) }
@@ -788,10 +818,17 @@ class PlayerController(
                     _state.update { it.copy(loading = false, error = null) }
                 }
                 Player.STATE_BUFFERING -> {
-                    // Puffer leer gelaufen (nicht: Neuaufbau): Live-TS bekommt ein höheres Vorlauf-Ziel.
+                    // Puffer wirklich leer: Vorlauf-Ziel anheben. Ein kurzer BUFFERING-Zustand bei
+                    // vollem Puffer (Anschluss, Decoder-Reset) ist ein Ruckler, kein Leerlaufen.
                     if (lastPlaybackState == Player.STATE_READY && liveMode) {
-                        cushion.onRebuffer()
-                        diag.event("Puffer leer (${cushion.rebuffers}.), Ziel-Vorlauf ${cushion.targetMs / 1000} s")
+                        val buffered = player.totalBufferedDuration
+                        if (buffered < 2_000L) {
+                            cushion.onRebuffer()
+                            diag.event("Puffer leer (${cushion.rebuffers}.), Ziel-Vorlauf ${cushion.targetMs / 1000} s")
+                        } else {
+                            noteHitch(hitchReason ?: hitchFromPending())
+                            diag.event("Kurz gehakt bei Puffer ${buffered / 1000} s")
+                        }
                     }
                     lastPlaybackState = playbackState
                     _state.update { it.copy(loading = true) }
@@ -892,6 +929,8 @@ class PlayerController(
             initializationDurationMs: Long,
         ) {
             diag.videoDecoder = decoderName
+            videoDecoderInits++
+            if (videoDecoderInits > 1 && liveMode) noteHitch("Decoder neu")
         }
 
         override fun onAudioDecoderInitialized(
@@ -905,6 +944,9 @@ class PlayerController(
 
         override fun onDroppedVideoFrames(eventTime: AnalyticsListener.EventTime, droppedFrames: Int, elapsedMs: Long) {
             diag.dropped += droppedFrames
+            if (droppedFrames > 0 && liveMode && player.totalBufferedDuration >= 3_000L) {
+                noteHitch("Bilder verloren")
+            }
         }
 
         override fun onLoadCompleted(
@@ -951,6 +993,7 @@ class PlayerController(
             elapsedSinceLastFeedMs: Long,
         ) {
             diag.underruns++
+            if (liveMode) noteHitch("Ton-Lücke")
         }
 
         override fun onVideoCodecError(eventTime: AnalyticsListener.EventTime, videoCodecError: Exception) {
@@ -1321,6 +1364,33 @@ class PlayerController(
         player.playWhenReady = true
     }
 
+    private fun noteHitch(reason: String) {
+        val now = SystemClock.elapsedRealtime()
+        if (reason == hitchReason && now < hitchUntil) {
+            hitchUntil = now + HITCH_HOLD_MS
+            return
+        }
+        hitchReason = reason
+        hitchUntil = now + HITCH_HOLD_MS
+        diag.event("Ruckler: $reason")
+    }
+
+    private fun currentHitch(): String? {
+        val reason = hitchReason ?: return null
+        if (SystemClock.elapsedRealtime() > hitchUntil) {
+            hitchReason = null
+            return null
+        }
+        return reason
+    }
+
+    /** Fallback, wenn der Player bei vollem Puffer kurz in BUFFERING fällt. */
+    private fun hitchFromPending(): String = when {
+        liveJoin.keyframeGapMs() >= 200L -> "Lücke bis Schlüsselbild (${liveJoin.keyframeGapMs()} ms)"
+        player.mediaItemCount > 1 -> "Anschluss (Decoder neu)"
+        else -> "Bildstand bei vollem Puffer"
+    }
+
     /**
      * Eine Zeile für die Puffer-Diagnose: Puffer/Ziel, Tempo, Zulauf und Wiedergabe als Vielfaches der
      * Echtzeit, Datenrate, wie oft der Puffer leer lief und neu verbunden wurde.
@@ -1368,6 +1438,7 @@ class PlayerController(
             loadPaused = live && !player.isLoading && !eofPending && player.playbackState == Player.STATE_READY,
             lastFix = lastFix,
             decoderNote = decoderNote,
+            hitch = currentHitch(),
         )
         _state.update { if (it.bufferDiag == line) it else it.copy(bufferDiag = line) }
     }
@@ -1393,7 +1464,7 @@ class PlayerController(
             if (closed == 0) {
                 stallKick.set(false)
             } else {
-                lastFix = "Stillstand $stalledS s → neue Verbindung"
+                lastFix = if (seamlessLive) "Stillstand $stalledS s → nahtlos" else "Stillstand $stalledS s → neue Verbindung"
                 diag.event("Daten-Stillstand $stalledS s bei Puffer ${player.totalBufferedDuration / 1000} s: Verbindung abgebrochen")
             }
         }
@@ -1403,9 +1474,9 @@ class PlayerController(
 
     /**
      * Live-TS: Die Verbindung ist zu Ende (Anbieter hat geschlossen oder wir haben wegen Stillstand abgebrochen).
-     * Statt zu warten, bis der Puffer leer ist, sofort dieselbe Adresse als nächstes Stück der Wiedergabeliste
-     * anhängen. Media3 lädt es, während der Rest des Puffers läuft, und wechselt dann ohne Neustart dorthin
-     * (eigener Extraktor und eigene Zeitachse, kein Sprung im laufenden Strom). Liefern mehrere Verbindungen
+     * Fallback, wenn die nahtlose Neuöffnung im selben Strom nicht greift: dieselbe Adresse als
+     * nächstes Stück der Wiedergabeliste anhängen. Media3 lädt es, während der Rest des Puffers läuft.
+     * Der Wechsel ist ein neuer Extraktor (Renderer-Reset möglich). Liefern mehrere Verbindungen
      * nacheinander kaum Daten, wird nicht mehr angeschlossen und die normale Wiederverbindung greift.
      */
     private fun chainNextLive(windowIndex: Int, bytes: Long, kicked: Boolean): Boolean {
@@ -1439,7 +1510,7 @@ class PlayerController(
             ) return@launch
             connections.closeAll()
             chainCount++
-            liveJoin.arm()
+            liveJoin.arm(sameStream = false)
             lastFix = if (kicked) "Stillstand → angeschlossen" else "Anbieter-Ende → angeschlossen"
             diag.event("Neue Verbindung angeschlossen ($chainCount.), Puffer ${player.totalBufferedDuration / 1000} s")
             player.addMediaItem(next)
@@ -1624,6 +1695,7 @@ class PlayerController(
         const val CHAIN_DELAY_MS = 2_500L
         /** Wird der Puffer knapper, sofort anschließen. */
         const val CHAIN_EARLY_BUFFER_MS = 6_000L
+        const val HITCH_HOLD_MS = 20_000L
         const val EOF_RECONNECT_BUFFER_MS = 750L
         const val STREAM_READ_TIMEOUT_S = 15L
         const val STALL_AUDIO_SUSPECT_BUFFER_MS = 2_000L

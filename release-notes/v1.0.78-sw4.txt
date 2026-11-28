@@ -1,0 +1,10 @@
+Testversion 1.0.78-sw4 (Vorabversion, nur zum Testen): Puffer bleibt beim Anschluss voll, nahtloser Übergang
+
+Basis 1.0.78-sw3 (kein Rücksprung, Schwarz-Weiß-Schalter und Puffer-Verbesserungen bleiben enthalten).
+- Hauptursache aus dem Video zu sw3: Der Puffer stieg beim Anschließen auf 38–40 s und fiel nach etwa 5 s schlagartig auf 1 s, das Bild stand kurz, der Ton setzte aus, ein Rücksprung im Bild gab es nicht. Beim Wechsel auf das nächste Stück hat ein Seek an die „Live-Kante“ auf nicht seekbarem Live-TS den Sprung als Position 0 gewertet und den ganzen Puffer verworfen. Dieser Seek ist entfernt; bei abweichender Zeitachse läuft das neue Stück einfach weiter.
+- Zusätzlich hakte es bei vollem Puffer oft etwa eine Sekunde, weil Media3 den Decoder neu gestartet hat und der Filter bis zum nächsten Schlüsselbild wartete (bei typischen GOPs bis zu einer Sekunde Lücke). Jetzt wird die neue Verbindung standardmäßig im selben Strom geöffnet (Decoder bleibt). Anbieter-Vorlauf wird weiter per PTS verworfen, aber ohne Warten auf das nächste Schlüsselbild. Vor der Neuöffnung gelten weiter 2,5 s Pause (gegen 406), entfallen unter 6 s Puffer. Passen die Zeitstempel nicht, endet dieser Weg und es wird ein neues Stück angeschlossen – ohne Seek.
+- Der PTS-Filter läuft nur noch bei Live-TS. HLS-Playlists und -Segmente sowie Filme (MP4/MKV) gehen unverändert durch.
+- AC-3-Ton (PES-Kennung 0xBD) wird beim Anschluss mit berücksichtigt. Gemerkt wird nur wirklich wiedergegebene PTS, nicht verworfener Vorlauf.
+- In der ausführlichen Puffer-Diagnose erscheint bei einem Ruckler „Ruckler: Grund“ (z. B. Anschluss, Decoder neu, Lücke bis Schlüsselbild, Ton-Lücke, Bilder verloren, Bildstand bei vollem Puffer).
+
+versionCode 103.

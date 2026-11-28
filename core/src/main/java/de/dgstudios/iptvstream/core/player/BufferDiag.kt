@@ -21,6 +21,7 @@ object BufferDiag {
         decoderNote: String? = null,
         chains: Int = 0,
         loadPaused: Boolean = false,
+        hitch: String? = null,
     ): String = buildList {
         add(format)
         add("Puffer ${sec(bufferedMs)}" + (targetMs?.let { " / Ziel ${sec(it)}" } ?: ""))
@@ -36,6 +37,7 @@ object BufferDiag {
         if (stallMs >= 1_000L) add("Stillstand ${sec(stallMs)}")
         lastFix?.let { add("zuletzt: $it") }
         decoderNote?.let { add("Decoder: $it") }
+        hitch?.let { add("Ruckler: $it") }
     }.joinToString(" · ")
 
     private fun sec(ms: Long) = String.format(Locale.GERMANY, "%.1f s", ms.coerceAtLeast(0L) / 1000.0)

@@ -10,7 +10,7 @@ import java.io.IOException
 
 /**
  * Datenquelle für Live-Streams ohne Ende (MPEG-TS über HTTP). Schließt der Anbieter die Verbindung
- * sauber (Ende der Daten), öffnet sie sofort eine neue und liest weiter. Der Player merkt davon nichts:
+ * sauber (Ende der Daten) oder wird sie wegen Stillstands abgebrochen, öffnet sie eine neue und liest weiter. Der Player merkt davon nichts:
  * Puffer, Bild und Ton laufen ohne Neustart weiter. Ein TS-Strom ist selbstsynchronisierend, der
  * Extraktor findet nach der neuen Verbindung den nächsten Paketanfang selbst.
  *
@@ -21,13 +21,20 @@ import java.io.IOException
 class ReconnectingDataSource(
     private val factory: DataSource.Factory,
     private val enabled: () -> Boolean,
-    private val onReconnect: (bytes: Long, millis: Long) -> Unit,
+    private val onReconnect: (bytes: Long, millis: Long, kicked: Boolean) -> Unit,
     /** Live-TS: ein absichtlich abgebrochener Stillstand darf als Ende gelten (unabhängig von [enabled]). */
     private val stallEnabled: () -> Boolean = { false },
     /** Wurde die laufende Verbindung wegen Daten-Stillstand abgebrochen? True genau einmal pro Abbruch. */
     private val takeStallKick: () -> Boolean = { false },
     /** Vor einer neuen Verbindung im selben Strom (nahtlose Neuöffnung). */
     private val onReopen: () -> Unit = {},
+    /**
+     * Nach einem Ende oder Stillstand-Abbruch: höchstens so lange warten, bevor die nächste
+     * Verbindung im selben Strom geöffnet wird (gegen 406). 0 = nicht warten, außer bei leerer Antwort.
+     */
+    private val reopenMaxDelayMs: () -> Long = { 0L },
+    /** Wartezeit vor der Neuöffnung verkürzen, sobald der Puffer knapp wird. */
+    private val shouldWaitBeforeReopen: () -> Boolean = { false },
     private val clock: () -> Long = System::currentTimeMillis,
     private val sleep: (Long) -> Unit = {
         try {
@@ -80,13 +87,21 @@ class ReconnectingDataSource(
             val source = upstream ?: return C.RESULT_END_OF_INPUT
             val n = try {
                 source.read(buffer, offset, length)
+            } catch (e: TsJoinMismatchException) {
+                // Neue Verbindung hat eine andere Zeitachse: nicht in denselben Extraktor mischen,
+                // sondern den Strom beenden. Der Player hängt ein neues Stück an.
+                try { source.close() } catch (_: IOException) {}
+                upstream = null
+                active = false
+                return C.RESULT_END_OF_INPUT
             } catch (e: IOException) {
-                // Absichtlich abgebrochen, weil der Anbieter nichts mehr schickte: wie ein normales Ende
-                // melden. Der Player schließt dann eine neue Verbindung als eigenes Stück an (kein Anhängen
-                // in denselben Extraktor, kein Zeitsprung im Strom).
+                // Absichtlich abgebrochen, weil der Anbieter nichts mehr schickte.
+                // Wenn nahtlos aktiv ist, im selben Extraktor neu öffnen (Decoder bleibt, kein Renderer-Reset).
+                // Sonst als Ende melden: der Player kann ein neues Stück anschließen.
                 if (!stallActive || !takeStallKick()) throw e
                 try { source.close() } catch (_: IOException) {}
                 upstream = null
+                if (reopen(kicked = true)) continue
                 return C.RESULT_END_OF_INPUT
             }
             if (n > 0) {
@@ -95,22 +110,46 @@ class ReconnectingDataSource(
             }
             if (n == 0) return 0
             // Ende der Daten.
-            if (!active) return C.RESULT_END_OF_INPUT
-            if (bytesThisConnection == 0L) {
-                emptyReopens++
-                if (emptyReopens > MAX_EMPTY_REOPENS) return C.RESULT_END_OF_INPUT
-            } else {
-                emptyReopens = 0
-            }
-            val bytes = bytesThisConnection
-            val millis = clock() - openedAt
             try { source.close() } catch (_: IOException) {}
             upstream = null
-            if (Thread.currentThread().isInterrupted) return C.RESULT_END_OF_INPUT
-            if (bytes == 0L) sleep(RETRY_DELAY_MS)
-            onReconnect(bytes, millis)
-            onReopen()
-            openUpstream(spec ?: return C.RESULT_END_OF_INPUT)
+            if (reopen(kicked = false)) continue
+            return C.RESULT_END_OF_INPUT
+        }
+    }
+
+    /**
+     * Öffnet eine neue Verbindung im selben Strom. False: der Strom endet (Fallback: Anschluss
+     * als nächstes Stück oder normale Wiederverbindung).
+     */
+    private fun reopen(kicked: Boolean): Boolean {
+        if (!active || !enabled()) return false
+        if (bytesThisConnection == 0L) {
+            emptyReopens++
+            if (emptyReopens > MAX_EMPTY_REOPENS) return false
+        } else {
+            emptyReopens = 0
+        }
+        if (Thread.currentThread().isInterrupted) return false
+        val bytes = bytesThisConnection
+        val millis = clock() - openedAt
+        waitBeforeReopen(empty = bytes == 0L)
+        if (Thread.currentThread().isInterrupted) return false
+        onReconnect(bytes, millis, kicked)
+        onReopen()
+        val spec = this.spec ?: return false
+        openUpstream(spec)
+        return true
+    }
+
+    private fun waitBeforeReopen(empty: Boolean) {
+        val start = clock()
+        val minWait = if (empty) RETRY_DELAY_MS else 0L
+        val maxWait = reopenMaxDelayMs().coerceAtLeast(0L)
+        val until = start + maxOf(minWait, maxWait)
+        while (clock() < until) {
+            if (clock() - start >= minWait && !shouldWaitBeforeReopen()) break
+            sleep(100)
+            if (Thread.currentThread().isInterrupted) return
         }
     }
 

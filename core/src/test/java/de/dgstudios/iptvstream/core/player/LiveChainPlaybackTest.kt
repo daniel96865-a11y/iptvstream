@@ -95,7 +95,7 @@ class LiveChainPlaybackTest {
         }
     }
 
-    private fun play(firstEnd: Int = half, secondStart: Int = 0, hang: Boolean = false) {
+    private fun play(firstEnd: Int = half, secondStart: Int = 0, hang: Boolean = false, seamless: Boolean = false) {
         val join = LiveTsJoin()
         Server(firstEnd, secondStart, hang).use { server ->
             val connections = StreamConnections(OkHttpClient())
@@ -108,9 +108,9 @@ class LiveChainPlaybackTest {
                             join,
                         )
                     },
-                    enabled = { false },
-                    onReconnect = { _, _ -> },
-                    onReopen = { join.arm() },
+                    enabled = { seamless && server.connections.get() < 2 },
+                    onReconnect = { _, _, _ -> },
+                    onReopen = { join.arm(sameStream = seamless) },
                     stallEnabled = { true },
                     takeStallKick = { kick.getAndSet(false) },
                 )
@@ -137,17 +137,19 @@ class LiveChainPlaybackTest {
                     }
                 }
             })
-            player.addAnalyticsListener(object : AnalyticsListener {
-                override fun onLoadCompleted(eventTime: AnalyticsListener.EventTime, loadEventInfo: LoadEventInfo, mediaLoadData: MediaLoadData) {
-                    // Wie chainNextLive: nur ans letzte Stück anschließen, hier höchstens einmal.
-                    if (mediaLoadData.dataType == C.DATA_TYPE_MEDIA && eventTime.windowIndex == player.mediaItemCount - 1 &&
-                        server.connections.get() < 2
-                    ) {
-                        join.arm()
-                        player.addMediaItem(item)
+            if (!seamless) {
+                player.addAnalyticsListener(object : AnalyticsListener {
+                    override fun onLoadCompleted(eventTime: AnalyticsListener.EventTime, loadEventInfo: LoadEventInfo, mediaLoadData: MediaLoadData) {
+                        // Wie chainNextLive: nur ans letzte Stück anschließen, hier höchstens einmal.
+                        if (mediaLoadData.dataType == C.DATA_TYPE_MEDIA && eventTime.windowIndex == player.mediaItemCount - 1 &&
+                            server.connections.get() < 2
+                        ) {
+                            join.arm(sameStream = false)
+                            player.addMediaItem(item)
+                        }
                     }
-                }
-            })
+                })
+            }
             if (hang) {
                 Thread {
                     server.firstSent.await(10, TimeUnit.SECONDS)
@@ -161,18 +163,29 @@ class LiveChainPlaybackTest {
             player.play()
             TestPlayerRunHelper.run(player).untilState(Player.STATE_ENDED)
             assertNull(player.playerError)
-            assertEquals(1, transitions.get())
-            assertEquals(2, server.connections.get())
-            // Zweites Stück: nur der noch nicht gesehene Rest (neue Verbindung beginnt früher).
-            // Ohne Überspringen wäre currentPosition ~10 s (ganze Datei noch einmal).
-            assertTrue(
-                "zweites Stück soll nur den neuen Teil haben, nicht die ganze Datei nochmal " +
-                    "(Position ${player.currentPosition} ms, Dauer ${player.duration} ms)",
-                player.currentPosition in 1_000..8_000,
-            )
-            val dur = player.duration
-            if (dur != C.TIME_UNSET) {
-                assertTrue("Dauer des zweiten Stücks ${dur} ms", dur in 1_000..8_000)
+            if (seamless) {
+                // Ein Stück, derselbe Decoder: kein MediaItem-Wechsel, die Datei einmal durch.
+                assertEquals("nahtloser Anschluss darf den Renderer nicht neu starten", 0, transitions.get())
+                assertEquals(2, server.connections.get())
+                assertTrue(
+                    "nahtlos soll die Sendung einmal durchlaufen, nicht doppelt " +
+                        "(Position ${player.currentPosition} ms, Dauer ${player.duration} ms)",
+                    player.currentPosition in 7_000..12_000,
+                )
+            } else {
+                assertEquals(1, transitions.get())
+                assertEquals(2, server.connections.get())
+                // Zweites Stück: nur der noch nicht gesehene Rest (neue Verbindung beginnt früher).
+                // Ohne Überspringen wäre currentPosition ~10 s (ganze Datei noch einmal).
+                assertTrue(
+                    "zweites Stück soll nur den neuen Teil haben, nicht die ganze Datei nochmal " +
+                        "(Position ${player.currentPosition} ms, Dauer ${player.duration} ms)",
+                    player.currentPosition in 1_000..8_000,
+                )
+                val dur = player.duration
+                if (dur != C.TIME_UNSET) {
+                    assertTrue("Dauer des zweiten Stücks ${dur} ms", dur in 1_000..8_000)
+                }
             }
             assertTrue(join.joined())
             assertNoPtsRewind(join)
@@ -189,5 +202,15 @@ class LiveChainPlaybackTest {
         val firstEnd = (ts.size * 7 / 10) / packet * packet
         val secondStart = (ts.size * 4 / 10) / packet * packet
         play(firstEnd = firstEnd, secondStart = secondStart, hang = false)
+    }
+
+    @Test fun providerEndReopensInSameExtractorWithoutTransition() = play(hang = false, seamless = true)
+
+    @Test fun stalledConnectionReopensInSameExtractorWithoutTransition() = play(hang = true, seamless = true)
+
+    @Test fun seamlessReopenWithOverlapDoesNotReplaySeenContent() {
+        val firstEnd = (ts.size * 7 / 10) / packet * packet
+        val secondStart = (ts.size * 4 / 10) / packet * packet
+        play(firstEnd = firstEnd, secondStart = secondStart, hang = false, seamless = true)
     }
 }

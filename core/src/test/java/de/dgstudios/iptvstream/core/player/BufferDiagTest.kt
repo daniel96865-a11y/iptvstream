@@ -39,4 +39,11 @@ class BufferDiagTest {
             BufferDiag.line("TS", 6_000, null, 0.97f, null, null, null, null, 0, 1, 0, 0, "Stillstand 3 s → Neustart", "Bild stand (Daten-Stillstand), Decoder bleibt"),
         )
     }
+
+    @Test fun showsHitchReason() {
+        assertEquals(
+            "TS · Puffer 40,0 s · Tempo 97 % · Zulauf … · Wiedergabe … · Netz … · leer 0× · neu 0× · Ruckler: Anschluss (Decoder neu)",
+            BufferDiag.line("TS", 40_000, null, 0.97f, null, null, null, null, 0, 0, hitch = "Anschluss (Decoder neu)"),
+        )
+    }
 }
