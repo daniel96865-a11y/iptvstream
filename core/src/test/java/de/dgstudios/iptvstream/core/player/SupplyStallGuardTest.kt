@@ -50,6 +50,18 @@ class SupplyStallGuardTest {
         assertTrue(g.observe(6_500, true, 10_000))
     }
 
+    @Test fun doesNotKickWhileBufferIsComfortable() {
+        val g = SupplyStallGuard()
+        g.observe(0, true, 100, bufferedMs = 30_000, kickBelowMs = 6_000)
+        assertFalse(g.observe(3_000, true, 100, bufferedMs = 27_000, kickBelowMs = 6_000))
+        assertFalse(g.observe(10_000, true, 100, bufferedMs = 20_000, kickBelowMs = 6_000))
+        assertEquals(10_000, g.stalledMs(10_000))
+        assertEquals(0, g.kicks)
+        // Sobald der Puffer knapp ist und schon lange nichts mehr kam: sofort eingreifen.
+        assertTrue(g.observe(20_000, true, 100, bufferedMs = 5_000, kickBelowMs = 6_000))
+        assertEquals(1, g.kicks)
+    }
+
     @Test fun tricklingFillBytesAreStillAStall() {
         val g = SupplyStallGuard()
         g.observe(0, true, 0)

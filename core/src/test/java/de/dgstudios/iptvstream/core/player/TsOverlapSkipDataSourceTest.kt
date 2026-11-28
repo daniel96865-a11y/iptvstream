@@ -66,6 +66,26 @@ class TsOverlapSkipDataSourceTest {
         // Beginn der Ausgabe ist ein gültiges TS
         assertEquals(0x47, out[0].toInt() and 0xFF)
         assertTrue("PAT bleibt erhalten", (0 until out.size step TS_PACKET).any { pid(out, it) == 0 })
+        assertNoPtsRewind(join)
+    }
+
+    @Test fun deliveredPtsMustNotGoBackwardsAcrossAChain() {
+        val half = ts.size / 2 / TS_PACKET * TS_PACKET
+        val join = LiveTsJoin()
+        readAll(ts.copyOf(half), join)
+        join.arm()
+        readAll(ts, join)
+        assertTrue(join.joined())
+        assertNoPtsRewind(join)
+    }
+
+    @Test fun replayWithoutSkipWouldRewindPts() {
+        val half = ts.size / 2 / TS_PACKET * TS_PACKET
+        val join = LiveTsJoin()
+        readAll(ts.copyOf(half), join)
+        // absichtlich nicht arm(): die zweite Lieferung beginnt vorn – der Test muss das erkennen.
+        readAll(ts, join)
+        assertTrue("ohne Überspringen muss ein PTS-Rücksprung erkennbar sein", hasPtsRewind(join))
     }
 
     @Test fun unrelatedPtsAreNotSkipped() {
@@ -73,7 +93,7 @@ class TsOverlapSkipDataSourceTest {
         readAll(ts, join)
         // So tun, als käme die nächste Verbindung von einer ganz anderen Zeitachse
         val last = join.lastPts()
-        join.onPts(last + 3L * 3600 * 90_000)
+        join.shiftLastPts(3L * 3600 * 90_000)
         join.arm()
         val src = TsOverlapSkipDataSource(ByteArrayDataSource(ts), join)
         src.open(DataSpec(Uri.EMPTY))
@@ -111,5 +131,33 @@ class TsOverlapSkipDataSourceTest {
         join.mismatch() -> LiveTsJoin.MISMATCH
         join.shouldSeekToLiveEdge() -> LiveTsJoin.ARMED
         else -> LiveTsJoin.NONE
+    }
+
+    companion object {
+        fun hasPtsRewind(join: LiveTsJoin): Boolean {
+            val last = HashMap<Int, Long>()
+            for ((pid, pts) in join.delivered()) {
+                val prev = last[pid]
+                if (prev != null && ptsAhead(pts, prev) < -LiveTsJoin.PTS_HZ / 10) return true
+                last[pid] = pts
+            }
+            return false
+        }
+
+        fun assertNoPtsRewind(join: LiveTsJoin) {
+            val last = HashMap<Int, Long>()
+            for ((pid, pts) in join.delivered()) {
+                val prev = last[pid]
+                if (prev != null) {
+                    val ahead = ptsAhead(pts, prev)
+                    assertTrue(
+                        "PTS springt zurück pid=$pid um ${ptsMs(-ahead)} ms (von $prev nach $pts)",
+                        ahead >= -LiveTsJoin.PTS_HZ / 10,
+                    )
+                }
+                last[pid] = pts
+            }
+            assertTrue("es müssen PTS angekommen sein", last.isNotEmpty())
+        }
     }
 }

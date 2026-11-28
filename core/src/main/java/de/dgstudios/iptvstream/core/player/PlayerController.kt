@@ -1382,7 +1382,10 @@ class PlayerController(
         val now = SystemClock.elapsedRealtime()
         val active = stallReconnectLive && readyOnce && !inBackground && player.playWhenReady &&
             player.isLoading && player.playbackState != Player.STATE_IDLE
-        if (stallGuard.observe(now, active, bytesLoaded.get())) {
+        // Nicht schon nach 3 s bei viel Restpuffer abbrechen: erst wenn der Puffer knapp wird
+        // (unter [CHAIN_EARLY_BUFFER_MS]), sonst würde eine neue Verbindung mit Vorlauf zu früh
+        // angeschlossen.
+        if (stallGuard.observe(now, active, bytesLoaded.get(), player.totalBufferedDuration, CHAIN_EARLY_BUFFER_MS)) {
             val stalledS = stallGuard.stalledMs(now) / 1000
             diag.issue("Kein Datenzulauf seit $stalledS s")
             stallKick.set(true)
@@ -1424,8 +1427,9 @@ class PlayerController(
         val item = current
         chainJob?.cancel()
         chainJob = scope.launch {
-            // Nie zwei Verbindungen gleichzeitig: die alte ist zu Ende; dem Anbieter etwas Zeit geben, die Sitzung
-            // freizugeben (sofort neu → 406 auf manchen Anschlüssen). Früher, wenn der Puffer knapp wird.
+            // Nie zwei Verbindungen gleichzeitig: die alte ist zu Ende; dem Anbieter 2,5 s Zeit geben, die Sitzung
+            // freizugeben (sofort neu → 406 auf manchen Anschlüssen). Die Wartezeit entfällt, sobald der Puffer
+            // unter 6 s fällt – dann muss die neue Verbindung rechtzeitig sitzen.
             val until = SystemClock.elapsedRealtime() + CHAIN_DELAY_MS
             while (SystemClock.elapsedRealtime() < until && player.totalBufferedDuration > CHAIN_EARLY_BUFFER_MS) delay(100)
             val state = player.playbackState

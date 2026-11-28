@@ -1,8 +1,9 @@
 Testversion 1.0.78-sw3 (Vorabversion, nur zum Testen): kein Rücksprung beim Anschluss
 
 Basis 1.0.78-sw2 (Schwarz-Weiß-Schalter und Puffer-Verbesserungen von puffer8 bleiben enthalten).
-- Beim Anschließen einer neuen Live-Verbindung haben manche Anbieter ein paar Sekunden Vorlauf geschickt, der zeitlich vor dem Ende der alten Verbindung lag. Der Player sprang dann zurück und zeigte schon Gesehenes noch einmal.
-- Jetzt: Die letzte Bildzeit (PTS) der alten Verbindung wird gemerkt. In der neuen Verbindung wird überlappender Inhalt bis zu diesem Zeitpunkt verworfen, der Anschluss beginnt am nächsten Schlüsselbild danach. Das Videobild läuft vorwärts weiter, ohne die Szene zu wiederholen.
-- Passen die Zeitstempel nicht zusammen, wird statt des Vorlaufs an der Live-Kante der neuen Verbindung weitergespielt (lieber ein kurzer Sprung nach vorn als eine Wiederholung). Zurück springt der Player dabei nicht.
+- Beim Anschließen einer neuen Live-Verbindung haben manche Anbieter ein paar Sekunden Vorlauf geschickt, der zeitlich vor dem Ende der alten Verbindung lag. Der Player sprang dann zurück und zeigte schon Gesehenes noch einmal; der Vorlauf zählte außerdem im Puffer mit.
+- Jetzt: Je Spur wird die letzte Bildzeit (PTS) der alten Verbindung gemerkt. In der neuen Verbindung werden PES-Pakete mit PTS bis zu diesem Zeitpunkt verworfen (PAT und PMT bleiben). Der Anschluss beginnt am nächsten Videoschlüsselbild danach. Der Puffer enthält nur noch neues Material, schon gesehene Bilder werden nicht wiederholt.
+- Passen die Zeitstempel nicht zusammen (sehr großer Rücksprung, Anbieter-Neustart) oder kommt kein TS, wird nichts verworfen; stattdessen wird an der Live-Kante der neuen Verbindung weitergespielt (lieber ein kurzer Sprung nach vorn als eine Wiederholung). Zurück springt der Player dabei nicht. Gilt auch für „Nahtlose Neuverbindung (Test)“. Beim Senderwechsel wird das Gedächtnis gelöscht.
+- Stillstand-Abbruch erst, wenn der Puffer unter 6 s fällt – nicht schon nach 3 s bei viel Restpuffer. Die 2,5 s Wartezeit vor dem Anschließen bleiben (gegen 406); sie entfallen, sobald der Puffer unter 6 s ist.
 
 versionCode 102.

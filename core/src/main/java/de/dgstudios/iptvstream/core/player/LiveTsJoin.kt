@@ -1,46 +1,56 @@
 package de.dgstudios.iptvstream.core.player
 
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicLong
 
 /**
- * Gemeinsamer Stand für Live-TS-Anschlüsse: merkt die letzte PTS der laufenden Verbindung
- * und sagt der nächsten, bis wohin schon Gesehenes verworfen werden soll.
+ * Gemeinsamer Stand für Live-TS-Anschlüsse: merkt je Spur (PID) die letzte PTS der laufenden
+ * Verbindung und sagt der nächsten, bis wohin schon Gesehenes verworfen werden soll.
  *
  * Viele Anbieter schicken bei einer neuen Verbindung ein paar Sekunden Vorlauf, der zeitlich
- * vor dem Ende der alten Verbindung liegt. Ohne Überspringen würde der Player zurückspringen.
+ * vor dem Ende der alten Verbindung liegt. Ohne Überspringen würde der Player zurückspringen,
+ * und der Vorlauf würde fälschlich im Puffer mitzählen.
  */
 class LiveTsJoin {
-    private val lastPts = AtomicLong(UNSET)
-    private val skipUntil = AtomicLong(UNSET)
+    private val lastPtsByPid = ConcurrentHashMap<Int, Long>()
+    private val skipUntilByPid = ConcurrentHashMap<Int, Long>()
     private val outcome = AtomicInteger(NONE)
+    private val deliveredPts = CopyOnWriteArrayList<Pair<Int, Long>>()
 
-    /** Letzte gesehene Medien-PTS (90 kHz) oder [UNSET]. */
-    fun lastPts(): Long = lastPts.get()
+    /** Höchste letzte PTS über alle Spuren, oder [UNSET]. */
+    fun lastPts(): Long = lastPtsByPid.values.maxOrNull() ?: UNSET
 
-    /** Neue Verbindung: bis zur letzten PTS der alten überspringen, falls eine bekannt ist. */
+    fun lastPts(pid: Int): Long = lastPtsByPid[pid] ?: UNSET
+
+    /** Neue Verbindung: je Spur bis zur letzten PTS der alten überspringen, falls eine bekannt ist. */
     fun arm() {
-        val last = lastPts.get()
-        if (last == UNSET) {
-            skipUntil.set(UNSET)
+        skipUntilByPid.clear()
+        if (lastPtsByPid.isEmpty()) {
             outcome.set(NONE)
         } else {
-            skipUntil.set(last)
+            skipUntilByPid.putAll(lastPtsByPid)
             outcome.set(ARMED)
         }
     }
 
-    /**
-     * Ziel-PTS für diese Öffnung (einmalig). [UNSET], wenn nichts übersprungen werden soll.
-     */
-    fun takeSkipUntil(): Long {
-        val v = skipUntil.getAndSet(UNSET)
-        return v
+    /** Ziel-PTS je Spur für diese Öffnung (einmalig). Leer, wenn nichts übersprungen werden soll. */
+    fun takeSkipUntil(): Map<Int, Long> {
+        val snap = HashMap(skipUntilByPid)
+        skipUntilByPid.clear()
+        return snap
     }
 
-    fun onPts(pts: Long) {
-        lastPts.set(pts)
+    fun onPts(pid: Int, pts: Long) {
+        lastPtsByPid[pid] = pts
     }
+
+    fun onDelivered(pid: Int, pts: Long) {
+        deliveredPts.add(pid to pts)
+    }
+
+    /** An den Player abgegebene Medien-PTS in Lesereihenfolge (für Tests: kein Rücksprung). */
+    fun delivered(): List<Pair<Int, Long>> = deliveredPts
 
     fun markJoined() { outcome.set(JOINED) }
 
@@ -58,9 +68,18 @@ class LiveTsJoin {
         return o == MISMATCH || o == ARMED
     }
 
+    /**
+     * Test: tut so, als läge die letzte geladene PTS aller Spuren weit neben der nächsten Datei
+     * (Anbieter-Neustart / andere Zeitachse).
+     */
+    fun shiftLastPts(delta: Long) {
+        lastPtsByPid.replaceAll { _, v -> (v + delta) and PTS_MASK }
+    }
+
     fun reset() {
-        lastPts.set(UNSET)
-        skipUntil.set(UNSET)
+        lastPtsByPid.clear()
+        skipUntilByPid.clear()
+        deliveredPts.clear()
         outcome.set(NONE)
     }
 

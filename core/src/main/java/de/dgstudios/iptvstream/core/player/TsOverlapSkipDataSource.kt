@@ -13,9 +13,10 @@ import de.dgstudios.iptvstream.core.player.LiveTsJoin.Companion.ptsAhead
 
 /**
  * Liest einen MPEG-TS-Strom und verwirft am Anfang einer neuen Verbindung schon gesehenen Vorlauf:
- * Pakete, deren PTS vor dem Ende der vorherigen Verbindung liegt, werden nicht an den Player
- * weitergegeben. PAT/PMT bleiben erhalten, damit der Extraktor den Strom erkennt. Bilder und Ton
- * der neuen Verbindung beginnen erst ab dem Anschluss (oder dem nächsten Schlüsselbild knapp danach).
+ * Je Spur (PID) werden PES-Pakete mit PTS ≤ der letzten schon geladenen PTS dieser Spur nicht
+ * an den Player weitergegeben. PAT und PMT bleiben immer erhalten. Bilder und Ton der neuen
+ * Verbindung beginnen erst ab dem Anschluss (Video: am nächsten Schlüsselbild knapp danach).
+ * So zählt der Puffer nur neues Material, und schon Gesehenes wird nicht noch einmal gespielt.
  *
  * Passen die Zeitstempel nicht zur alten Verbindung, wird nichts verworfen; der Player soll dann
  * an die Live-Kante springen statt den Vorlauf noch einmal zu zeigen.
@@ -32,7 +33,8 @@ class TsOverlapSkipDataSource(
     private var outBuf = out
     private var outStart = 0
     private var outEnd = 0
-    private var skipUntil = UNSET
+    private var skipUntil = emptyMap<Int, Long>()
+    private val droppingPid = HashSet<Int>()
     private var skipMode = SkipMode.PASS
     private val psiPids = HashSet<Int>().apply { addAll(ALWAYS_PSI) }
     private val videoPids = HashSet<Int>()
@@ -61,8 +63,9 @@ class TsOverlapSkipDataSource(
         psiPids.clear()
         psiPids.addAll(ALWAYS_PSI)
         videoPids.clear()
+        droppingPid.clear()
         skipUntil = join.takeSkipUntil()
-        skipMode = if (skipUntil == UNSET) SkipMode.PASS else SkipMode.DECIDE
+        skipMode = if (skipUntil.isEmpty()) SkipMode.PASS else SkipMode.DECIDE
         return upstream.open(dataSpec)
     }
 
@@ -142,7 +145,7 @@ class TsOverlapSkipDataSource(
         val streamId = readStreamId(packet)
         if (streamId in 0xE0..0xEF) videoPids.add(((packet[1].toInt() and 0x1F) shl 8) or (packet[2].toInt() and 0xFF))
         val rai = hasRai(packet)
-        if (pts != UNSET) join.onPts(pts)
+        if (pts != UNSET) join.onPts(pid, pts)
 
         when (skipMode) {
             SkipMode.PASS -> deliver(packet, pts)
@@ -154,23 +157,29 @@ class TsOverlapSkipDataSource(
 
     private fun decide(pid: Int, pts: Long) {
         if (pts == UNSET) {
-            if (isPsi(pid)) emit(packet)
+            emit(packet)
             return
         }
-        val ahead = ptsAhead(pts, skipUntil)
+        val target = skipUntil[pid]
+        if (target == null) {
+            // Spur ohne Vergleichswert: durchlassen, Entscheidung an einer bekannten Spur.
+            emit(packet)
+            return
+        }
+        val ahead = ptsAhead(pts, target)
         when {
-            ahead >= 0 -> {
-                // Neue Verbindung beginnt am oder hinter dem alten Ende: nichts zurück, evtl. kleine Lücke.
-                skipMode = SkipMode.PASS
-                join.markJoined()
-                deliver(packet, pts)
+            ahead > 0 -> {
+                // Diese Spur beginnt hinter dem alten Ende.
+                skipMode = SkipMode.KEYFRAME
+                heldFromPts = pts
+                dropOrHold(pid, pts, hasRai(packet), readStreamId(packet))
             }
-            -ahead <= MAX_OVERLAP_PTS -> {
+            ahead == 0L || -ahead <= MAX_OVERLAP_PTS -> {
                 skipMode = SkipMode.DROP
-                if (isPsi(pid)) emit(packet) else skippedPackets++
+                if (isPsi(pid)) emit(packet) else { droppingPid.add(pid); skippedPackets++ }
             }
             else -> {
-                // Andere Zeitachse: Vorlauf nicht anhand der PTS verwerfen.
+                // Sehr großer Rücksprung (Neustart / andere Zeitachse, nicht der 33-Bit-Umschlag): nichts verwerfen.
                 skipMode = SkipMode.PASS
                 join.markMismatch()
                 deliver(packet, pts)
@@ -183,16 +192,32 @@ class TsOverlapSkipDataSource(
             emit(packet)
             return
         }
-        if (pts != UNSET && skipMode == SkipMode.DROP && ptsAhead(pts, skipUntil) >= 0) {
+        val target = skipUntil[pid]
+        val pusi = (packet[1].toInt() and 0x40) != 0
+        if (pts != UNSET && target != null && ptsAhead(pts, target) <= 0 && -ptsAhead(pts, target) <= MAX_OVERLAP_PTS) {
+            droppingPid.add(pid)
+            skippedPackets++
+            return
+        }
+        if (pusi && pts != UNSET && (target == null || ptsAhead(pts, target) > 0)) {
+            droppingPid.remove(pid)
+        }
+        if (!pusi && pid in droppingPid) {
+            skippedPackets++
+            return
+        }
+        if (pts != UNSET && skipMode == SkipMode.DROP && (target == null || ptsAhead(pts, target) > 0)) {
             skipMode = SkipMode.KEYFRAME
-            heldFromPts = pts
+            if (heldFromPts == UNSET) heldFromPts = pts
         }
         if (skipMode == SkipMode.KEYFRAME) {
+            val videoTarget = videoPids.firstOrNull()?.let { skipUntil[it] } ?: target
             val videoKey = rai && (pid in videoPids || streamId in 0xE0..0xEF) &&
-                (pts == UNSET || ptsAhead(pts, skipUntil) >= 0)
-            if (videoKey || (pts != UNSET && ptsAhead(pts, skipUntil) >= KEYFRAME_WAIT_PTS)) {
+                (pts == UNSET || videoTarget == null || ptsAhead(pts, videoTarget) >= 0)
+            if (videoKey || (pts != UNSET && videoTarget != null && ptsAhead(pts, videoTarget) >= KEYFRAME_WAIT_PTS)) {
                 held.clear()
                 skipMode = SkipMode.PASS
+                droppingPid.clear()
                 join.markJoined()
                 deliver(packet, pts)
                 return
@@ -201,6 +226,7 @@ class TsOverlapSkipDataSource(
             if (pts != UNSET && ptsAhead(pts, heldFromPts) >= KEYFRAME_WAIT_PTS) {
                 flushHeld(keepFromKeyframe = false)
                 skipMode = SkipMode.PASS
+                droppingPid.clear()
                 join.markJoined()
             }
             return
@@ -220,8 +246,9 @@ class TsOverlapSkipDataSource(
 
     private fun deliver(src: ByteArray, pts: Long) {
         val mediaPts = if (pts != UNSET) pts else readPesPts(src)
-        if (firstDeliveredPts == UNSET && mediaPts != UNSET && !isPsi(packetPid(src))) {
-            firstDeliveredPts = mediaPts
+        if (mediaPts != UNSET && !isPsi(packetPid(src))) {
+            if (firstDeliveredPts == UNSET) firstDeliveredPts = mediaPts
+            join.onDelivered(packetPid(src), mediaPts)
         }
         emit(src)
     }

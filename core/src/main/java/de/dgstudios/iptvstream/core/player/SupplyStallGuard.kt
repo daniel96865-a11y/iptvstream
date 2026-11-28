@@ -33,8 +33,18 @@ class SupplyStallGuard(
     /**
      * [active]: Der Player lädt gerade (will Daten). Während er wegen vollem Puffer pausiert, ist
      * Stille normal und zählt nicht. True = jetzt die Verbindung ersetzen.
+     *
+     * Ein Stillstand wird erst abgebrochen, wenn der Puffer unter [kickBelowMs] fällt. Bei viel Restpuffer
+     * bleibt die Verbindung, der Stillstand wird aber weitergezählt (Anzeige). Sobald der Puffer knapp
+     * ist und schon lange nichts mehr kam, wird sofort eingegriffen.
      */
-    fun observe(nowMs: Long, active: Boolean, totalBytes: Long): Boolean {
+    fun observe(
+        nowMs: Long,
+        active: Boolean,
+        totalBytes: Long,
+        bufferedMs: Long = 0L,
+        kickBelowMs: Long = Long.MAX_VALUE,
+    ): Boolean {
         if (!active) {
             lastBytes = -1L
             return false
@@ -45,6 +55,7 @@ class SupplyStallGuard(
             dataAt = nowMs
             return false
         }
+        if (bufferedMs > kickBelowMs) return false
         if (kicks >= maxKicks) return false
         val since = if (kicks == 0) dataAt else kickAt
         if (nowMs - since < thresholdMs * (kicks + 1)) return false

@@ -25,6 +25,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import de.dgstudios.iptvstream.core.player.TsOverlapSkipDataSourceTest.Companion.assertNoPtsRewind
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -167,13 +168,14 @@ class LiveChainPlaybackTest {
             assertTrue(
                 "zweites Stück soll nur den neuen Teil haben, nicht die ganze Datei nochmal " +
                     "(Position ${player.currentPosition} ms, Dauer ${player.duration} ms)",
-                player.currentPosition in 2_000..8_000,
+                player.currentPosition in 1_000..8_000,
             )
             val dur = player.duration
             if (dur != C.TIME_UNSET) {
-                assertTrue("Dauer des zweiten Stücks ${dur} ms", dur in 2_000..8_000)
+                assertTrue("Dauer des zweiten Stücks ${dur} ms", dur in 1_000..8_000)
             }
             assertTrue(join.joined())
+            assertNoPtsRewind(join)
             player.release()
         }
     }
