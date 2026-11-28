@@ -39,7 +39,14 @@ class LiveReadPacer(
 
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
         val n = upstream.read(buffer, offset, length)
-        if (n > 0) onRead(n)
+        if (n > 0) {
+            // Drossel darf die Wiedergabe nie abbrechen (z. B. Player-Zugriff vom Lade-Thread).
+            try {
+                onRead(n)
+            } catch (_: Exception) {
+                resetPace()
+            }
+        }
         return n
     }
 
@@ -53,7 +60,12 @@ class LiveReadPacer(
     }
 
     private fun onRead(n: Int) {
-        if (!shouldPace()) {
+        val pace = try {
+            shouldPace()
+        } catch (_: Exception) {
+            false
+        }
+        if (!pace) {
             resetPace()
             return
         }
@@ -63,7 +75,12 @@ class LiveReadPacer(
             pacedBytes = 0
         }
         pacedBytes += n
-        val delay = delayMs(pacedBytes, now - paceStartedAt, bytesPerSec().coerceAtLeast(MIN_BYTES_PER_SEC))
+        val rate = try {
+            bytesPerSec().coerceAtLeast(MIN_BYTES_PER_SEC)
+        } catch (_: Exception) {
+            DEFAULT_BYTES_PER_SEC
+        }
+        val delay = delayMs(pacedBytes, now - paceStartedAt, rate)
         if (delay > 0) sleep(delay)
     }
 

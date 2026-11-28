@@ -87,7 +87,15 @@ class TsOverlapSkipDataSource(
                 break
             }
             if (n == 0) return 0
-            processPacket()
+            try {
+                processPacket()
+            } catch (_: Exception) {
+                // Filter oder Zeitstempel-Umrechnung darf die Wiedergabe nie abbrechen:
+                // das rohe Paket wie ohne Filter durchreichen (Verhalten wie vor sw5).
+                alignClock = false
+                skipMode = SkipMode.PASS
+                emit(packet)
+            }
         }
         val n = minOf(length, outEnd - outStart)
         System.arraycopy(outBuf, outStart, buffer, offset, n)

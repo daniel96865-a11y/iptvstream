@@ -1,0 +1,8 @@
+Testversion 1.0.78-sw6 (Vorabversion, nur zum Testen): Start und Neustart spielen wieder (kein sofortiger Ladefehler)
+
+Basis 1.0.78-sw5. Anlass war die Diagnose auf dem Fernseher: „v1.0.78-sw5 · Leerlauf · TS/chrome · Puffer 0 s · Video keins · Ton keiner · ERROR_CODE_IO_UNSPECIFIED / IllegalStateException“, Verlauf „Ladefehler … 0 KB in 0 s“ und schließlich Wiedergabefehler (2000). Es kam kein Byte an.
+- Ursache: Die neue Lesedrossel hat bei jedem Read den Pufferstand über player.totalBufferedDuration gelesen. Das läuft auf dem Lade-Thread; ExoPlayer erlaubt den Zugriff nur auf dem Player-Thread und wirft IllegalStateException. Media3 meldet das als ERROR_CODE_IO_UNSPECIFIED, der Ladevorgang endet mit 0 KB, und die automatische Neuverbindung wiederholt denselben Fehler.
+- Die Drossel liest den Pufferstand jetzt aus einem Wert, den der Player-Thread regelmäßig schreibt. Zusätzlich gilt: Ein Fehler in der Drossel oder im PTS-Filter darf die Wiedergabe nie abbrechen; im Zweifel werden die Daten unverändert durchgereicht (wie in sw4).
+- Getestet: erster Read trotz IllegalStateException, mehrmaliges open/close derselben Instanz, Kaltstart eines Live-TS und Senderwechsel.
+
+versionCode 105.

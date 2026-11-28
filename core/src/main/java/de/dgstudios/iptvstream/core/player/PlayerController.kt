@@ -220,6 +220,13 @@ class PlayerController(
     private val bufferDiagOn = settings.bufferDiag
     private val flow = FlowMeter()
     private val bytesLoaded = java.util.concurrent.atomic.AtomicLong()
+    /**
+     * Pufferstand, den der Player-Thread regelmäßig schreibt.
+     * Die Lade-Schicht (Drossel, Neuöffnen) darf [player] nicht anfassen:
+     * [player.totalBufferedDuration] wirft sonst IllegalStateException (falscher Thread)
+     * und der Start bricht mit 0 KB / ERROR_CODE_IO_UNSPECIFIED ab.
+     */
+    private val bufferedMs = java.util.concurrent.atomic.AtomicLong()
     private var rateBytes = 0L
     private var rateAt = 0L
     private var networkKbps: Int? = null
@@ -328,7 +335,7 @@ class PlayerController(
                     liveTsFilter,
                 ),
                 shouldPace = {
-                    liveMode && LiveReadPacer.shouldPace(player.totalBufferedDuration, liveBufferMaxMs)
+                    liveMode && LiveReadPacer.shouldPace(bufferedMs.get(), liveBufferMaxMs)
                 },
                 bytesPerSec = {
                     val kbps = networkKbps
@@ -345,13 +352,7 @@ class PlayerController(
                 takeStallKick = { stallKick.getAndSet(false).also { if (it) lastEndWasKick = true } },
                 onReopen = { liveJoin.arm(sameStream = true) },
                 reopenMaxDelayMs = { CHAIN_DELAY_MS },
-                shouldWaitBeforeReopen = {
-                    try {
-                        player.totalBufferedDuration > CHAIN_EARLY_BUFFER_MS
-                    } catch (_: Exception) {
-                        true
-                    }
-                },
+                shouldWaitBeforeReopen = { bufferedMs.get() > CHAIN_EARLY_BUFFER_MS },
                 onReconnect = { bytes, millis, kicked ->
                     seamlessCount.incrementAndGet()
                     lastFix = if (kicked) "Stillstand → nahtlos" else "Anbieter-Ende → nahtlos"
@@ -575,6 +576,7 @@ class PlayerController(
                 }
             }
             .build()
+        bufferedMs.set(0)
         _state.update {
             it.copy(
                 loading = true, playing = false, error = null, notice = null, ended = false,
@@ -1614,11 +1616,13 @@ class PlayerController(
                 val item = current ?: continue
                 val dur = player.duration
                 val live = liveEdge(item)
+                val buffer = if (live) player.totalBufferedDuration.coerceAtLeast(0L) else player.bufferedPosition
+                bufferedMs.set(buffer)
                 _state.update {
                     it.copy(
                         positionMs = if (live) 0 else player.currentPosition,
                         durationMs = if (dur == C.TIME_UNSET || live) 0 else dur,
-                        bufferedMs = if (live) player.totalBufferedDuration.coerceAtLeast(0L) else player.bufferedPosition,
+                        bufferedMs = buffer,
                         bufferMaxMs = if (live) liveBufferMaxMs else 0L,
                     )
                 }
