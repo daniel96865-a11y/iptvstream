@@ -1,0 +1,9 @@
+Testversion 1.0.78-sw5 (Vorabversion, nur zum Testen): Volle Puffer haken nicht mehr durch Ton-Lücke oder Lesepause
+
+Basis 1.0.78-sw4. Anlass war das Diagnose-Foto zu sw4: „Puffer 38,1 s / Ziel 10,0 s · Tempo 100 % · nahtlos 2× · angeschlossen 2× · Laden pausiert · zuletzt: Anschluss (neue Zeitachse) · Ruckler: Ton-Lücke“. Der Puffer war voll, trotzdem hakte es kurz.
+- „Laden pausiert“ bei 38 s war die alte Lesepause (Zielpuffer 40 s minus 2 s). Lange Pausen können dazu führen, dass der Anbieter die Verbindung beendet und neu angeschlossen werden muss – oft mit neuer Zeitachse. Live-TS wird deshalb nicht mehr zeitlich pausiert; es wird gleichmäßig weitergelesen, bei vollem Puffer nur noch im Sendetempo gedrosselt (TCP bleibt offen, der Speicher wächst nicht unbegrenzt). In der Diagnose sollte „Laden pausiert“ bei vollem Zeitpuffer nicht mehr erscheinen.
+- Neue Zeitachse (PTS-Sprung über 20 s, typisch nach einem Anschluss) bleibt im selben Strom: Die Zeitstempel (PTS, DTS und PCR) werden auf die laufende Uhr umgerechnet. Extraktor, Decoder und AudioSink laufen durch, es gibt kein neues MediaItem und keinen Renderer-Reset. In der Diagnose steht dann „Anschluss (Zeitachse angeglichen)“ statt „Anschluss (neue Zeitachse)“; „angeschlossen“ sollte dabei nicht steigen.
+- Nur wenn dieser Weg nicht greift, wird wie bisher ein neues Stück angeschlossen. skipSilence ist fest aus (sonst könnte der Übergang als Stille übersprungen werden). Audio-Passthrough und Tunneling waren und bleiben aus; ein Reset des Audio-Renderers entfällt im Normalfall, weil der Strom nicht gewechselt wird.
+- Lokale Tests erkennen Ton-Lücken über 200 ms an den Audio-PTS und prüfen, dass eine neue Zeitachse ohne MediaItem-Wechsel und ohne Ton-Lücke durchläuft.
+
+versionCode 104.

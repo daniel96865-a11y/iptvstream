@@ -18,9 +18,9 @@ import de.dgstudios.iptvstream.core.player.LiveTsJoin.Companion.ptsAhead
  * Verbindung beginnen erst ab dem Anschluss. Im selben Strom (nahtlose Neuöffnung) geht es sofort nach der letzten PTS weiter; ein neuer Decoder beginnt am nächsten Schlüsselbild.
  * So zählt der Puffer nur neues Material, und schon Gesehenes wird nicht noch einmal gespielt.
  *
- * Passen die Zeitstempel nicht zur alten Verbindung, wird nichts verworfen. Ein neuer
- * MediaItem spielt die neue Zeitachse einfach ab (kein Seek auf Live-TS). Im selben Extraktor
- * darf die fremde Zeitachse nicht landen: dann endet der Strom, der Player hängt ein neues Stück an.
+ * Passen die Zeitstempel nicht zur alten Verbindung, wird im selben Strom die PTS-Basis
+ * an die laufende Uhr angeglichen (PTS, DTS und PCR), sodass Decoder und AudioSink nicht neu starten.
+ * Nur wenn das Angleichen nicht möglich ist, endet der Strom und der Player hängt ein neues Stück an.
  */
 @UnstableApi
 class TsOverlapSkipDataSource(
@@ -47,6 +47,10 @@ class TsOverlapSkipDataSource(
         private set
     var skippedPackets: Int = 0
         private set
+    /** Offset, mit dem eine neue PTS-Basis an die laufende Zeitachse angeglichen wird. 0 = aus. */
+    var ptsOffset: Long = 0L
+        private set
+    private var alignClock = false
 
     override fun addTransferListener(transferListener: TransferListener) {
         upstream.addTransferListener(transferListener)
@@ -62,6 +66,8 @@ class TsOverlapSkipDataSource(
         heldFromPts = UNSET
         firstDeliveredPts = UNSET
         skippedPackets = 0
+        ptsOffset = 0L
+        alignClock = false
         psiPids.clear()
         psiPids.addAll(ALWAYS_PSI)
         videoPids.clear()
@@ -146,10 +152,13 @@ class TsOverlapSkipDataSource(
     private fun processPacket() {
         val pid = ((packet[1].toInt() and 0x1F) shl 8) or (packet[2].toInt() and 0xFF)
         if (pid == 0) readPat(packet)
-        val pts = readPesPts(packet)
+        var pts = readPesPts(packet)
         val streamId = readStreamId(packet)
         if (streamId in 0xE0..0xEF) videoPids.add(((packet[1].toInt() and 0x1F) shl 8) or (packet[2].toInt() and 0xFF))
         val rai = hasRai(packet)
+        if (alignClock) {
+            pts = TsClockAlign.rewritePacket(packet, ptsOffset)
+        }
 
         when (skipMode) {
             SkipMode.PASS -> deliver(packet, pts)
@@ -172,23 +181,22 @@ class TsOverlapSkipDataSource(
         }
         val ahead = ptsAhead(pts, target)
         when {
-            ahead > 0 -> {
-                // Diese Spur beginnt hinter dem alten Ende.
+            ahead > 0 && ahead <= MAX_OVERLAP_PTS -> {
+                // Dieselbe Uhr, die Spur beginnt knapp hinter dem alten Ende.
                 startAfterJoin(pid, pts, hasRai(packet), readStreamId(packet))
             }
-            ahead == 0L || -ahead <= MAX_OVERLAP_PTS -> {
+            ahead <= 0 && -ahead <= MAX_OVERLAP_PTS -> {
                 skipMode = SkipMode.DROP
                 if (isPsi(pid)) emit(packet) else { droppingPid.add(pid); skippedPackets++ }
             }
             else -> {
-                // Sehr großer Rücksprung (Neustart / andere Zeitachse, nicht der 33-Bit-Umschlag): nichts verwerfen.
-                join.markMismatch()
+                // Sprung größer als der typische Vorlauf: neue Zeitachse, nicht der 33-Bit-Umschlag.
                 if (join.sameStream()) {
-                    // Fremde PTS dürfen nicht in denselben Extraktor. Der Aufrufer (nahtlose
-                    // Neuöffnung) beendet den Strom und hängt ein neues Stück an.
-                    throw TsJoinMismatchException()
+                    startClockAlign(pts, target)
+                    return
                 }
                 skipMode = SkipMode.PASS
+                join.markMismatch()
                 deliver(packet, pts)
             }
         }
@@ -240,6 +248,21 @@ class TsOverlapSkipDataSource(
             return
         }
         skippedPackets++
+    }
+
+    /**
+     * Neue PTS-Basis im selben Strom: Offset so wählen, dass die erste neue PTS knapp hinter
+     * der letzten ausgegebenen liegt, und alle folgenden Zeitstempel entsprechend umschreiben.
+     */
+    private fun startClockAlign(rawPts: Long, lastPts: Long) {
+        ptsOffset = TsClockAlign.offsetToContinue(lastPts, rawPts)
+        alignClock = true
+        join.markRemapped()
+        val shifted = TsClockAlign.rewritePacket(packet, ptsOffset)
+        skipMode = SkipMode.PASS
+        droppingPid.clear()
+        held.clear()
+        deliver(packet, shifted)
     }
 
     /**

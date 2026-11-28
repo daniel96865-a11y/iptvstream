@@ -314,17 +314,26 @@ class PlayerController(
         )
         val httpFactory = DataSource.Factory {
             val extra = streamReferrer?.let { mapOf("Referer" to it) }.orEmpty()
-            TsOverlapSkipDataSource.wrap(
-                DefaultDataSource.Factory(
-                    context,
-                    // Kürzeres Lese-Zeitlimit für Streams: Hängt die Verbindung, kommt nach 15 s ein Fehler
-                    // und die Wiederverbindung greift, statt 45 s lang mit leerem Puffer zu warten.
-                    OkHttpDataSource.Factory(connections).setUserAgent(streamUserAgent ?: Net.userAgentFor(settings.userAgent))
-                        .setDefaultRequestProperties(extra)
-                        .setTransferListener(byteCounter),
-                ).createDataSource(),
-                liveJoin,
-                liveTsFilter,
+            LiveReadPacer.wrap(
+                TsOverlapSkipDataSource.wrap(
+                    DefaultDataSource.Factory(
+                        context,
+                        // Kürzeres Lese-Zeitlimit für Streams: Hängt die Verbindung, kommt nach 15 s ein Fehler
+                        // und die Wiederverbindung greift, statt 45 s lang mit leerem Puffer zu warten.
+                        OkHttpDataSource.Factory(connections).setUserAgent(streamUserAgent ?: Net.userAgentFor(settings.userAgent))
+                            .setDefaultRequestProperties(extra)
+                            .setTransferListener(byteCounter),
+                    ).createDataSource(),
+                    liveJoin,
+                    liveTsFilter,
+                ),
+                shouldPace = {
+                    liveMode && LiveReadPacer.shouldPace(player.totalBufferedDuration, liveBufferMaxMs)
+                },
+                bytesPerSec = {
+                    val kbps = networkKbps
+                    if (kbps != null && kbps > 0) (kbps * 1000) / 8 else LiveReadPacer.DEFAULT_BYTES_PER_SEC
+                },
             )
         }
         // Live-TS: Beendet der Anbieter die Verbindung, wird sofort neu geöffnet, ohne den Player anzufassen.
@@ -420,6 +429,8 @@ class PlayerController(
             .setStuckPlayingDetectionTimeoutMs(STUCK_PLAYING_TIMEOUT_MS)
             .setMediaSourceFactory(mediaSourceFactory)
             .setHandleAudioBecomingNoisy(true)
+            // Stille überspringen würde nach einem Anschluss wie eine Ton-Lücke wirken.
+            .setSkipSilenceEnabled(false)
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -1420,6 +1431,9 @@ class PlayerController(
             else -> "?"
         }
         val videoKbps = player.videoFormat?.let { f -> (f.averageBitrate.takeIf { it > 0 } ?: f.bitrate.takeIf { it > 0 })?.div(1000) }
+        if (liveJoin.remapped() && lastFix != "Anschluss (Zeitachse angeglichen)") {
+            lastFix = "Anschluss (Zeitachse angeglichen)"
+        }
         val line = BufferDiag.line(
             format = fmt,
             bufferedMs = player.totalBufferedDuration,

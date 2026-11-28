@@ -77,11 +77,17 @@ class LiveTsJoin {
 
     fun markMismatch() { outcome.set(MISMATCH) }
 
+    /** Neue Zeitachse im selben Strom: PTS/DTS/PCR wurden an die laufende Uhr angeglichen. */
+    fun markRemapped() { outcome.set(REMAPPED) }
+
     /** Die neue Verbindung beginnt hinter oder genau am Ende der alten (Überlappung verworfen oder Lücke). */
     fun joined(): Boolean = outcome.get() == JOINED
 
-    /** Zeitstempel passen nicht zusammen: an der Live-Kante weiterspielen, nicht am Anfang der neuen Verbindung. */
+    /** Zeitstempel passen nicht zusammen und konnten nicht im selben Strom angeglichen werden. */
     fun mismatch(): Boolean = outcome.get() == MISMATCH
+
+    /** Die neue Verbindung hatte eine andere PTS-Basis, die Zeitachse wurde fortgeschrieben. */
+    fun remapped(): Boolean = outcome.get() == REMAPPED
 
     /**
      * Es sollte übersprungen werden, ist aber nicht gelungen (MISMATCH oder noch ARMED).
@@ -117,6 +123,7 @@ class LiveTsJoin {
         const val ARMED = 1
         const val JOINED = 2
         const val MISMATCH = 3
+        const val REMAPPED = 4
 
         /** 33-Bit-PTS, 90 kHz. */
         const val PTS_MASK = 0x1FFFFFFFFL

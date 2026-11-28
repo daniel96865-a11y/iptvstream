@@ -33,16 +33,18 @@ class LiveAwareLoadControl(
     }
 
     /**
-     * Media3 hört bei vollem Puffer auf zu lesen und fängt erst unter dem Mindestpuffer wieder an (z. B. 40 s → 8 s,
-     * also über 30 s Pause). Bei einem Live-Strom ruht die Verbindung dann so lange; manche Anbieter kappen oder
-     * drosseln eine Verbindung, die nicht gelesen wird. Live darum schon knapp unter dem Höchstpuffer weiterlesen
-     * (Pause nur etwa [LIVE_RESUME_GAP_MS]). Die Byte-Grenze bleibt (Speicher).
+     * Media3 hört bei vollem Puffer auf zu lesen (teils bis der Mindestpuffer erreicht ist).
+     * Eine solche Pause lässt die Live-Verbindung ruhen; manche Anbieter beenden sie dann.
+     * Live deshalb zeitlich nie pausieren – [LiveReadPacer] liest bei vollem Puffer in Echtzeit
+     * weiter. Nur die Byte-Grenze bleibt (Speicher).
      */
     override fun shouldContinueLoading(parameters: LoadControl.Parameters): Boolean {
-        val base = delegate.shouldContinueLoading(parameters)
-        if (base || liveMaxMs <= 0L || !isLive()) return base
-        if (delegate.getAllocator(parameters.playerId).totalBytesAllocated >= targetBytes) return false
-        return parameters.bufferedDurationUs < (liveMaxMs - LIVE_RESUME_GAP_MS) * 1_000L
+        return continueLoading(
+            isLive = isLive(),
+            delegateWantsMore = delegate.shouldContinueLoading(parameters),
+            allocatedBytes = delegate.getAllocator(parameters.playerId).totalBytesAllocated,
+            targetBytes = targetBytes,
+        )
     }
 
     override fun onPrepared(playerId: PlayerId) = delegate.onPrepared(playerId)
@@ -72,6 +74,22 @@ class LiveAwareLoadControl(
     ): Boolean = delegate.shouldContinuePreloading(playerId, timeline, mediaPeriodId, bufferedDurationUs)
 
     companion object {
-        const val LIVE_RESUME_GAP_MS = 2_000L
+        /** @deprecated nur noch als Abstand, ab dem [LiveReadPacer] drosselt. */
+        const val LIVE_RESUME_GAP_MS = LiveReadPacer.PACE_HEADROOM_MS
+
+        /**
+         * Live: weiterlesen, solange der Speicher es zulässt – unabhängig vom Zeitpuffer.
+         * Filme und Serien folgen dem Delegaten.
+         */
+        fun continueLoading(
+            isLive: Boolean,
+            delegateWantsMore: Boolean,
+            allocatedBytes: Int,
+            targetBytes: Int,
+        ): Boolean {
+            if (!isLive) return delegateWantsMore
+            if (allocatedBytes >= targetBytes) return false
+            return true
+        }
     }
 }

@@ -26,6 +26,7 @@ import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import de.dgstudios.iptvstream.core.player.TsOverlapSkipDataSourceTest.Companion.assertNoPtsRewind
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -54,6 +55,7 @@ class LiveChainPlaybackTest {
         val firstEnd: Int,
         val secondStart: Int,
         val hang: Boolean,
+        val shiftSecondPts: Long = 0L,
     ) : AutoCloseable {
         val socket = ServerSocket(0)
         val firstSent = CountDownLatch(1)
@@ -77,7 +79,12 @@ class LiveChainPlaybackTest {
                                 firstSent.countDown()
                                 if (hang) Thread.sleep(60_000)
                             } else {
-                                out.write(ts, secondStart, ts.size - secondStart)
+                                if (shiftSecondPts != 0L) {
+                                    val chunk = TsClockAlign.shiftAll(ts.copyOfRange(secondStart, ts.size), shiftSecondPts)
+                                    out.write(chunk)
+                                } else {
+                                    out.write(ts, secondStart, ts.size - secondStart)
+                                }
                                 out.flush()
                             }
                             c.close()
@@ -95,9 +102,16 @@ class LiveChainPlaybackTest {
         }
     }
 
-    private fun play(firstEnd: Int = half, secondStart: Int = 0, hang: Boolean = false, seamless: Boolean = false) {
+    private fun play(
+        firstEnd: Int = half,
+        secondStart: Int = 0,
+        hang: Boolean = false,
+        seamless: Boolean = false,
+        shiftSecondPts: Long = 0L,
+    ) {
         val join = LiveTsJoin()
-        Server(firstEnd, secondStart, hang).use { server ->
+        val underruns = AtomicInteger()
+        Server(firstEnd, secondStart, hang, shiftSecondPts).use { server ->
             val connections = StreamConnections(OkHttpClient())
             val kick = AtomicBoolean(false)
             val dataSource = DataSource.Factory {
@@ -127,6 +141,16 @@ class LiveChainPlaybackTest {
                 .build()
             val item = MediaItem.fromUri(server.url)
             val transitions = AtomicInteger()
+            player.addAnalyticsListener(object : AnalyticsListener {
+                override fun onAudioUnderrun(
+                    eventTime: AnalyticsListener.EventTime,
+                    bufferSize: Int,
+                    bufferSizeMs: Long,
+                    elapsedSinceLastFeedMs: Long,
+                ) {
+                    underruns.incrementAndGet()
+                }
+            })
             player.addListener(object : Player.Listener {
                 override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                     if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
@@ -187,7 +211,18 @@ class LiveChainPlaybackTest {
                     assertTrue("Dauer des zweiten Stücks ${dur} ms", dur in 1_000..8_000)
                 }
             }
-            assertTrue(join.joined())
+            if (shiftSecondPts != 0L) {
+                assertTrue("neue Zeitachse soll im selben Strom angeglichen werden", join.remapped())
+                val audio = setOf(257)
+                assertTrue("Testdatei muss Ton-PTS (PID 257) liefern", join.delivered().any { it.first == 257 })
+                assertFalse(
+                    "Ton-Lücke ${AudioGapDetector.largestGapMs(join.delivered(), audio)} ms",
+                    AudioGapDetector.hasGap(join.delivered(), audio),
+                )
+                assertEquals("Audio-Unterlauf", 0, underruns.get())
+            } else {
+                assertTrue(join.joined())
+            }
             assertNoPtsRewind(join)
             player.release()
         }
@@ -212,5 +247,16 @@ class LiveChainPlaybackTest {
         val firstEnd = (ts.size * 7 / 10) / packet * packet
         val secondStart = (ts.size * 4 / 10) / packet * packet
         play(firstEnd = firstEnd, secondStart = secondStart, hang = false, seamless = true)
+    }
+
+    @Test fun seamlessReopenWithNewTimeBaseStaysInSameStream() {
+        // Fortsetzung nach der ersten Hälfte, aber mit neuer PTS-Basis (kein Vorlauf).
+        play(
+            firstEnd = half,
+            secondStart = half,
+            hang = false,
+            seamless = true,
+            shiftSecondPts = 3L * 3600 * 90_000,
+        )
     }
 }

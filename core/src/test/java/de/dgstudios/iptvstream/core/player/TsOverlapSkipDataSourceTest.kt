@@ -12,7 +12,6 @@ import de.dgstudios.iptvstream.core.player.TsOverlapSkipDataSource.Companion.TS_
 import de.dgstudios.iptvstream.core.player.TsOverlapSkipDataSource.Companion.readPesPts
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
-import org.junit.Assert.fail
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -147,24 +146,31 @@ class TsOverlapSkipDataSourceTest {
         assertEquals(UNSET, src.firstDeliveredPts)
     }
 
-    @Test fun sameStreamMismatchAbortsWithoutDelivering() {
+    @Test fun sameStreamMismatchRemapsPtsContinuously() {
         val join = LiveTsJoin()
         readAll(ts, join)
-        join.shiftLastPts(3L * 3600 * 90_000)
-        val shifted = join.lastPts()
+        val lastBeforeArm = join.lastPts()
         join.arm(sameStream = true)
-        val src = TsOverlapSkipDataSource(ByteArrayDataSource(ts), join)
+        val shifted = TsClockAlign.shiftAll(ts, 3L * 3600 * 90_000)
+        val src = TsOverlapSkipDataSource(ByteArrayDataSource(shifted), join)
         src.open(DataSpec(Uri.EMPTY))
-        try {
-            drain(src)
-            fail("bei anderer Zeitachse im selben Extraktor muss TsJoinMismatchException fliegen")
-        } catch (_: TsJoinMismatchException) {
-            assertTrue(join.mismatch())
-            assertEquals(UNSET, src.firstDeliveredPts)
-            assertEquals("fremde PTS dürfen lastPts nicht überschreiben", shifted, join.lastPts())
-        } finally {
-            src.close()
-        }
+        drain(src)
+        src.close()
+        assertTrue("neue Zeitachse soll im selben Strom angeglichen werden", join.remapped())
+        assertTrue(src.ptsOffset != 0L)
+        assertTrue(src.firstDeliveredPts != UNSET)
+        val gap = ptsMs(ptsAhead(src.firstDeliveredPts, lastBeforeArm))
+        assertTrue(
+            "erste angeglichene PTS liegt knapp hinter dem alten Ende (Lücke $gap ms)",
+            gap in 0L..80L,
+        )
+        assertNoPtsRewind(join)
+        val audio = setOf(257)
+        assertTrue("Testdatei muss Ton-PTS (PID 257) liefern", join.delivered().any { it.first == 257 })
+        assertTrue(
+            "Ton-PTS darf über den Anschluss keine Lücke > ${AudioGapDetector.MAX_OK_MS} ms haben (war ${AudioGapDetector.largestGapMs(join.delivered(), audio)} ms)",
+            !AudioGapDetector.hasGap(join.delivered(), audio),
+        )
     }
 
     @Test fun ac3PrivateStreamPtsIsRead() {
@@ -260,6 +266,7 @@ class TsOverlapSkipDataSourceTest {
 
     private fun visibleOutcome(join: LiveTsJoin): Int = when {
         join.joined() -> LiveTsJoin.JOINED
+        join.remapped() -> LiveTsJoin.REMAPPED
         join.mismatch() -> LiveTsJoin.MISMATCH
         join.shouldSeekToLiveEdge() -> LiveTsJoin.ARMED
         else -> LiveTsJoin.NONE
